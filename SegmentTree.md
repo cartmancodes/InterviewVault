@@ -43,6 +43,7 @@ private:
     void update(int index, int left, int right, int pos, int val) {
         if (left == right) {
             tree[index] = val;
+            return;
         }
         int mid = (left + right)/2;
         if (pos <= mid) 
