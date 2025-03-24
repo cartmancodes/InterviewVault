@@ -17,6 +17,7 @@ while (hi - lo > 3) {
     }
 }
 
+// Iterate over lo to hi and return the max/min as per use case
 if (lo == hi) {
     ans = min(ans, fx(lo));
 } else {
