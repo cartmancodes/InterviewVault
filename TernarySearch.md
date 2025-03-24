@@ -17,12 +17,7 @@ while (hi - lo > 3) {
     }
 }
 
-// Iterate over lo to hi and return the max/min as per use case
-if (lo == hi) {
-    ans = min(ans, fx(lo));
-} else {
-    for (int r = lo; r <= hi; r++) {
-        ans = min(ans, fx(r));
-    }
-}
+// Iterate fx() over lo to hi and return the max/min as per use case, 
+for (int i = lo; i <= hi; r++) 
+    ans = min(ans, fx(i));
 ```
