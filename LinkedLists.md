@@ -28,7 +28,7 @@ public:
 };
 ```
 
-2. Fast and slow pointer method in O(n) time and O(1) space:
+2. Fast and slow pointer/ Floyd's Cycle finding method in O(n) time and O(1) space:
 
 ```
 /**
