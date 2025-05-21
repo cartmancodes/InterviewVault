@@ -4,7 +4,7 @@ Detect cycle or loop in a linkedlist:
 
 1. Naive hashing pointer approach: 
 
-
+```
 /**
  * Definition for singly-linked list.
  * struct ListNode {
@@ -26,3 +26,4 @@ public:
         return false;
     }
 };
+```
