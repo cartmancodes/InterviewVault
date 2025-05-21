@@ -28,7 +28,7 @@ public:
 };
 ```
 
-2. Fast and slow pointer/ Floyd's Cycle finding method in O(n) time and O(1) space:
+2. Fast and slow pointer/ Floyd's Cycle finding method in O(n) time and O(1) space, fast_pointer always gains +1 on slow pointer hence is bound to meet it incase of a loop:
 
 ```
 /**
@@ -92,3 +92,31 @@ public:
     }
 };
 ```
+
+USing tortoise hare algorithm(fast/slow pointer method):
+```
+/**
+ * Definition for singly-linked list.
+ * struct ListNode {
+ *     int val;
+ *     ListNode *next;
+ *     ListNode() : val(0), next(nullptr) {}
+ *     ListNode(int x) : val(x), next(nullptr) {}
+ *     ListNode(int x, ListNode *next) : val(x), next(next) {}
+ * };
+ */
+class Solution {
+public:
+    ListNode* middleNode(ListNode* head) {
+        ListNode *slow_pointer = head, *fast_pointer = head;
+
+        while(slow_pointer != nullptr && fast_pointer != nullptr && fast_pointer -> next != nullptr) {
+            slow_pointer = slow_pointer -> next;
+            fast_pointer = fast_pointer -> next -> next;
+        }
+
+        return slow_pointer;
+    }
+};
+```
+
