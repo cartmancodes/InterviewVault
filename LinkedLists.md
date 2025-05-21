@@ -2,7 +2,7 @@
 
 Detect cycle or loop in a linkedlist:
 
-1. Naive hashing pointer approach: 
+1. Naive hashing pointer approach in O(n) time and space: 
 
 ```
 /**
@@ -26,4 +26,10 @@ public:
         return false;
     }
 };
+```
+
+2. Fast and slow pointer method in O(n) time and O(1) space:
+
+```
+
 ```
