@@ -120,3 +120,41 @@ public:
 };
 ```
 
+Reverse a linkedlist:
+
+```
+/**
+ * Definition for singly-linked list.
+ * struct ListNode {
+ *     int val;
+ *     ListNode *next;
+ *     ListNode() : val(0), next(nullptr) {}
+ *     ListNode(int x) : val(x), next(nullptr) {}
+ *     ListNode(int x, ListNode *next) : val(x), next(next) {}
+ * };
+ */
+class Solution {
+public:
+    ListNode* reverseList(ListNode* head) {
+        // Maintain three pointers, prev, curr and next 
+        ListNode *prev = nullptr, *curr = head, *next;
+
+        while(curr != nullptr) {
+            // Store next pointer temporraily 
+            next = curr -> next;
+
+            // Update next to store previous 
+            curr -> next = prev;
+
+            // Copy newly prepared curr to prev 
+            prev = curr;
+
+            // Update curr with next value
+            curr = next;
+        }
+        return prev;
+
+    }
+};
+```
+
