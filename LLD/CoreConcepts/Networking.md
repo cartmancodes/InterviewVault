@@ -417,18 +417,22 @@ graph TB
 
 ## Network Layers
 
-Understanding the OSI and TCP/IP models helps contextualize where different technologies operate.
+### Why OSI Model?
+
+The OSI (Open Systems Interconnect) Model provides a **high-level design on how to transmit data from one computational device to another**. Computational devices include laptops, mobiles, smartwatches, desktops, and more.
+
+Understanding the OSI and TCP/IP models helps contextualize where different technologies operate and how data flows through the network stack.
 
 ```mermaid
 graph TB
-    subgraph "OSI Model"
-        L7_OSI[Layer 7: Application<br/>HTTP, WebSocket, gRPC]
-        L6_OSI[Layer 6: Presentation<br/>SSL/TLS, Encryption]
-        L5_OSI[Layer 5: Session<br/>Session Management]
-        L4_OSI[Layer 4: Transport<br/>TCP, UDP]
-        L3_OSI[Layer 3: Network<br/>IP, Routing]
-        L2_OSI[Layer 2: Data Link<br/>Ethernet, MAC]
-        L1_OSI[Layer 1: Physical<br/>Cables, Signals]
+    subgraph "OSI Model Overview"
+        L7_OSI[Layer 7: Application<br/>HTTP, WebSocket, gRPC, FTP]
+        L6_OSI[Layer 6: Presentation<br/>SSL/TLS, Encryption, Compression]
+        L5_OSI[Layer 5: Session<br/>Session Management, Authentication]
+        L4_OSI[Layer 4: Transport<br/>TCP, UDP, Segments]
+        L3_OSI[Layer 3: Network<br/>IP, Routing, Packets]
+        L2_OSI[Layer 2: Data Link<br/>Ethernet, MAC, Frames]
+        L1_OSI[Layer 1: Physical<br/>Cables, Signals, Bits]
     end
     
     subgraph "What You Need to Know"
@@ -445,6 +449,525 @@ graph TB
     style TRANS fill:#e1f5ff
     style NET fill:#fff4e1
 ```
+
+### Detailed Layer Breakdown
+
+#### Layer 7: Application Layer
+
+**Unit of Operation:** Application-specific data
+
+**Purpose:** This is where network applications and their protocols live. It provides network services directly to end-users.
+
+```mermaid
+graph LR
+    subgraph "Application Layer Protocols"
+        HTTP[Web Browsers<br/>HTTP/HTTPS<br/>FTP]
+        MAIL[Email<br/>SMTP<br/>POP3/IMAP]
+        VIDEO[Video Conferencing<br/>Skype/Zoom<br/>Proprietary]
+        REMOTE[Remote Access<br/>Telnet<br/>RDP<br/>SSH]
+    end
+    
+    style HTTP fill:#e8f5e9
+    style MAIL fill:#e1f5ff
+    style VIDEO fill:#fff4e1
+    style REMOTE fill:#f3e5f5
+```
+
+**Key Protocols:**
+- **HTTP/HTTPS**: Web browsing and REST APIs
+- **FTP**: File transfer
+- **SMTP**: Sending emails
+- **POP3/IMAP**: Receiving emails
+- **DNS**: Domain name resolution
+- **Telnet/SSH**: Remote access
+- **RDP**: Remote Desktop Protocol
+
+**Interview Focus:** This is where your API design decisions (REST, GraphQL, gRPC) live. Understanding protocols helps you choose the right communication pattern.
+
+---
+
+#### Layer 6: Presentation Layer
+
+**Unit of Operation:** Formatted data
+
+**Purpose:** Translates data between the application layer and the network format. Handles data encoding, compression, and encryption.
+
+```mermaid
+graph TB
+    subgraph "Presentation Layer Functions"
+        ENC[Character Encoding<br/>ASCII/Unicode/UTF-8]
+        COMP[Data Compression<br/>Audio/Video/Text]
+        ENCRYPT[Encryption<br/>SSL/TLS]
+        FORMAT[Format Conversion<br/>PDF/JPEG/MPEG]
+    end
+    
+    ENC --> BINARY[Convert to Binary]
+    COMP --> BINARY
+    ENCRYPT --> BINARY
+    FORMAT --> BINARY
+    
+    BINARY --> NETWORK[Send to Network]
+    
+    style ENC fill:#e8f5e9
+    style COMP fill:#e1f5ff
+    style ENCRYPT fill:#fff4e1
+    style FORMAT fill:#f3e5f5
+```
+
+**Key Functions:**
+
+1. **Character Encoding/Translation**
+   - Converts ASCII/EBCDIC/Unicode/PDF encoded data to binary format
+   - **Why it matters**: 1 byte = 8 bits, and 2^8 (256) combinations can fit enough characters without wasting space
+   - Handles different character sets across systems
+
+2. **Data Compression**
+   - Reduces bandwidth usage
+   - Critical for audio and video streaming
+   - Lossless (ZIP) vs Lossy (JPEG, MP3) compression
+
+3. **Encryption**
+   - SSL/TLS encryption happens here
+   - Ensures data confidentiality
+   - Certificate validation
+
+**Interview Focus:** When discussing security (HTTPS, TLS) or data optimization (compression), you're dealing with presentation layer concerns.
+
+---
+
+#### Layer 5: Session Layer
+
+**Unit of Operation:** Sessions/Connections
+
+**Purpose:** Establishes, manages, and terminates sessions between applications. Handles authentication and authorization.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Session Layer
+    participant App as Application
+    
+    C->>S: Request Connection
+    S->>S: Authenticate User
+    S->>S: Create Session (Cookie/Token)
+    S->>App: Establish Session
+    
+    loop Active Session
+        C->>S: Send Request (with session)
+        S->>S: Validate Session
+        S->>App: Forward Request
+        App-->>S: Response
+        S-->>C: Send Response
+    end
+    
+    C->>S: End Session
+    S->>App: Terminate Connection
+    S->>S: Clear Session Data
+```
+
+**Key Functions:**
+
+1. **Session Management**
+   - Establishes, maintains, and terminates connections
+   - Does NOT modify data, just manages the connection
+   - Uses cookies, tokens, or session IDs
+
+2. **Authorization and Authentication**
+   - Verifies user identity
+   - Manages permissions
+   - Token validation (JWT, OAuth)
+
+3. **Security**
+   - SSL/TLS session establishment
+   - Certificate exchange
+   - Secure channel setup
+
+**Common Implementations:**
+- HTTP Cookies
+- JWT (JSON Web Tokens)
+- Session IDs
+- OAuth tokens
+
+**Interview Focus:** When discussing authentication, session management, or stateful connections, you're operating at the session layer.
+
+---
+
+#### Layer 4: Transport Layer
+
+**Unit of Operation:** Segments
+
+**Purpose:** Ensures reliable data transfer between hosts. Handles segmentation, flow control, and error control.
+
+```mermaid
+graph TB
+    subgraph "Transport Layer Functions"
+        SEG[Segmentation<br/>Break data into segments]
+        FLOW[Flow Control<br/>Rate management]
+        ERROR[Error Control<br/>Checksum & retransmission]
+        PORT[Port Addressing<br/>Application identification]
+    end
+    
+    DATA[Application Data] --> SEG
+    SEG --> FLOW
+    FLOW --> ERROR
+    ERROR --> PORT
+    PORT --> SEGMENT[Segment with:<br/>- Sequence number<br/>- Port number<br/>- Checksum]
+    
+    style SEG fill:#e8f5e9
+    style FLOW fill:#e1f5ff
+    style ERROR fill:#fff4e1
+    style PORT fill:#f3e5f5
+```
+
+**Key Functions:**
+
+1. **Segmentation**
+   - Takes data from session layer and breaks it into segments
+   - Each segment has:
+     - **Sequence number**: For ordering and reassembly
+     - **Port number**: Identifies destination application (e.g., port 80 for HTTP, 443 for HTTPS)
+   - TCP and UDP have different segment sizes
+
+2. **Flow Control**
+   - Controls the rate at which data is sent from server to client
+   - Prevents overwhelming the receiver
+   - Sliding window mechanism
+
+3. **Error Control**
+   - Automatic Repeat Request (ARQ) to recover lost data
+   - Computes **checksum** for each segment
+   - Detects data corruption over physical layer
+   - Adds checksum bits to segment tail
+
+**Segment Structure:**
+```
++------------------+------------------+
+| Source Port (16) | Dest Port (16)   |
++------------------+------------------+
+| Sequence Number (32 bits)           |
++--------------------------------------+
+| Acknowledgment Number (32 bits)     |
++--------------------------------------+
+| Data | Flags | Window Size          |
++--------------------------------------+
+| Checksum        | Urgent Pointer    |
++--------------------------------------+
+| Data ...                            |
++--------------------------------------+
+```
+
+**Interview Focus:** Understanding TCP vs UDP, port numbers, and reliability mechanisms is crucial for system design discussions.
+
+---
+
+#### Layer 3: Network Layer
+
+**Unit of Operation:** Packets
+
+**Purpose:** Handles logical addressing (IP) and routing. Determines the best path for data to travel from source to destination.
+
+```mermaid
+graph TB
+    subgraph "Network Layer Functions"
+        LOG[Logical Addressing<br/>IP Address Assignment]
+        ROUTE[Routing<br/>Path Selection]
+        PATH[Path Determination<br/>Best Route Selection]
+        PACK[Packet Formation<br/>Add IP Headers]
+    end
+    
+    SEGMENT[Segment from Transport] --> PACK
+    PACK --> LOG
+    LOG --> ROUTE
+    ROUTE --> PATH
+    PATH --> PACKET[IP Packet with:<br/>- Source IP<br/>- Destination IP<br/>- TTL<br/>- Protocol]
+    
+    style LOG fill:#e8f5e9
+    style ROUTE fill:#e1f5ff
+    style PATH fill:#fff4e1
+    style PACK fill:#f3e5f5
+```
+
+**Key Functions:**
+
+1. **Packets**
+   - Segment + IP header information = Packet
+   - Contains source and destination IP addresses
+
+2. **Logical Addressing (IP)**
+   - IPv4: 32-bit addresses (e.g., 192.168.1.1)
+   - IPv6: 128-bit addresses (e.g., 2001:0db8:85a3::8a2e:0370:7334)
+   - Uniquely identifies devices on a network
+
+3. **Routing (with Masking)**
+   - Forwards packets to destination using subnet masks
+   - Routers make forwarding decisions
+   - ISP maintains DNS to resolve names to IP addresses
+
+4. **Path Determination**
+   - Selects the best path based on:
+     - Hop count
+     - Bandwidth
+     - Latency
+     - Network congestion
+   - Uses routing protocols: OSPF, BGP, RIP
+
+**Common Protocols:**
+- **IPv4/IPv6**: Internet Protocol versions
+- **ICMP**: Internet Control Message Protocol (ping, traceroute)
+- **ARP**: Address Resolution Protocol (IP to MAC)
+- **Routing Protocols**: OSPF, BGP, RIP
+
+**Interview Focus:** IP addressing, routing decisions, and geographic distribution discussions happen at this layer.
+
+---
+
+#### Layer 2: Data Link Layer
+
+**Unit of Operation:** Frames
+
+**Purpose:** Provides node-to-node data transfer. Handles MAC addressing, error detection, and media access control.
+
+```mermaid
+graph TB
+    subgraph "Data Link Layer Functions"
+        MAC[Physical Addressing<br/>MAC Address]
+        ACCESS[Media Access Control<br/>Collision Avoidance]
+        ERR[Error Detection<br/>CRC/Checksum]
+        FRAME[Framing<br/>Add Headers & Tail]
+    end
+    
+    PACKET[Packet from Network] --> FRAME
+    FRAME --> MAC
+    MAC --> ACCESS
+    ACCESS --> ERR
+    ERR --> FINAL[Frame with:<br/>- MAC Source<br/>- MAC Destination<br/>- IP Header<br/>- Data<br/>- Tail CRC]
+    
+    style MAC fill:#e8f5e9
+    style ACCESS fill:#e1f5ff
+    style ERR fill:#fff4e1
+    style FRAME fill:#f3e5f5
+```
+
+**Key Functions:**
+
+1. **Physical Addressing (MAC)**
+   - **MAC Address**: Unique 48-bit hardware address
+   - Burned into Network Interface Card (NIC)
+   - Format: `AA:BB:CC:DD:EE:FF`
+   - Used for local network communication
+
+2. **Access to Physical Medium**
+   - Controls access to copper wires, Ethernet cables, fiber optics
+   - NIC (Network Interface Card) operates here
+
+3. **Media Access Control (MAC)**
+   - Reduces collisions across mediums
+   - CSMA/CD (Carrier Sense Multiple Access with Collision Detection)
+   - Ensures orderly access to shared medium
+
+4. **Error Detection**
+   - Detects errors in received frames
+   - Uses CRC (Cyclic Redundancy Check)
+   - Adds error detection bits to frame tail
+
+**Frame Structure:**
+```
++------------------+------------------+
+| Destination MAC  | Source MAC       |
++------------------+------------------+
+| Type/Length      | IP Packet        |
++------------------+------------------+
+| Data Payload ...                    |
++--------------------------------------+
+| Frame Check Sequence (CRC)          |
++--------------------------------------+
+```
+
+**Technologies:**
+- Ethernet
+- Wi-Fi (802.11)
+- PPP (Point-to-Point Protocol)
+- Switches operate at this layer
+
+**Interview Focus:** Understanding MAC addresses, switching, and local network communication.
+
+---
+
+#### Layer 1: Physical Layer
+
+**Unit of Operation:** Bits
+
+**Purpose:** Converts digital data into electrical, optical, or radio signals for transmission over physical medium.
+
+```mermaid
+graph LR
+    subgraph "Physical Layer"
+        DIGITAL[Digital Data<br/>Bits: 0s and 1s]
+        CONVERT[Signal Conversion]
+        MEDIUM[Transmission Medium]
+    end
+    
+    DIGITAL -->|Encoding| CONVERT
+    
+    CONVERT -->|Electrical| COPPER[Copper Wires<br/>Ethernet Cables]
+    CONVERT -->|Light| FIBER[Fiber Optics<br/>High Speed]
+    CONVERT -->|Radio| WIRELESS[Wireless<br/>Wi-Fi/4G/5G]
+    
+    COPPER & FIBER & WIRELESS --> MEDIUM
+    
+    style COPPER fill:#e8f5e9
+    style FIBER fill:#e1f5ff
+    style WIRELESS fill:#fff4e1
+```
+
+**Key Functions:**
+
+1. **Bit Transmission**
+   - Converts bits (0s and 1s) to signals
+   - Digital to analog conversion
+   - Signal modulation
+
+2. **Physical Characteristics**
+   - Voltage levels (for electrical signals)
+   - Light wavelengths (for fiber optics)
+   - Radio frequencies (for wireless)
+
+**Transmission Mediums:**
+
+**Guided Mediums** (Physical cables):
+- **Copper Wires**: Twisted pair cables (Cat5e, Cat6)
+- **Coaxial Cables**: TV cables, older networks
+- **Fiber Optic Cables**: High-speed, long-distance
+
+**Unguided Mediums** (Wireless):
+- **Radio Waves**: Wi-Fi, Bluetooth
+- **Microwaves**: Satellite communication
+- **Infrared**: Short-range (remote controls)
+
+**Transmission Modes:**
+
+```mermaid
+graph TB
+    subgraph "Simplex"
+        A1[Device A] -->|One direction only| B1[Device B]
+        EX1[Example: TV broadcast]
+    end
+    
+    subgraph "Half Duplex"
+        A2[Device A] <-->|Both directions<br/>Not simultaneous| B2[Device B]
+        EX2[Example: Walkie-talkie]
+    end
+    
+    subgraph "Full Duplex"
+        A3[Device A] <-->|Both directions<br/>Simultaneously| B3[Device B]
+        EX3[Example: Phone call]
+    end
+    
+    style A1 fill:#ffe1e1
+    style B1 fill:#ffe1e1
+    style A2 fill:#fff4e1
+    style B2 fill:#fff4e1
+    style A3 fill:#e8f5e9
+    style B3 fill:#e8f5e9
+```
+
+- **Simplex**: One direction only (e.g., TV broadcast)
+- **Half Duplex**: Both directions, but one at a time (e.g., walkie-talkie)
+- **Full Duplex**: Both directions simultaneously (e.g., phone call, modern Ethernet)
+
+**Network Types by Physical Scope:**
+- **PAN** (Personal Area Network): Bluetooth, USB
+- **LAN** (Local Area Network): Office, home network
+- **WLAN** (Wireless LAN): Wi-Fi networks
+- **CAN** (Campus Area Network): University campus
+- **MAN** (Metropolitan Area Network): City-wide
+- **WAN** (Wide Area Network): Internet, cross-country
+
+**Interview Focus:** Understanding physical constraints (latency due to speed of light in fiber) and transmission medium choices.
+
+---
+
+### Complete Data Flow Through OSI Layers
+
+```mermaid
+graph TB
+    subgraph "Sender Side - Data Encapsulation"
+        APP_S[Application Layer<br/>User Data]
+        PRES_S[Presentation Layer<br/>Format + Compress + Encrypt]
+        SESS_S[Session Layer<br/>Add Session Info]
+        TRANS_S[Transport Layer<br/>Add Segment Header<br/>Port, Sequence, Checksum]
+        NET_S[Network Layer<br/>Add IP Header<br/>Source & Dest IP]
+        LINK_S[Data Link Layer<br/>Add MAC Header + Tail<br/>Frame]
+        PHY_S[Physical Layer<br/>Convert to Signals<br/>Bits]
+    end
+    
+    subgraph "Transmission Medium"
+        MEDIUM[Copper/Fiber/Wireless]
+    end
+    
+    subgraph "Receiver Side - Data Decapsulation"
+        PHY_R[Physical Layer<br/>Receive Signals<br/>Convert to Bits]
+        LINK_R[Data Link Layer<br/>Remove MAC Header<br/>Error Check]
+        NET_R[Network Layer<br/>Remove IP Header<br/>Check Destination]
+        TRANS_R[Transport Layer<br/>Remove Segment Header<br/>Reassemble, Error Check]
+        SESS_R[Session Layer<br/>Validate Session]
+        PRES_R[Presentation Layer<br/>Decrypt + Decompress]
+        APP_R[Application Layer<br/>Deliver to Application]
+    end
+    
+    APP_S --> PRES_S --> SESS_S --> TRANS_S --> NET_S --> LINK_S --> PHY_S
+    PHY_S --> MEDIUM
+    MEDIUM --> PHY_R
+    PHY_R --> LINK_R --> NET_R --> TRANS_R --> SESS_R --> PRES_R --> APP_R
+    
+    style APP_S fill:#e8f5e9
+    style TRANS_S fill:#e1f5ff
+    style NET_S fill:#fff4e1
+    style LINK_S fill:#f3e5f5
+    style APP_R fill:#e8f5e9
+    style TRANS_R fill:#e1f5ff
+    style NET_R fill:#fff4e1
+    style LINK_R fill:#f3e5f5
+```
+
+### Layer-by-Layer Data Transformation
+
+```mermaid
+graph LR
+    subgraph "Data Encapsulation Process"
+        D1[User Data<br/>Hello World]
+        D2[Compressed<br/>Encrypted Data]
+        D3[Session Info<br/>+ Data]
+        D4[Segment<br/>Port: 443<br/>Seq: 1<br/>+ Data]
+        D5[Packet<br/>IP: 192.168.1.1<br/>+ Segment]
+        D6[Frame<br/>MAC: AA:BB:CC<br/>+ Packet + CRC]
+        D7[Bits<br/>01010101...]
+    end
+    
+    D1 -->|Presentation| D2
+    D2 -->|Session| D3
+    D3 -->|Transport| D4
+    D4 -->|Network| D5
+    D5 -->|Data Link| D6
+    D6 -->|Physical| D7
+    
+    style D1 fill:#e8f5e9
+    style D4 fill:#e1f5ff
+    style D5 fill:#fff4e1
+    style D6 fill:#f3e5f5
+```
+
+### Quick Reference: What Happens at Each Layer
+
+| Layer | Adds | Unit | Key Info |
+|-------|------|------|----------|
+| **7. Application** | Application data | Data | HTTP request, email, etc. |
+| **6. Presentation** | Formatting | Data | Encryption, compression |
+| **5. Session** | Session tokens | Data | Authentication, session ID |
+| **4. Transport** | Port numbers, sequence | **Segment** | Source port, dest port, checksum |
+| **3. Network** | IP addresses | **Packet** | Source IP, dest IP, TTL |
+| **2. Data Link** | MAC addresses, CRC | **Frame** | Source MAC, dest MAC, error check |
+| **1. Physical** | - | **Bits** | Electrical/optical/radio signals |
 
 ### TCP vs UDP
 
