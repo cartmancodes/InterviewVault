@@ -58,142 +58,34 @@ mindmap
 
 ## Networking Essentials
 
+> 📖 **Detailed content moved to:** [Networking.md](./Networking.md)
+
 Networking is one of those topics where you can go incredibly deep, but for system design interviews you need to know the **practical bits** that come up when you're designing distributed systems.
 
-### Key Concepts
+### Quick Overview
 
-#### Communication Protocols
+**Key Topics Covered:**
+- Communication Protocols (HTTP/TCP, WebSockets, SSE, gRPC)
+- Real-time Communication patterns
+- Load Balancing (Layer 4 vs Layer 7)
+- Geography and Latency considerations
+- Network layers and protocols
 
-For most systems, you'll default to **HTTP over TCP**. It's well-understood, works everywhere, and handles 90% of use cases.
+**Most Important Concepts:**
+- Default to HTTP/TCP for 90% of use cases
+- WebSockets for bidirectional real-time (chat, gaming)
+- SSE for one-way server push (notifications, live scores)
+- Layer 7 load balancers for HTTP, Layer 4 for WebSockets
+- Geography matters: NY→London = 80ms minimum latency
 
-```mermaid
-graph TB
-    subgraph "Communication Protocols"
-        HTTP[HTTP/TCP<br/>Default Choice<br/>90% of use cases]
-        WS[WebSockets<br/>Bidirectional<br/>Real-time]
-        SSE[Server-Sent Events<br/>Server → Client<br/>Simpler than WS]
-        gRPC[gRPC<br/>Internal Services<br/>High Performance]
-    end
-    
-    HTTP -->|When to use| UC1[REST APIs<br/>Standard CRUD<br/>Stateless operations]
-    WS -->|When to use| UC2[Chat apps<br/>Live collaboration<br/>Gaming]
-    SSE -->|When to use| UC3[Live scores<br/>Notifications<br/>One-way updates]
-    gRPC -->|When to use| UC4[Microservices<br/>Internal APIs<br/>Performance critical]
-    
-    style HTTP fill:#e8f5e9
-    style WS fill:#e1f5ff
-    style SSE fill:#fff4e1
-    style gRPC fill:#f3e5f5
-```
+**When to Dive Deeper:**
+- Designing real-time systems (chat, collaboration)
+- Handling global user bases with low latency requirements
+- Choosing between different communication protocols
+- Understanding load balancer selection
+- Optimizing for network performance
 
-#### Real-time Communication
-
-**WebSockets vs Server-Sent Events:**
-
-- **SSE**: Server-to-client push only (like live scores or notifications)
-- **WebSockets**: Bidirectional communication where both sides send messages (like chat or live collaboration)
-
-> ⚠️ **Common Mistake**: Proposing WebSockets when HTTP with long polling or Server-Sent Events would work fine. WebSockets add significant complexity for maintaining stateful connections at scale.
-
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant S as Server
-    
-    rect rgb(225, 245, 255)
-    Note over C,S: WebSocket - Bidirectional
-    C->>S: Upgrade to WebSocket
-    S->>C: Connection Established
-    C->>S: Message 1
-    S->>C: Message 2
-    C->>S: Message 3
-    S->>C: Message 4
-    end
-    
-    rect rgb(255, 244, 225)
-    Note over C,S: SSE - Server to Client Only
-    C->>S: Request SSE Connection
-    S->>C: Event 1
-    S->>C: Event 2
-    S->>C: Event 3
-    Note over C: Client only receives
-    end
-```
-
-#### Load Balancing
-
-```mermaid
-graph TB
-    subgraph "Load Balancer Types"
-        L7[Layer 7<br/>Application Level<br/>HTTP Content-aware]
-        L4[Layer 4<br/>Transport Level<br/>TCP/UDP]
-    end
-    
-    subgraph "Use Cases"
-        L7 -->|Route based on| R1[URL Path<br/>HTTP Headers<br/>Request Content]
-        L4 -->|Route based on| R2[IP Address<br/>Port Number<br/>Connection]
-    end
-    
-    subgraph "Best For"
-        L7 -.-> B1[REST APIs<br/>Microservices<br/>Content Routing]
-        L4 -.-> B2[WebSockets<br/>Persistent Connections<br/>Raw Speed]
-    end
-    
-    style L7 fill:#e1f5ff
-    style L4 fill:#fff4e1
-```
-
-**Key Differences:**
-
-- **Layer 7 (Application)**: Routes based on HTTP request content. Can send API calls to one service and web page requests to another
-- **Layer 4 (Transport)**: Works at TCP level, faster but dumber. Just distributes connections without looking at content
-- For WebSockets, you typically need Layer 4 balancing because you're maintaining a persistent TCP connection
-
-#### Geography and Latency
-
-Geography and latency matter more than most candidates realize. A request from New York to London has a **minimum latency of around 80ms** just from the speed of light through fiber optic cables, before you even process anything.
-
-```mermaid
-graph TB
-    subgraph "Latency Considerations"
-        NY[New York User]
-        L[London User]
-        T[Tokyo User]
-    end
-    
-    subgraph "US Region"
-        US_DC[US Data Center]
-        US_CDN[US CDN Edge]
-    end
-    
-    subgraph "EU Region"
-        EU_DC[EU Data Center]
-        EU_CDN[EU CDN Edge]
-    end
-    
-    subgraph "APAC Region"
-        APAC_DC[APAC Data Center]
-        APAC_CDN[APAC CDN Edge]
-    end
-    
-    NY -->|~5ms| US_CDN
-    NY -->|~20ms| US_DC
-    NY -.->|~80ms| EU_DC
-    
-    L -->|~5ms| EU_CDN
-    L -->|~20ms| EU_DC
-    L -.->|~80ms| US_DC
-    
-    T -->|~5ms| APAC_CDN
-    T -->|~20ms| APAC_DC
-    T -.->|~150ms| US_DC
-    
-    style US_CDN fill:#e8f5e9
-    style EU_CDN fill:#e8f5e9
-    style APAC_CDN fill:#e8f5e9
-```
-
-**Solution**: If your system needs low latency globally, you'll need regional deployments with data replicated or partitioned by geography. This is why CDNs exist - to serve static content from edge servers close to users.
+👉 **[Read the full Networking Essentials guide](./Networking.md)** for detailed explanations, diagrams, and examples.
 
 ---
 
