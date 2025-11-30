@@ -98,6 +98,68 @@ Walking through our functional requirements, we need:
 - **Messages**
 - **Clients** (a user might have multiple devices)
 
+```mermaid
+erDiagram
+    USER ||--o{ CLIENT : "has multiple"
+    USER ||--o{ CHAT_PARTICIPANT : "participates in"
+    CHAT ||--o{ CHAT_PARTICIPANT : "contains"
+    CHAT ||--o{ MESSAGE : "contains"
+    MESSAGE ||--o{ ATTACHMENT : "may have"
+    CLIENT ||--o{ INBOX : "receives messages in"
+    
+    USER {
+        string userId PK
+        string name
+        string phoneNumber
+        timestamp lastSeen
+    }
+    
+    CLIENT {
+        string clientId PK
+        string userId FK
+        string deviceType
+        timestamp lastActive
+    }
+    
+    CHAT {
+        string chatId PK
+        string name
+        timestamp createdAt
+        int participantCount
+    }
+    
+    CHAT_PARTICIPANT {
+        string chatId PK
+        string userId PK
+        timestamp joinedAt
+        string role
+    }
+    
+    MESSAGE {
+        string messageId PK
+        string chatId FK
+        string senderId FK
+        string content
+        timestamp sentAt
+    }
+    
+    ATTACHMENT {
+        string attachmentId PK
+        string messageId FK
+        string s3Key
+        string fileType
+        int fileSize
+    }
+    
+    INBOX {
+        string inboxId PK
+        string clientId FK
+        string messageId FK
+        boolean delivered
+        timestamp createdAt
+    }
+```
+
 ### API or System Interface
 
 Next, we'll want to think through the API of our system. Unlike a lot of other products where a REST API is probably appropriate, for a chat app, we're going to have high-frequency updates being both sent and received. This is a perfect use case for a **bi-directional socket connection**!
@@ -197,6 +259,65 @@ For this interview, we'll just use **WebSockets** although a simple TLS connecti
 
 ## High-Level Design
 
+### Complete System Architecture
+
+```mermaid
+graph TB
+    subgraph "Client Layer"
+        C1[Mobile Client]
+        C2[Web Client]
+        C3[Desktop Client]
+    end
+    
+    subgraph "Load Balancing"
+        LB[L4 Load Balancer<br/>WebSocket Support]
+    end
+    
+    subgraph "Application Layer"
+        CS1[Chat Server 1]
+        CS2[Chat Server 2]
+        CS3[Chat Server 3]
+        AS[Attachment Service]
+    end
+    
+    subgraph "Message Queue"
+        PS[Pub/Sub System<br/>Kafka/Redis/SNS]
+    end
+    
+    subgraph "Storage Layer"
+        DB[(DynamoDB)]
+        S3[(S3 Storage<br/>Media Files)]
+    end
+    
+    subgraph "DynamoDB Tables"
+        T1[Chat Table]
+        T2[ChatParticipant Table]
+        T3[Message Table]
+        T4[Inbox Table]
+        T5[Clients Table]
+    end
+    
+    C1 & C2 & C3 <-->|WebSocket| LB
+    LB <-->|Route| CS1 & CS2 & CS3
+    
+    CS1 & CS2 & CS3 <-->|Pub/Sub| PS
+    CS1 & CS2 & CS3 <-->|Read/Write| DB
+    
+    C1 & C2 & C3 <-->|Upload/Download| AS
+    AS <-->|Store/Retrieve| S3
+    
+    DB -.-> T1 & T2 & T3 & T4 & T5
+    
+    style LB fill:#e1f5ff
+    style CS1 fill:#e1f5ff
+    style CS2 fill:#e1f5ff
+    style CS3 fill:#e1f5ff
+    style AS fill:#e1f5ff
+    style PS fill:#fff4e1
+    style DB fill:#e8f5e9
+    style S3 fill:#e8f5e9
+```
+
 ### 1) Users should be able to start group chats with multiple participants (limit 100)
 
 For our first requirement, we need a way for a user to create a chat. We'll start with a simple service behind an **L4 load balancer** (to support WebSockets!) which can write Chat metadata to a database.
@@ -204,6 +325,27 @@ For our first requirement, we need a way for a user to create a chat. We'll star
 Let's use **DynamoDB** for fast key/value performance and scalability here, although we have lots of other options.
 
 #### Create a Chat Flow
+
+```mermaid
+sequenceDiagram
+    participant Client as Client
+    participant LB as L4 Load Balancer
+    participant CS as Chat Server
+    participant DB as DynamoDB
+    
+    Client->>LB: createChat(participants, name)
+    LB->>CS: Forward request
+    
+    CS->>DB: BEGIN TRANSACTION
+    CS->>DB: INSERT Chat(chatId, name, createdAt)
+    CS->>DB: INSERT ChatParticipant(chatId, userId1)
+    CS->>DB: INSERT ChatParticipant(chatId, userId2)
+    CS->>DB: INSERT ChatParticipant(chatId, userId3)
+    CS->>DB: COMMIT TRANSACTION
+    
+    DB-->>CS: Transaction Success
+    CS-->>Client: {chatId: "chat_123"}
+```
 
 **Steps:**
 1. User connects to the service and sends a `createChat` message
@@ -223,6 +365,28 @@ Let's use **DynamoDB** for fast key/value performance and scalability here, alth
   - Allows efficient query of all chats for a given user
   - GSI automatically kept in sync with base table by DynamoDB
 
+```mermaid
+graph TB
+    subgraph "DynamoDB Tables"
+        subgraph "Chat Table"
+            CT[Primary Key: chatId]
+        end
+        
+        subgraph "ChatParticipant Table"
+            CPT[Composite PK: chatId + participantId]
+            GSI[GSI: participantId + chatId]
+        end
+    end
+    
+    Q1[Query: Get participants<br/>for chatId] --> CPT
+    Q2[Query: Get all chats<br/>for userId] --> GSI
+    Q3[Query: Get chat details<br/>by chatId] --> CT
+    
+    style CT fill:#e1f5ff
+    style CPT fill:#e1f5ff
+    style GSI fill:#fff4e1
+```
+
 ---
 
 ### 2) Users should be able to send/receive messages
@@ -237,10 +401,45 @@ To allow users to send/receive messages, we're going to need to start taking adv
 
 When users make WebSocket connections to our Chat Server, we'll want to keep track of their connection with a simple **hash map** which will map a user id to a websocket connection.
 
+```mermaid
+graph LR
+    subgraph "Chat Server - Single Host"
+        HM[HashMap<br/>userId -> WebSocket]
+    end
+    
+    U1[User A<br/>WebSocket] -.->|connected| HM
+    U2[User B<br/>WebSocket] -.->|connected| HM
+    U3[User C<br/>WebSocket] -.->|connected| HM
+    
+    style HM fill:#e1f5ff
+```
+
 **To send a message:**
 1. User sends a `sendMessage` message to the Chat Server
 2. The Chat Server looks up all participants in the chat via the ChatParticipant table
 3. The Chat Server looks up the websocket connection for each participant in its internal hash table and sends the message via each connection
+
+```mermaid
+sequenceDiagram
+    participant UA as User A
+    participant CS as Chat Server
+    participant DB as ChatParticipant Table
+    participant UB as User B
+    participant UC as User C
+    
+    UA->>CS: sendMessage(chatId, "Hello!")
+    CS->>DB: getParticipants(chatId)
+    DB-->>CS: [UserB, UserC]
+    
+    CS->>CS: Lookup WebSocket for UserB
+    CS->>CS: Lookup WebSocket for UserC
+    
+    CS->>UB: newMessage("Hello!")
+    CS->>UC: newMessage("Hello!")
+    
+    UB-->>CS: ACK
+    UC-->>CS: ACK
+```
 
 > ⚠️ **Strong Assumptions**: We're assuming all users are online, connected to the same Chat Server, and that we have a websocket connection for each of them. But under those conditions we're moving, so let's keep going.
 
@@ -254,7 +453,60 @@ With our next requirement, we're forced to undo some of those assumptions. We're
 
 Let's keep an "Inbox" for each user which will contain all undelivered messages. When messages are sent, we'll write them to the inbox of each recipient user. If they're already online, we can go ahead and try to deliver the message immediately. If they're not online, we'll store the message and wait for them to come back later.
 
+```mermaid
+graph TB
+    subgraph "Storage Layer"
+        MT[Message Table<br/>All messages]
+        IT[Inbox Table<br/>Undelivered messages<br/>per user]
+    end
+    
+    subgraph "Message Flow"
+        S[Sender] -->|1. sendMessage| CS[Chat Server]
+        CS -->|2. Write to DB| MT
+        CS -->|3. Write inbox entries| IT
+        CS -->|4. Try deliver| Online[Online Users]
+        IT -->|5. Fetch on connect| Offline[Offline Users]
+    end
+    
+    Online -->|6. ACK| CS
+    CS -->|7. Delete from inbox| IT
+    
+    style MT fill:#e1f5ff
+    style IT fill:#fff4e1
+```
+
 #### Send a Message Flow
+
+```mermaid
+sequenceDiagram
+    participant Sender as Sender
+    participant CS as Chat Server
+    participant CPT as ChatParticipant Table
+    participant MT as Message Table
+    participant IT as Inbox Table
+    participant R1 as Recipient 1 (Online)
+    participant R2 as Recipient 2 (Offline)
+    
+    Sender->>CS: sendMessage(chatId, "Hello!")
+    CS->>CPT: getParticipants(chatId)
+    CPT-->>CS: [Recipient1, Recipient2]
+    
+    CS->>CS: BEGIN TRANSACTION
+    CS->>MT: INSERT Message(msgId, chatId, content)
+    CS->>IT: INSERT Inbox(recipient1, msgId)
+    CS->>IT: INSERT Inbox(recipient2, msgId)
+    CS->>CS: COMMIT TRANSACTION
+    
+    CS-->>Sender: SUCCESS (messageId)
+    
+    Note over CS,R1: Attempt immediate delivery
+    CS->>R1: newMessage("Hello!")
+    R1-->>CS: ACK
+    CS->>IT: DELETE Inbox(recipient1, msgId)
+    
+    Note over CS,R2: R2 is offline, stays in Inbox
+    CS-xR2: Connection not found
+```
 
 **Steps:**
 1. User sends a `sendMessage` message to the Chat Server
@@ -269,6 +521,28 @@ Let's keep an "Inbox" for each user which will contain all undelivered messages.
 #### Handling Offline Clients
 
 For clients who aren't connected, we'll keep the messages in the Inbox table. Once the client connects to our service later:
+
+```mermaid
+sequenceDiagram
+    participant Client as Client (Reconnects)
+    participant CS as Chat Server
+    participant IT as Inbox Table
+    participant MT as Message Table
+    
+    Client->>CS: Connect (userId)
+    CS->>IT: SELECT * FROM Inbox WHERE userId = ?
+    IT-->>CS: [msg1, msg2, msg3]
+    
+    loop For each message ID
+        CS->>MT: SELECT * FROM Message WHERE msgId = ?
+        MT-->>CS: Message content
+        CS->>Client: newMessage(content)
+        Client-->>CS: ACK
+        CS->>IT: DELETE FROM Inbox WHERE msgId = ?
+    end
+    
+    Note over Client,CS: Client is now in sync
+```
 
 1. Look up the user's Inbox and find any undelivered message IDs
 2. For each message ID, look up the message in the Message table
@@ -318,6 +592,38 @@ Users sending and receiving media is annoying. It's bandwidth- and storage-inten
 - Client sends message with attachment ID reference
 - Recipients download media from S3 using the attachment ID
 
+```mermaid
+sequenceDiagram
+    participant Sender as Sender Client
+    participant AS as Attachment Service
+    participant S3 as S3 Storage
+    participant CS as Chat Server
+    participant Receiver as Receiver Client
+    
+    Note over Sender,S3: Upload Phase
+    Sender->>AS: requestUploadURL(fileName, fileType)
+    AS->>S3: Generate presigned URL
+    S3-->>AS: presignedURL
+    AS-->>Sender: presignedURL
+    
+    Sender->>S3: PUT /upload (media file)
+    S3-->>Sender: Upload success
+    S3-->>AS: Upload notification
+    AS-->>Sender: attachmentId
+    
+    Note over Sender,Receiver: Message Phase
+    Sender->>CS: sendMessage(chatId, text, [attachmentId])
+    CS->>Receiver: newMessage(text, [attachmentId])
+    
+    Note over Receiver,S3: Download Phase
+    Receiver->>AS: requestDownloadURL(attachmentId)
+    AS->>S3: Generate presigned URL
+    S3-->>AS: presignedURL
+    AS-->>Receiver: presignedURL
+    Receiver->>S3: GET /download
+    S3-->>Receiver: Media file
+```
+
 > ✅ **Result**: We have a system which has real-time delivery of messages, persistence to handle offline use-cases, and attachments.
 
 ---
@@ -342,6 +648,23 @@ If we have 1B users, we might expect 200M of them to be connected at any one tim
 
 Adding more chat servers also introduces some new problems: now the sending and receiving users might be connected to different hosts. If User A is trying to send a message to User B and C, but User B and C are connected to different Chat Servers, we're going to have a problem.
 
+```mermaid
+graph TB
+    UA[User A] -->|Connected| CS1[Chat Server 1]
+    UB[User B] -->|Connected| CS2[Chat Server 2]
+    UC[User C] -->|Connected| CS3[Chat Server 3]
+    
+    UA -.->|Wants to send to| UB
+    UA -.->|Wants to send to| UC
+    
+    CS1 -.->|How to route?| CS2
+    CS1 -.->|How to route?| CS3
+    
+    style CS1 fill:#ffe1e1
+    style CS2 fill:#ffe1e1
+    style CS3 fill:#ffe1e1
+```
+
 **The issue is one of routing**: we're going to need to route messages to the right Chat Servers in order to deliver them.
 
 #### Solutions Evolution
@@ -351,16 +674,79 @@ Adding more chat servers also introduces some new problems: now the sending and 
 - No coordination between servers
 - Messages won't reach users on different servers
 
+```mermaid
+graph LR
+    U1[User 1] --> CS1[Chat Server 1]
+    U2[User 2] --> CS2[Chat Server 2]
+    U3[User 3] --> CS3[Chat Server 3]
+    
+    CS1 -.x|No routing<br/>mechanism| CS2
+    CS2 -.x|No routing<br/>mechanism| CS3
+    
+    style CS1 fill:#ffe1e1
+    style CS2 fill:#ffe1e1
+    style CS3 fill:#ffe1e1
+```
+
 ##### ⚠️ Bad Solution: Keep a Kafka topic per user
 - Creates massive number of topics
 - Kafka not designed for this pattern
 - Management overhead too high
+
+```mermaid
+graph TB
+    subgraph "Kafka - 1 Billion Topics!"
+        T1[Topic: User1]
+        T2[Topic: User2]
+        T3[Topic: User3]
+        T4[...]
+        T5[Topic: UserN]
+    end
+    
+    CS[Chat Servers] -.x|Unmanageable<br/>at scale| T1 & T2 & T3 & T4 & T5
+    
+    style T1 fill:#ffe1e1
+    style T2 fill:#ffe1e1
+    style T3 fill:#ffe1e1
+    style T4 fill:#ffe1e1
+    style T5 fill:#ffe1e1
+```
 
 ##### ✅ Good Solution: Consistent Hashing of Chat Servers
 - Hash user IDs to specific chat servers
 - Servers know which other servers host which users
 - Need a coordination service (like ZooKeeper)
 - Works but requires complex coordination
+
+```mermaid
+graph TB
+    subgraph "Coordination Layer"
+        ZK[ZooKeeper<br/>Tracks user->server mapping]
+    end
+    
+    subgraph "Hash Ring"
+        CS1[Chat Server 1<br/>Hash: 0-33%]
+        CS2[Chat Server 2<br/>Hash: 34-66%]
+        CS3[Chat Server 3<br/>Hash: 67-100%]
+    end
+    
+    U1[User 1<br/>Hash: 15%] --> CS1
+    U2[User 2<br/>Hash: 50%] --> CS2
+    U3[User 3<br/>Hash: 85%] --> CS3
+    
+    CS1 <-->|Query routing| ZK
+    CS2 <-->|Query routing| ZK
+    CS3 <-->|Query routing| ZK
+    
+    CS1 <-.->|Route messages| CS2
+    CS2 <-.->|Route messages| CS3
+    CS3 <-.->|Route messages| CS1
+    
+    style CS1 fill:#fff4e1
+    style CS2 fill:#fff4e1
+    style CS3 fill:#fff4e1
+    style ZK fill:#e1f5ff
+```
 
 ##### 🌟 Great Solution: Offload to Pub/Sub
 - Use a **message queue system** (Kafka, AWS SNS/SQS, Redis Pub/Sub)
@@ -374,6 +760,77 @@ Adding more chat servers also introduces some new problems: now the sending and 
   - Scales horizontally
   - Handles server failures gracefully
   - Simple to implement and maintain
+
+```mermaid
+graph TB
+    subgraph "Chat Servers"
+        CS1[Chat Server 1<br/>Subscribed: UserB, UserD]
+        CS2[Chat Server 2<br/>Subscribed: UserA, UserE]
+        CS3[Chat Server 3<br/>Subscribed: UserC, UserF]
+    end
+    
+    subgraph "Pub/Sub System (Kafka/Redis)"
+        T1[Topic: UserA]
+        T2[Topic: UserB]
+        T3[Topic: UserC]
+        T4[Topic: UserD]
+        T5[Topic: UserE]
+        T6[Topic: UserF]
+    end
+    
+    subgraph "Users"
+        UA[User A] -.->|connected| CS2
+        UB[User B] -.->|connected| CS1
+        UC[User C] -.->|connected| CS3
+    end
+    
+    UA -->|1. Send message to B & C| CS2
+    CS2 -->|2. Publish to topics| T2
+    CS2 -->|2. Publish to topics| T3
+    
+    T2 -->|3. Deliver| CS1
+    T3 -->|3. Deliver| CS3
+    
+    CS1 -->|4. Send via WebSocket| UB
+    CS3 -->|4. Send via WebSocket| UC
+    
+    style CS1 fill:#e1f5ff
+    style CS2 fill:#e1f5ff
+    style CS3 fill:#e1f5ff
+    style T1 fill:#fff4e1
+    style T2 fill:#fff4e1
+    style T3 fill:#fff4e1
+    style T4 fill:#fff4e1
+    style T5 fill:#fff4e1
+    style T6 fill:#fff4e1
+```
+
+```mermaid
+sequenceDiagram
+    participant UA as User A<br/>(CS2)
+    participant CS2 as Chat Server 2
+    participant PS as Pub/Sub System
+    participant CS1 as Chat Server 1
+    participant CS3 as Chat Server 3
+    participant UB as User B<br/>(CS1)
+    participant UC as User C<br/>(CS3)
+    
+    Note over CS1: Subscribed to UserB topic
+    Note over CS3: Subscribed to UserC topic
+    
+    UA->>CS2: sendMessage("Hello B & C!")
+    CS2->>PS: Publish to topic:UserB
+    CS2->>PS: Publish to topic:UserC
+    
+    PS-->>CS1: Message for UserB
+    PS-->>CS3: Message for UserC
+    
+    CS1->>UB: newMessage("Hello B & C!")
+    CS3->>UC: newMessage("Hello B & C!")
+    
+    UB-->>CS1: ACK
+    UC-->>CS3: ACK
+```
 
 ---
 
@@ -404,12 +861,131 @@ Let's account for this with minimal changes to our design:
 - When we send a message, we'll need to send it to all of the clients for that user
 - On the pub/sub side, nothing needs to change. Chat servers will continue to subscribe to a topic with the userId
 
+```mermaid
+graph TB
+    subgraph "User A's Devices"
+        P[Phone<br/>ClientID: A1]
+        L[Laptop<br/>ClientID: A2]
+        T[Tablet<br/>ClientID: A3]
+    end
+    
+    subgraph "Chat Servers"
+        CS1[Chat Server 1]
+        CS2[Chat Server 2]
+    end
+    
+    subgraph "Storage"
+        CT[Clients Table<br/>userId -> [clientIds]]
+        IT[Inbox Table<br/>clientId -> [messages]]
+    end
+    
+    P -.->|connected| CS1
+    L -.->|connected| CS2
+    T -.->|offline| CS2
+    
+    CS1 -->|lookup clients| CT
+    CS2 -->|lookup clients| CT
+    
+    CS1 -->|write undelivered| IT
+    CS2 -->|write undelivered| IT
+    
+    IT -.->|A1 inbox: empty| P
+    IT -.->|A2 inbox: empty| L
+    IT -.->|A3 inbox: [msg1, msg2]| T
+    
+    style CT fill:#e1f5ff
+    style IT fill:#fff4e1
+```
+
+```mermaid
+sequenceDiagram
+    participant Sender as Sender
+    participant CS as Chat Server
+    participant CT as Clients Table
+    participant IT as Inbox Table
+    participant P as Phone (Online)
+    participant L as Laptop (Online)
+    participant T as Tablet (Offline)
+    
+    Sender->>CS: sendMessage(userId: A, "Hello!")
+    CS->>CT: getClients(userId: A)
+    CT-->>CS: [Phone:A1, Laptop:A2, Tablet:A3]
+    
+    Note over CS: Write to per-client inbox
+    CS->>IT: INSERT Inbox(A1, messageId)
+    CS->>IT: INSERT Inbox(A2, messageId)
+    CS->>IT: INSERT Inbox(A3, messageId)
+    
+    Note over CS,P: Deliver to online clients
+    CS->>P: newMessage("Hello!")
+    P-->>CS: ACK
+    CS->>IT: DELETE Inbox(A1, messageId)
+    
+    CS->>L: newMessage("Hello!")
+    L-->>CS: ACK
+    CS->>IT: DELETE Inbox(A2, messageId)
+    
+    Note over T: Offline - stays in inbox
+    CS-xT: Not connected
+    
+    Note over IT: Tablet inbox still has message
+```
+
 **Best Practice:**
 We'll probably want to introduce some limits (3 clients per account) to avoid blowing up our storage and throughput.
 
 ---
 
 ## What is Expected at Each Level?
+
+```mermaid
+graph LR
+    subgraph "Mid-Level E4"
+        M1[80% Breadth<br/>20% Depth]
+        M2[Functional Design]
+        M3[Basic Scaling]
+        M4[Interviewer Guided]
+    end
+    
+    subgraph "Senior E5"
+        S1[60% Breadth<br/>40% Depth]
+        S2[Advanced Concepts]
+        S3[Trade-off Analysis]
+        S4[Proactive Problem Solving]
+    end
+    
+    subgraph "Staff+ E6"
+        ST1[40% Breadth<br/>60% Depth]
+        ST2[Deep Expertise]
+        ST3[System Optimization]
+        ST4[Independent Leadership]
+    end
+    
+    M1 --> S1
+    M2 --> S2
+    M3 --> S3
+    M4 --> S4
+    
+    S1 --> ST1
+    S2 --> ST2
+    S3 --> ST3
+    S4 --> ST4
+    
+    style M1 fill:#e8f5e9
+    style M2 fill:#e8f5e9
+    style M3 fill:#e8f5e9
+    style M4 fill:#e8f5e9
+    
+    style S1 fill:#e1f5ff
+    style S2 fill:#e1f5ff
+    style S3 fill:#e1f5ff
+    style S4 fill:#e1f5ff
+    
+    style ST1 fill:#fff4e1
+    style ST2 fill:#fff4e1
+    style ST3 fill:#fff4e1
+    style ST4 fill:#fff4e1
+```
 
 ### Mid-level
 
@@ -538,6 +1114,75 @@ We'll probably want to introduce some limits (3 clients per account) to avoid bl
 - System Design Patterns Documentation
 
 ---
+
+## Complete Message Flow Diagram
+
+```mermaid
+flowchart TB
+    Start([User sends message]) --> A{Message has<br/>attachments?}
+    
+    A -->|Yes| B[Upload to S3 via<br/>Attachment Service]
+    B --> C[Get attachmentId]
+    C --> D[Send message with attachmentId]
+    
+    A -->|No| D
+    
+    D --> E[Chat Server receives message]
+    E --> F[Write to Message Table]
+    E --> G[Lookup participants<br/>from ChatParticipant Table]
+    
+    F --> H[Transaction: Write to<br/>Inbox for each client]
+    G --> H
+    
+    H --> I[Publish to Pub/Sub topics<br/>for each user]
+    
+    I --> J{Chat Servers<br/>subscribed to topics}
+    
+    J --> K[Chat Server 1<br/>receives notification]
+    J --> L[Chat Server 2<br/>receives notification]
+    J --> M[Chat Server N<br/>receives notification]
+    
+    K --> N{Client<br/>online?}
+    L --> O{Client<br/>online?}
+    M --> P{Client<br/>online?}
+    
+    N -->|Yes| Q[Deliver via WebSocket]
+    N -->|No| R[Keep in Inbox]
+    
+    O -->|Yes| S[Deliver via WebSocket]
+    O -->|No| T[Keep in Inbox]
+    
+    P -->|Yes| U[Deliver via WebSocket]
+    P -->|No| V[Keep in Inbox]
+    
+    Q --> W[Receive ACK]
+    S --> X[Receive ACK]
+    U --> Y[Receive ACK]
+    
+    W --> Z[Delete from Inbox]
+    X --> Z
+    Y --> Z
+    
+    R --> AA[Deliver on reconnect]
+    T --> AA
+    V --> AA
+    
+    AA --> AB[User connects]
+    AB --> AC[Fetch from Inbox]
+    AC --> AD[Deliver messages]
+    AD --> AE[Receive ACK]
+    AE --> Z
+    
+    Z --> End([Message delivered])
+    
+    style Start fill:#e8f5e9
+    style End fill:#e8f5e9
+    style A fill:#fff4e1
+    style N fill:#fff4e1
+    style O fill:#fff4e1
+    style P fill:#fff4e1
+    style I fill:#e1f5ff
+```
 
 ## Summary
 
