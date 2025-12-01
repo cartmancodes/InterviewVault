@@ -297,16 +297,33 @@ graph TB
         T5[Clients Table]
     end
     
-    C1 & C2 & C3 <-->|WebSocket| LB
-    LB <-->|Route| CS1 & CS2 & CS3
+    C1 <-->|WebSocket| LB
+    C2 <-->|WebSocket| LB
+    C3 <-->|WebSocket| LB
     
-    CS1 & CS2 & CS3 <-->|Pub/Sub| PS
-    CS1 & CS2 & CS3 <-->|Read/Write| DB
+    LB <-->|Route| CS1
+    LB <-->|Route| CS2
+    LB <-->|Route| CS3
     
-    C1 & C2 & C3 <-->|Upload/Download| AS
+    CS1 <-->|Pub/Sub| PS
+    CS2 <-->|Pub/Sub| PS
+    CS3 <-->|Pub/Sub| PS
+    
+    CS1 <-->|Read/Write| DB
+    CS2 <-->|Read/Write| DB
+    CS3 <-->|Read/Write| DB
+    
+    C1 <-->|Upload/Download| AS
+    C2 <-->|Upload/Download| AS
+    C3 <-->|Upload/Download| AS
+    
     AS <-->|Store/Retrieve| S3
     
-    DB -.-> T1 & T2 & T3 & T4 & T5
+    DB -.-> T1
+    DB -.-> T2
+    DB -.-> T3
+    DB -.-> T4
+    DB -.-> T5
     
     style LB fill:#e1f5ff
     style CS1 fill:#e1f5ff
@@ -680,8 +697,11 @@ graph LR
     U2[User 2] --> CS2[Chat Server 2]
     U3[User 3] --> CS3[Chat Server 3]
     
-    CS1 -.x|No routing<br/>mechanism| CS2
-    CS2 -.x|No routing<br/>mechanism| CS3
+    CS1 -.-x CS2
+    CS2 -.-x CS3
+    
+    CS1 -.->|No routing mechanism| CS2
+    CS2 -.->|No routing mechanism| CS3
     
     style CS1 fill:#ffe1e1
     style CS2 fill:#ffe1e1
@@ -703,13 +723,20 @@ graph TB
         T5[Topic: UserN]
     end
     
-    CS[Chat Servers] -.x|Unmanageable<br/>at scale| T1 & T2 & T3 & T4 & T5
+    CS[Chat Servers]
+    
+    CS -.->|Unmanageable at scale| T1
+    CS -.->|Unmanageable at scale| T2
+    CS -.->|Unmanageable at scale| T3
+    CS -.->|Unmanageable at scale| T4
+    CS -.->|Unmanageable at scale| T5
     
     style T1 fill:#ffe1e1
     style T2 fill:#ffe1e1
     style T3 fill:#ffe1e1
     style T4 fill:#ffe1e1
     style T5 fill:#ffe1e1
+    style CS fill:#ffe1e1
 ```
 
 ##### ✅ Good Solution: Consistent Hashing of Chat Servers
