@@ -27,6 +27,7 @@
   - [Stage 3: 1K to 100K Users](#stage-3-1k-to-100k-users)
   - [Stage 4: 100K to 10M Users](#stage-4-100k-to-10m-users)
   - [Stage 5: 10M+ Users](#stage-5-10m-users)
+- [Insider Tips and Tricks](#insider-tips-and-tricks)
 - [Expected Depth by Level](#expected-depth-by-level)
 
 ---
@@ -129,18 +130,20 @@ Two approaches dominate real-time collaborative editors.
 
 **Operational Transformation (OT)** - what Google Docs actually uses. Operations are indexed (`insert at position 5`). When two concurrent operations arrive, the server "transforms" one against the other so that its index accounts for the effect of the first. Example: client A inserts "X" at index 3, client B concurrently inserts "Y" at index 3. The server accepts A first, then rewrites B's op to insert "Y" at index 4. OT requires a central, trusted authority to do the transformation; free-for-all peer-to-peer OT is notoriously hard to get right because of the TP2 transformation property.
 
-**CRDTs** (RGA, Yjs, Automerge) - each character gets a unique, globally orderable identifier (usually `(site_id, lamport_clock)`) and operations commute by construction. Two peers that have seen the same set of operations end up with the same document regardless of arrival order. This makes CRDTs friendlier for offline and P2P, but they add per-character metadata overhead (historically 2-10x the text size; modern optimizations like Yjs's run-length encoding bring this down).
+OT theory defines two transformation properties. TP1 is the basic convergence property: if two operations O1 and O2 are concurrent, then applying `transform(O1, O2)` after O2 produces the same result as applying `transform(O2, O1)` after O1. Almost every OT implementation satisfies TP1. TP2 is a stronger property required only in peer-to-peer (more than two sites) topologies: it guarantees that the order in which you compose transforms does not matter. TP2 is extremely difficult to satisfy correctly — the literature is littered with algorithms that claim TP2 compliance but diverge under specific three-site concurrent edit sequences. Jupiter, the algorithm underlying Google Wave and early Google Docs, sidesteps TP2 entirely by routing all operations through a single server, reducing the problem to a series of two-site transforms.
 
-**Trade-off for Google Docs**: OT wins because the product already has a centralized server for auth and sharing, latency is dominated by the round trip (not by conflict resolution cost), and OT produces a clean linear revision history which powers features like version history and suggestions. CRDTs become attractive when offline-first matters more (Apple Notes, Notion offline, Figma for some structures).
+**CRDTs** (RGA, Yjs, Automerge) - each character gets a unique, globally orderable identifier (usually `(site_id, lamport_clock)`) and operations commute by construction. Two peers that have seen the same set of operations end up with the same document regardless of arrival order. This makes CRDTs friendlier for offline and P2P, but they add per-character metadata overhead. Older CRDT implementations carried 5-10x the raw text size in metadata. Modern run-length encoding in Yjs brings this down to approximately 1.5-2x for typical prose editing workloads, making CRDTs viable for documents up to hundreds of kilobytes of text.
+
+**Trade-off for Google Docs**: OT wins because the product already has a centralized server for auth and sharing, latency is dominated by the round trip (not by conflict resolution cost), and OT produces a clean linear revision history which powers features like version history and suggestions. CRDTs become attractive when offline-first matters more (Apple Notes, Notion offline, Figma for some structures), or when the per-document metadata budget is acceptable.
 
 ### 2. Cursor and Presence
 
-Presence is deliberately *not* durable. Treating cursor positions like edits would explode the operation log (every mouse move) and pollute version history.
+Presence is deliberately *not* durable. Treating cursor positions like edits would explode the operation log (every mouse move) and pollute version history. Presence must never be written to the durable operation log — it is kept entirely in-memory on the coordinator and broadcast as ephemeral frames on the WebSocket, never fsynced to disk.
 
 - Cursors ride the same WebSocket but on a separate frame type.
-- The coordinator keeps an in-memory map `session_id -> {cursor, selection, last_seen}` and fans out a batched presence message every 100-200 ms, not on every move.
+- The coordinator keeps an in-memory map `session_id -> {cursor, selection, last_seen}` and fans out a batched presence message every 100-200 ms (approximately 5 Hz), not on every move. Throttling to ~5 Hz matters at scale: with N active cursors and M operations per second, naive per-move broadcasting creates an N × M fan-out that overwhelms both the coordinator's outbound bandwidth and clients' rendering budgets.
 - A cursor position is stored as an index into the *current* server revision. When a new op arrives, each peer transforms its local record of remote cursors the same way it transforms its own cursor after a remote edit, so cursors stay anchored to the right character.
-- Heartbeat timeout (e.g., 30 s) removes stale presences.
+- Heartbeat timeout (30 s) removes stale presences. When the coordinator restarts, all in-memory presence state is lost; clients rebuild it within one heartbeat cycle by sending their next presence frame, so the recovery is invisible to users.
 
 ### 3. Conflict Resolution Walkthrough
 
@@ -159,6 +162,8 @@ Broadcast goes out:
 
 Both clients converge to `"hel world"`. Note that naive "last write wins" would have deleted part of A's insert or placed it at the wrong index; OT is what makes this correct.
 
+A critical correctness point: the server assigns all revision numbers using its own monotonic counter. The `ts` field that clients include in operation frames cannot be trusted for ordering — client clocks can differ by seconds or minutes, and two concurrent operations from different clients may report timestamps that cross over. Wall-clock timestamps from clients are used only for display purposes (e.g., "last edited 3 minutes ago") and must never influence the transformation pipeline or operation ordering.
+
 ### 4. Offline Edits and Reconnection
 
 While disconnected, the client keeps accepting keystrokes, appending them to a local pending queue, and applying them to its local DOM. Each pending op carries the `base_revision` it was created against - always the last revision the client saw from the server.
@@ -168,9 +173,11 @@ On reconnect:
 1. Client reopens the WebSocket and sends its `last_acked_revision` and its queue of pending ops.
 2. Server compares with the current document revision. If the gap is small (say < N thousand ops), it replays the missing ops from the operation log into a transformation pipeline, rebasing the client's queued ops one by one against each intervening server op.
 3. Each rebased op is assigned a new revision and broadcast. Client receives acks and reconciles.
-4. If the gap is too large (long offline session, snapshots have truncated the log), the server sends a fresh snapshot instead and the client re-diffs its local text against it to recover unsynced changes. This is where users occasionally see the dreaded "some of your changes could not be saved" - the fallback when rebase fails.
+4. If the gap is too large — specifically, if the log entries the client needs have been truncated after snapshot compaction — rebase is impossible. The server sends a fresh snapshot and the client must perform a three-way merge: its local (offline-edited) text, the pre-offline baseline the client remembers, and the server's current snapshot. This is structurally identical to `git merge`: find the common ancestor, apply both diverging changesets, and surface conflicts where they overlap. Most production implementations show a conflict dialog at this point. This is where users occasionally see the dreaded "some of your changes could not be saved."
 
-CRDTs are more graceful here because every local op is already globally orderable and does not need rebasing. This is the strongest argument for hybrid designs: OT on the hot path, CRDT-style vector clocks at the edges for long offline windows.
+Operation logs are truncated periodically after a snapshot is taken and a retention window expires. A client offline long enough to fall outside that retention window hits this hard limit — it cannot be rebased, and must accept the three-way merge fallback.
+
+CRDTs are more graceful here because every local op is already globally orderable by its `(site_id, lamport_clock)` vector clock and does not need rebasing against a server log. A CRDT client that reconnects after weeks offline simply ships its local op set; the server performs a set-union merge. This is the strongest argument for hybrid designs: OT on the hot path for its clean linear history, CRDT-style vector clocks at the edges for long offline windows where log-based rebase is unavailable.
 
 ### 5. Scaling WebSocket Connections
 
@@ -179,17 +186,20 @@ The WebSocket fleet is stateless with respect to documents - any edge node can t
 - **Edge tier (stateless)**: A fleet of WebSocket terminators behind a load balancer that supports sticky sessions or consistent hashing. These nodes do TLS, authentication, and frame parsing only.
 - **Coordinator tier (stateful, single-writer per doc)**: Each doc is assigned to exactly one coordinator process via consistent hashing on `doc_id`. All ops for a doc land on its coordinator. Edge nodes look up the coordinator from a placement service (e.g., ZooKeeper or an in-memory routing cache) and forward the frame.
 - **Presence fan-out**: The coordinator owns the authoritative session list for its docs; it pushes updates to the edge nodes that currently host those sessions.
-- **Failover**: When a coordinator dies, the placement service elects a new one. The new coordinator rebuilds state by replaying the operation log from the latest snapshot. Clients experience a short stall and reconnect.
+- **Failover**: When a coordinator dies, the placement service elects a new one. The new coordinator rebuilds state by replaying the operation log from the latest snapshot. Clients experience a short stall and reconnect. The critical correctness requirement during failover is not just speed of election — it is guaranteeing that the old coordinator has fully stopped processing before the new one starts. A fencing token (a monotonically increasing epoch number, sometimes called a "generation number") enforces this: the new coordinator writes its epoch to a shared store, and any late-arriving write from the old coordinator that carries a stale epoch is rejected. Without a fencing token, a coordinator that is slow to die (e.g., paused by a GC or a network partition) can race with its successor and produce two diverging revision sequences for the same document.
 
-Capacity back-of-envelope: a modern Linux box with tuned kernel settings can hold ~500K-1M idle WebSockets, but "active editing" workloads cap out much earlier (CPU for op transform, fan-out). Plan ~10-50K active sessions per coordinator process, sharded.
+To prevent a slow client from stalling op delivery to all other collaborators on the same document, each session on the coordinator maintains an application-level send queue with a maximum depth (typically a few hundred frames). If the queue fills because the client is not draining the socket fast enough, the coordinator switches that session to "catch-up mode": it stops enqueuing incremental ops and waits until the client drains, then sends a single snapshot to resynchronize. This is necessary because TCP's flow control will eventually back-pressure a slow client, but only after hundreds of frames have already accumulated in the kernel socket buffer — by which point the coordinator may be blocked on a socket write, delaying broadcasts to all other sessions.
+
+Capacity back-of-envelope: a modern Linux box with tuned kernel settings can hold ~500K-1M idle WebSockets, but "active editing" workloads cap out much earlier (CPU for op transform, fan-out). Plan ~10-50K active sessions per coordinator process, sharded across a fleet.
 
 ### 6. Storage: Snapshots and the Operation Log
 
 The durability story has two halves.
 
 - **Operation log (append-only, hot)**: Every committed op is written to a replicated log keyed by `(doc_id, revision)`. This is the source of truth for ordering and for rebuild after coordinator failover. Implementation choices: a Kafka topic partitioned by doc_id, a sharded MySQL table with strict per-doc ordering, or a specialized log like Bigtable with single-row commits per doc. Fsync before ack, otherwise a crash loses keystrokes.
-- **Snapshots (periodic, cold)**: Every N ops or M minutes, the coordinator materializes the text and writes it to blob storage (S3/GCS) as `{doc_id, revision}.blob`. Load path reads the latest snapshot plus operations after that revision; this bounds startup cost even for docs with millions of edits over years.
-- **Compaction**: Old log entries behind a snapshot can be archived to cold storage for version history but dropped from the hot log after some retention window.
+- **Snapshots (periodic, cold)**: Every N ops or M minutes, the coordinator materializes the text and writes it to blob storage (S3/GCS) as `{doc_id, revision}.blob`. Load path reads the latest snapshot plus operations after that revision; this bounds startup cost even for docs with millions of edits over years. Snapshot frequency is a direct operational SLO lever for failover recovery time: when a coordinator crashes, its replacement replays the operation log from the most recent snapshot. If you snapshot every 1,000 operations and a hot document receives 10,000 operations per hour, a freshly crashed doc requires up to 6 minutes of log replay before it can accept new edits. Most production systems target a snapshot interval of 100–500 operations for interactive documents, trading slightly higher storage write rates for much shorter recovery windows.
+- **Operation compression**: Raw character-by-character operations bloat the log significantly. A user typing "hello world" produces 11 separate insert operations. Consecutive inserts at the same cursor position — the dominant pattern during normal typing — can be collapsed into a single `insert(position, "hello world")` operation before the op is persisted. A delete immediately followed by an insert at the same position can often be represented as a single replace. Production OT systems perform this compression either at the coordinator before writing to the log or during snapshot generation. The result is typically a 90%+ reduction in log entry count for normal prose editing workloads, which also dramatically shortens failover replay time.
+- **Compaction**: Old log entries behind a snapshot can be archived to cold storage for version history but dropped from the hot log after a configured retention window. Once the retention window passes and the entries are no longer needed for rebase, they move to cold object storage (e.g., Glacier or equivalent) where they are queryable for the version history UI but do not consume hot-tier I/O or storage budget.
 
 ---
 
@@ -244,6 +254,42 @@ This journey is my original framing for how to evolve a Google Docs backend. It 
 **Architecture**: Multi-tier routing. Consistent hashing on `doc_id` is pushed down into the edge fleet with local caches, so only rare lookups hit the placement service. Placement itself is rebuilt on a Raft-backed, shardable metadata store (not a single ZooKeeper ensemble) so it scales with doc count, not just with cluster size. Coordinators run as a stateless ring where state is continuously replicated to two secondaries in the same region; failover is sub-second and does not need a log replay because the secondary already has the live in-memory state. For docs with truly global co-editing, relax strict single-writer: a per-region coordinator accepts ops locally using CRDT semantics (each region is a "site" with a unique ID), and a background reconciler merges region-local logs into a globally ordered OT history asynchronously. Users see instant local feedback; cross-region convergence is visible within a second or two. Snapshots and operation logs tier automatically: hot ops in region-local SSD, warm in regional object storage, cold archived across regions for version history. Admission control and quality-of-service kick in for abusive docs (tens of thousands of tabs on one doc) - new joiners get read-only mode until fan-out capacity is freed.
 
 **What you skip**: Nothing architectural; at this stage you are mostly paying engineers to drive tail latency down and to handle adversarial inputs.
+
+---
+
+## Insider Tips and Tricks
+
+### OT's TP2 Property Is Why Peer-to-Peer OT Fails in Practice
+
+Operational Transformation has two transformation properties: TP1 (the basic convergence property, which simple OT satisfies) and TP2 (required for peer-to-peer topologies with more than two sites). Very few OT algorithms correctly implement TP2 — Jupiter, the algorithm that underpins Google Wave and early Google Docs, solves convergence by requiring a central server as the single serialization point, which sidesteps TP2 entirely. When engineers try to implement OT without a central authority, they almost always get TP2 wrong and produce systems that diverge silently under concurrent edits from three or more clients.
+
+### The Single-Writer Coordinator Is the Design's Load-Bearing Assumption
+
+Every operation for a given document flows through exactly one coordinator process. This is not a performance choice — it is a correctness requirement. If two coordinators independently transformed and committed operations for the same document, the revision sequences would diverge and the document would split into two incompatible histories. When designing failover, the key question is not "how fast can we elect a new coordinator?" but "how do we guarantee that the old coordinator has fully stopped processing before the new one starts?" Leader election with a fencing token (a monotonically increasing epoch number) is the standard answer.
+
+### Presence Must Never Touch the Operation Log
+
+Cursor position updates can arrive hundreds of times per second per user. If presence were written to the same durable operation log as text edits, the log would grow by orders of magnitude and version history would be polluted with meaningless cursor-move entries. Keep presence entirely in-memory on the coordinator and broadcast it as ephemeral frames on the WebSocket — never fsync'd. When the coordinator restarts, presence state is simply lost and rebuilt from client heartbeats within one cycle.
+
+### Snapshot Frequency Bounds Your Failover Recovery Time
+
+When a coordinator crashes, the replacement replays the operation log from the most recent snapshot. If you snapshot every 1,000 operations and your hot documents receive 10,000 operations per hour, a freshly crashed doc takes up to 6 minutes of log replay before accepting new edits — during which all collaborators see a spinning cursor. Snapshot frequency is therefore an operational SLO lever: snapshot more often to shorten recovery, snapshot less often to reduce storage writes. Most systems target a snapshot interval of 100–500 operations for interactive documents.
+
+### Client Clock Skew Makes Wall Time Unreliable for Operation Ordering
+
+Client devices can have clocks that differ by seconds or even minutes. An operation's `ts` field sent from the client cannot be trusted for ordering — two clients that submit concurrent operations might report timestamps that cross over. The server must assign all ordering, using its own monotonic revision counter. Wall-clock timestamps from clients are useful only for display (e.g., "last edited 3 minutes ago") and must never be used as a tiebreaker in the transformation pipeline.
+
+### Offline Rebase Has a Hard Limit: The Log Truncation Window
+
+When a client reconnects after a long offline period, the server replays missing operations from the operation log and rebases the client's pending edits. But operation logs are truncated periodically (after a snapshot is taken and some retention period). If the client was offline long enough that the log entries it needs have been truncated, rebase is impossible. At that point the server sends a fresh snapshot and the client must perform a three-way merge of its local text, the pre-offline baseline, and the server's current text — the same algorithm used by `git merge`. Most implementations fall back to showing a conflict dialog.
+
+### Operation Compression Reduces Log Volume by 90%+ for Typical Editing
+
+Raw character-by-character operations bloat the log. A user typing "hello world" generates 11 separate insert operations, each individually small but collectively expensive to store and replay. Consecutive inserts at the same cursor position (common during typing) can be collapsed into a single `insert(position, "hello world")` operation. Similarly, a delete followed immediately by an insert at the same position can often be represented as a single replace. Most production OT systems perform this compression either at the coordinator before persisting or during snapshot generation.
+
+### WebSocket Backpressure Must Be Explicit, Not Just TCP's Sliding Window
+
+TCP's flow control will eventually back-pressure a slow client, but by that time you've already queued hundreds of operation frames in the server-side socket buffer. This means the coordinator may be blocked trying to write to a slow client's socket while other clients' operations are waiting to be broadcast. The fix is an application-level send queue per session with a maximum depth. If the queue fills, the coordinator switches that session to "catch-up mode": it stops sending incremental ops and instead sends a snapshot when the client drains. This prevents one slow client from stalling op broadcast to all other collaborators on the same doc.
 
 ---
 

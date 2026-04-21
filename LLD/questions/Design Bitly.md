@@ -23,7 +23,8 @@
    - [6. Custom Aliases and Expirations](#6-custom-aliases-and-expirations)
    - [7. Multi-Region Deployment](#7-multi-region-deployment)
 6. [Scaling Journey: 0 to infinity](#scaling-journey-0--)
-7. [Expected Depth by Level](#expected-depth-by-level)
+7. [Insider Tips and Tricks](#insider-tips-and-tricks)
+8. [Expected Depth by Level](#expected-depth-by-level)
 
 ---
 
@@ -61,7 +62,7 @@ Bitly converts long URLs into compact short codes that redirect back to the orig
 
 | Entity | Fields | Notes |
 |---|---|---|
-| **URLMapping** | `short_code` (PK, ~8 bytes), `long_url` (~100 bytes), `custom_alias` (nullable), `expiration_date` (nullable), `created_at`, `creator_id` (nullable) | Row ~500 bytes with metadata/overhead. |
+| **URLMapping** | `short_code` (PK, ~8 bytes), `long_url` (~100 bytes), `custom_alias` (nullable), `expiration_date` (nullable), `created_at`, `creator_id` (nullable), `is_custom` (bool), `url_hash` (SHA-256 truncated, indexed) | Row ~500 bytes with metadata/overhead. `url_hash` enables deduplication without scanning variable-length URL strings. |
 | **Counter** | `value` (int64) | Single logical counter (Redis) feeding short code generation; can be sharded into per-region ranges. |
 | **User** *(out of scope here)* | `id`, `email` | Only referenced via `creator_id` if present. |
 
@@ -94,7 +95,7 @@ Location: https://example.com/some/very/long/path?x=1
 410 Gone
 ```
 
-**Why 302 over 301:** 301 is cached by the browser, so the origin stops seeing hits and loses control (you cannot change the target, invalidate, or measure). 302 keeps the server in the loop at the cost of a round-trip per click — worth it for a link platform.
+**Why 302 over 301:** 301 is a permanent redirect — browsers cache it indefinitely with no expiry header, so once a user's browser sees the 301, every future click goes directly to the destination without touching your server. You permanently lose analytics, cannot change the target, and cannot invalidate it short of the user clearing their browser cache. 302 is a temporary redirect that is not browser-cached, so every click travels through your server: trackable, changeable, revocable. For a link-management platform, the control 302 provides is non-negotiable. Use 301 only if you are permanently retiring a link and have consciously decided to trade analytics for reduced origin load.
 
 ---
 
@@ -130,51 +131,76 @@ Location: https://example.com/some/very/long/path?x=1
 **Solution:** Three candidates, evaluated in order.
 
 - **Naive prefix of long URL** — broken; `example.com/a` and `example.com/b` collide immediately.
-- **Hash + Base62 truncation:** Canonicalize the URL, SHA-256 it, Base62-encode, take the first 8 characters. Base62 uses `[a-zA-Z0-9]` (URL-safe — no `+` or `/` like Base64). `62^8 ≈ 218 trillion` codes. Deterministic (same URL always maps to same code) but truncation reintroduces collision risk, so writes still need a UNIQUE constraint and retry-with-salt on conflict.
-- **Monotonic counter + Base62 (preferred):** Redis `INCR` returns a globally unique integer, which is Base62-encoded into a 6-7 char code. `62^6 ≈ 56B`, `62^7 ≈ 3.5T` — sufficient for 1B target with headroom. Single atomic op, no collisions by construction, codes stay short because they grow as `log_62(n)`.
+- **Hash + Base62 truncation:** Canonicalize the URL, SHA-256 it, Base62-encode, take the first 8 characters. Base62 uses `[a-zA-Z0-9]` (URL-safe, unlike Base64 which introduces `+` and `/` that require percent-encoding in URLs). `62^8 ≈ 218 trillion` codes. Deterministic: the same URL always maps to the same code, which provides natural deduplication. The cost is that truncating a 256-bit hash to 8 characters reintroduces birthday-collision risk, so writes still need a UNIQUE constraint and retry-with-salt on conflict.
+- **Monotonic counter + Base62 (preferred):** Redis `INCR` returns a globally unique integer, Base62-encoded into a 6-7 char code. `62^6 ≈ 56B`, `62^7 ≈ 3.5T` — sufficient for 1B stored URLs with four orders of magnitude of headroom. Single atomic op, no collisions by construction, codes stay short because they grow as `log_62(n)`. At 1B URLs the code is only 6 characters; you don't need 8 yet.
 
-**Tradeoff:** the counter approach leaks ordering (you can enumerate links) — mitigate by XOR-ing the counter with a secret before Base62 encoding, which preserves uniqueness but randomizes the visible code.
+**Tradeoff — sequential enumeration:** the counter approach makes codes guessable in sequence, which enables crawlers to scrape all links. Mitigate by XOR-ing the counter value with a 64-bit secret before Base62 encoding. XOR is bijective so uniqueness is preserved, but adjacent counter values map to visually random codes. Never rely on obscurity as a security layer — use access controls for truly private links — but XOR defeats casual enumeration.
+
+**Tradeoff — deduplication:** hashing gives free deduplication (same URL, same code). Counter-based schemes don't deduplicate by default. If deduplication matters, store a `url_hash` column (SHA-256 of the canonicalized URL, truncated to 32 bytes), put a UNIQUE index on it, and check for existing rows on write. This costs one read per write, which is acceptable since writes are ~1 QPS.
 
 ### 2. Collision Handling
 
-**Problem:** When using hashing, truncating SHA-256 to 8 chars is not bijective — two different URLs can map to the same prefix. The counter scheme avoids this, but if you pick hashing you need a plan.
+**Problem:** When using hashing, truncating SHA-256 to 8 chars is not bijective — two different URLs can produce the same 8-character prefix. The counter scheme avoids this entirely, but if you choose hashing you need a collision-handling path.
 
-**Solution:** A `UNIQUE` constraint on `short_code` in the DB is the source of truth. On insert conflict, the write service appends a small random salt (or bumps a per-URL nonce) and re-hashes, retrying 3-5 times. After that many retries the odds of collision are astronomically low given the 218T space; a hard failure surface to the client is acceptable at that point.
+**Solution:** The DB's `UNIQUE` constraint on `short_code` is the source of truth regardless of generation strategy. On an insert conflict due to a hash collision, the write service appends a small per-URL nonce (start at 0, increment on each conflict) to the input before re-hashing, and retries. The birthday-paradox math keeps collision rates negligible: `62^8 ≈ 218T` codes, so at 1B stored URLs the probability that any given new URL collides is `1B / 218T ≈ 0.00046%`. After 3-5 retries the odds of consecutive collisions are astronomically small (roughly `(0.00046%)^5`); a hard failure surfaced to the client at that point is acceptable.
+
+**Common interview mistake:** performing a read-before-write on every insert to check if the code exists before inserting. This adds a DB round-trip to every write and creates a TOCTOU race. The correct pattern is optimistic insert: generate, attempt insert, catch the unique constraint violation, regenerate, retry. Let the database enforce uniqueness — it is doing that work anyway via the index.
 
 ### 3. Scaling Reads to 600k QPS
 
-**Problem:** 100M DAU x ~5 redirects = 500M/day average ≈ 5.8k RPS; at 100x peak that's ~600k RPS. A single SSD-backed DB tops out around 100k IOPS — cannot serve peak directly.
+**Problem:** 100M DAU x ~5 redirects = 500M/day average ≈ 5.8k RPS; at 100x peak that's ~600k RPS. A single SSD-backed database instance tops out around 50-100k IOPS under a realistic mixed workload — it cannot serve peak traffic directly.
 
 **Solution:** A layered read path.
 
-1. **B-tree index on `short_code`** (free if it's the PK) — O(log n) lookup, required baseline.
-2. **In-memory cache (Redis / Memcached)** in front of the DB. Memory access is ~100ns vs ~100µs for SSD (roughly 1000x), and a single Redis node sustains 100k+ ops/sec. With strong locality (a small percentage of links get the majority of clicks — classic Zipfian), cache hit rates of 95%+ are realistic, dropping DB QPS into comfortable territory.
-3. **Eviction & TTL:** LRU eviction; cache TTL must be `<=` the URL's `expiration_date` so expired links are not served from stale cache.
-4. **Replica fan-out:** DB read replicas absorb the residual miss traffic; writes go to primary.
+1. **B-tree index on `short_code`** (free if it's the PK) — O(log n) lookup; at 1B rows this is ~30 comparisons even before any caching. Required baseline; costs nothing beyond making `short_code` the primary key.
+2. **In-memory cache (Redis / Memcached)** in front of the DB. Memory access is ~100ns vs ~100µs for an SSD read (roughly 1,000x difference), and a single Redis 7.x node sustains 100k-300k ops/sec on commodity hardware. The key insight is traffic distribution: URL access follows a heavy-tailed Zipfian distribution where the top 1% of links receive ~80% of clicks. A hot-set cache of even a few million entries achieves 95%+ hit rates in practice, which drops DB QPS from 600k to ~30k — well within comfortable range for a replicated Postgres cluster.
+3. **Eviction and TTL:** Use LRU eviction. The cache TTL must be set to `min(cache_default_ttl, url.expiration_date - now)` so that an expired URL cannot be served from a stale cache entry. A fixed 24-hour TTL with no expiration awareness is a correctness bug.
+4. **Read replicas:** DB read replicas absorb the residual cache-miss traffic. Write traffic (creating short codes) goes to the primary. With a 95% cache hit rate, each replica only needs to handle ~30k QPS / number-of-replicas.
+5. **Cache stampede protection:** if a hugely popular link's cache entry expires, thousands of concurrent requests simultaneously miss and all hit the DB. Mitigate with probabilistic early expiration (refresh the cache entry slightly before it expires based on a stochastic check) or a mutex/lock-on-miss pattern where only one request fetches from DB while others wait.
 
 ### 4. Edge / CDN-based Redirects
 
-**Problem:** Even a perfectly cached origin has a WAN round-trip per click from distant regions, which hurts the <100ms target for global users.
+**Problem:** Even a perfectly cached origin has a WAN round-trip per click for users distant from the origin region. A user in Singapore hitting a US-east origin faces ~180ms of network latency alone, which blows the <100ms target before any application logic runs.
 
-**Solution:** Serve the short-link domain via a CDN and push the redirect logic to the edge (Cloudflare Workers, Lambda@Edge, Fastly Compute). The edge node caches the `short_code -> long_url` mapping; 302s are returned without ever hitting the origin. Invalidation is the hard part — use short TTLs on the edge cache plus explicit purge calls when a URL is deleted or expires. This is a real cost/complexity tradeoff: worth it for a global product, over-engineering for regional traffic.
+**Solution:** Serve the short-link domain through a CDN and push redirect logic to the edge (Cloudflare Workers, Lambda@Edge, Fastly Compute@Edge). The edge node caches the `short_code -> long_url` mapping and returns the 302 without ever reaching the origin. Practical considerations:
+
+- **Edge TTL vs. analytics:** every hit served from edge cache is a hit the origin never sees, so click counts will be undercounted if analytics depend on origin-side logging. Production systems solve this by having the edge node emit an analytics event to a logging endpoint (fire-and-forget) even while returning the cached 302.
+- **Invalidation:** when a URL is deleted, updated, or expires, the edge cache entry must be purged. CDN purge APIs (Cloudflare Cache Purge, CloudFront invalidation) propagate globally in seconds but are not instantaneous. Use short edge TTLs (30-300 seconds) plus explicit purge calls on mutations to bound the staleness window. There is an inherent tradeoff: shorter TTLs reduce stale-serve window but increase origin traffic.
+- **Cost model:** CDN serving costs a fraction of origin compute costs at scale; for a global product with hundreds of millions of redirects per day, the edge approach pays for itself rapidly.
+- **Verdict:** worth implementing for a global product; genuine over-engineering if traffic is regionally concentrated.
 
 ### 5. Counter Coordination & Batching
 
-**Problem:** If every write service instance hits Redis for each short code, Redis becomes the bottleneck (and a single point of failure).
+**Problem:** If every write-service instance makes a network call to Redis for each short code, Redis becomes both the performance bottleneck and a single point of failure. At 1 write/sec this is trivial, but the write service should be designed to scale to higher write rates without re-architecting.
 
-**Solution:** Each write-service pod reserves a batch of IDs from Redis (`INCRBY 1000`), then allocates locally from that range until exhausted. Network calls to Redis drop 1000x. If a pod crashes mid-batch the unused IDs are simply lost — acceptable because the 62^7 space is effectively unbounded. Redis high availability comes from Sentinel or Cluster mode; even if a few batches are duplicated across a failover, the DB's `UNIQUE` constraint catches it.
+**Solution:** Each write-service pod reserves a batch of IDs from Redis with a single `INCRBY 1000`, then allocates locally from that reserved range until exhausted, then fetches the next batch. Network round-trips to Redis drop by 1000x. If a pod crashes mid-batch, the unused IDs in that range are abandoned — they become gaps in the sequence, not collisions. This is safe because the `62^7` space is effectively unbounded for practical purposes; wasting a few IDs on crashes is inconsequential.
+
+**Redis high availability:** run Redis with Sentinel (primary + 2 replicas + 3 sentinels) or Redis Cluster. On a primary failover, a brief window exists where two pods might receive overlapping batches from the old primary's state vs. the newly promoted replica. The DB's `UNIQUE` constraint catches any duplicates that result — the counter is a performance optimization, not the correctness guarantee.
+
+**Alternative: Twitter Snowflake-style IDs.** Compose a 64-bit ID from: timestamp (41 bits, ~69 years of range), machine/datacenter ID (10 bits, 1024 nodes), sequence number (12 bits, 4096 IDs/ms/node). No coordination needed; every node generates globally unique IDs independently. The tradeoff: IDs embed a timestamp, which leaks creation time unless you XOR-obfuscate before Base62 encoding.
 
 ### 6. Custom Aliases and Expirations
 
-**Problem:** Custom aliases collide with generated codes; expirations need to be enforced without a full table scan.
+**Problem:** Custom aliases can collide with generated codes and with each other; expirations need to be enforced without triggering expensive scheduled deletes on the hot write path.
 
-**Solution:** Custom aliases take the same code path as generated ones — they are inserted into the URL mapping table with the same `UNIQUE` constraint. If the user-supplied alias exists, the API returns `409 Conflict`. To avoid stealing the generator's namespace, reserve a visual convention (custom aliases must be `>=` 5 chars or contain a `-`) or keep a separate "reserved" bloom filter. Expirations are enforced at read time: if the row's `expiration_date` is past, return `410 Gone` and evict from cache. A background job sweeps expired rows periodically to reclaim storage.
+**Solution for custom aliases:** Custom aliases write into the same `url_mapping` table with the same `UNIQUE` constraint on `short_code` — same correctness guarantee, different code path. Key implementation details:
+
+- Store a boolean `is_custom` flag on each row to distinguish generated codes from user-chosen ones.
+- Generated codes are short (6-7 chars); custom aliases are typically longer (a user types "my-team", "sale2024", etc.). This natural length separation reduces namespace collisions, but is not a hard rule — enforce at the API layer that custom aliases meet a minimum length or character pattern.
+- If the alias is already taken, return `409 Conflict` immediately; do not silently remap.
+- Rate-limit and authenticate custom alias creation separately from regular shortening, since they are a prime target for namespace squatting.
+
+**Solution for expirations:** Never delete expired rows eagerly on the write path. Instead, store `expires_at` in the row and check it at read time: if `expires_at IS NOT NULL AND expires_at < now()`, return `410 Gone` and evict the entry from cache. This moves the cost from a latency-sensitive write operation to the read path where it is a cheap timestamp comparison. A background job (a cron or scheduled worker) runs periodically — every few hours, or nightly during low-traffic windows — and hard-deletes rows where `expires_at < now() - grace_period`. The grace period (e.g., 7 days) prevents races between the background delete and edge caches still serving the entry.
 
 ### 7. Multi-Region Deployment
 
-**Problem:** A single global Redis counter forces every write to cross regions, and a single primary DB cannot serve global reads at low latency.
+**Problem:** A single global Redis counter forces every write to cross regions (adding 100-200ms latency per write for distant regions), and a single primary DB cannot serve global reads at low latency. Active-passive failover gives durability but not low-latency reads.
 
-**Solution:** Partition the counter space by region — e.g., `us-east: [0, 1B)`, `eu-west: [1B, 2B)`, `ap-south: [2B, 3B)`. No cross-region coordination on writes. Each region has its own DB (or writes go home-region, reads go local replica). Reads are served from regional caches and CDN edges. Cross-region replication stitches the mapping table together asynchronously; the read cache absorbs the eventual-consistency window.
+**Solution:** Partition the counter space by region at provisioning time — e.g., `us-east: [0, 1B)`, `eu-west: [1B, 2B)`, `ap-south: [2B, 3B)`. Each range is large enough to never exhaust in practice, and the regions never coordinate on writes. Writes are routed to the user's home region; each region runs its own Redis counter and Postgres primary. Cross-region replication (Postgres streaming replication or logical replication to regional read replicas) stitches the global mapping table together asynchronously, with typical replication lag of <1 second on a well-tuned setup.
+
+**Read routing:** reads go to the nearest regional cache first, then the nearest read replica. For a code generated in us-east, a user in eu-west may hit a replication-lag window of a few hundred milliseconds after creation — the code doesn't exist in eu-west's replica yet. Mitigate by: (a) accepting the tiny window (most links are shared minutes to hours after creation, not milliseconds), or (b) doing a cross-region fallback read to the code's origin region on cache/replica miss.
+
+**Consistency model:** this is eventually consistent for newly created codes (seconds-level lag) and strongly consistent for reads served from the origin region. The product implication is that a user who creates a link and immediately shares it might observe a brief period where recipients in other regions see a 404 — acknowledge this tradeoff explicitly in an interview.
 
 ---
 
@@ -246,15 +272,66 @@ Beyond this point, scaling is mostly operational and cost engineering rather tha
 
 ---
 
+## Insider Tips and Tricks
+
+### 301 vs 302 Redirect Has Massive Caching Implications
+
+301 is a permanent redirect. Browsers cache it indefinitely — there is no expiry header semantics that constrains it, and clearing it requires the user to manually purge their browser cache. Once a user's browser has seen the 301, every future click goes directly to the destination without ever reaching your servers. You permanently lose: click analytics, the ability to change the destination URL, and the ability to invalidate the link. 302 is temporary and is not browser-cached, so every click routes through your server: trackable, updatable, and revocable. Bitly uses 302 for exactly this reason. The only legitimate reason to use 301 in a URL shortener is if you are permanently retiring a domain and consciously accepting the loss of all future analytics for reduced origin load — a decision almost no link-management product should make.
+
+### Base62 vs Base58 vs NanoID
+
+Base62 uses characters `[0-9a-zA-Z]` and is the standard choice for URL shorteners. The full set gives `62^n` combinations per n characters — 56 billion at 6 chars, 3.5 trillion at 7. The tradeoff is that it contains visually ambiguous characters: `0` vs `O`, `1` vs `l`. Base58 removes these four characters (used by Bitcoin addresses and IPFS CIDs) to make codes safer to transcribe by hand. For URL shorteners this distinction is irrelevant because codes are copy-pasted or clicked, never hand-typed — use Base62 for the larger code space. NanoID is a modern alternative that uses a cryptographically secure PRNG (CSPRNG) instead of a sequential counter, produces URL-safe codes, and has a well-audited implementation in most languages. Prefer NanoID over rolling your own Base62 encode when the generation strategy is hash-based or random rather than counter-based, particularly if short codes must be unpredictable for security reasons (e.g., one-time use links, private sharing links).
+
+### Hash Collision Is Not Your Hot-Path Problem
+
+A common interview mistake is proposing a read-before-write on every insert to check whether a generated code already exists. This adds a DB round-trip to every write and creates a time-of-check/time-of-use race condition. At 7 characters of Base62, the code space is `62^7 = 3,521,614,606,208` (~3.5 trillion). At 1 billion stored URLs, the birthday-paradox collision probability for any single new insertion is approximately `1B / 3.5T ≈ 0.000028%`, or about one collision per 3.5 million insertions. The correct approach is optimistic concurrency: generate the code, attempt the insert, catch the unique constraint violation from the database, regenerate with a nonce or salt, and retry. This handles collisions lazily with zero overhead on the 99.999972% of writes that don't collide. The database enforces uniqueness atomically through the index — a read before the write adds cost without adding correctness.
+
+### ID Generation Is the Hidden Single Point of Failure
+
+If short code generation relies on a single centralized counter — a Postgres sequence, a single Redis INCR node, or a single auto-increment column — that node is your single point of failure for all write traffic. Solutions in order of coordination cost:
+
+- **Pre-allocated ID ranges:** each app server fetches a batch of IDs from a central counter (`INCRBY 1000`) and allocates locally until exhausted. Redis failover may duplicate a small batch range, but the DB unique constraint catches it. Low coordination cost, minor waste on pod restart.
+- **Partitioned counter ranges per region:** assign non-overlapping ranges to each region at provisioning time. Zero runtime coordination. Wastes range space but eliminates cross-region writes entirely.
+- **Twitter Snowflake / ULID:** compose IDs from timestamp + node ID + per-node sequence. Zero coordination; each node generates globally unique IDs. Codes embed creation time (leaks ordering unless obfuscated).
+- **UUID + Base62 encode:** generate a v4 UUID (128 bits of randomness), Base62-encode it to ~22 characters. No coordination, no collision risk in practice, but codes are longer than desirable for a URL shortener.
+
+Identify which of these applies to your design and name the SPOF explicitly — interviewers at senior+ levels expect you to call it out proactively.
+
+### The Read:Write Ratio for URL Shorteners Is ~1000:1
+
+A popular short URL shared in a viral social media post can receive millions of redirects within hours of a single share event. The write rate for creating new short codes is comparatively tiny — 100k new shortens per day is ~1 write/sec. This asymmetry is the central design constraint of the entire system: the read path (GET `/:code` → 302) must be aggressively optimized for throughput and latency, while the write path (POST `/shorten`) can tolerate hundreds of milliseconds of additional latency without user impact. Every architectural decision — caching, read replicas, CDN edge nodes, read/write service split — flows directly from this ratio. State it explicitly in the first two minutes of a system design interview and use it to justify every subsequent decision.
+
+### Custom Aliases Are a Different Code Path
+
+Custom aliases (where the user chooses the slug: `short.ly/my-product-launch`) bypass the ID generation system entirely and require their own handling. The full code path for a custom alias is: (1) validate the alias meets length and character requirements at the API layer, (2) attempt insert into `url_mapping` with the user-supplied value as `short_code`, (3) on unique constraint violation return `409 Conflict` — the alias is taken. Store an `is_custom` boolean flag on each row to distinguish generated codes from custom ones; this is useful for analytics, abuse detection, and cold-storage tiering decisions. The namespace overlap risk is real: if your generator produces 6-character codes starting from counter value 0, a user registering a 6-character custom alias like `abc123` could collide with a future generated code. Mitigate by enforcing a minimum length on custom aliases that exceeds the current maximum generated code length, or by reserving a separate character prefix for custom aliases.
+
+### URL Expiration Is a Read-Time Check, Not a Delete
+
+A natural but wrong instinct is to delete expired URLs from the database eagerly — either immediately at the expiration timestamp or via a cron job that runs frequently. Eager deletion is expensive: at scale it means constant DELETE operations that compete with reads on the hot path, fragment the B-tree index, and potentially trigger cascading cache invalidations. The correct pattern is lazy expiration: store `expires_at` on the row, leave the row in place, and check `expires_at < now()` at read time. If expired, return `410 Gone` and evict the cache entry. A background job runs periodically during off-peak hours to hard-delete rows past their expiration plus a grace period (e.g., 7 days to allow edge caches to drain and to handle timezone edge cases). This decouples expiration enforcement (latency-sensitive, happens on every read) from garbage collection (throughput-oriented, runs asynchronously). The same pattern applies to soft-deleted URLs.
+
+### Analytics Are Eventually Consistent by Design
+
+If you increment a click counter in Postgres synchronously on every redirect, you immediately transform your 600k RPS read-heavy workload into a 600k RPS write-heavy workload — the exact opposite of what the system is designed for. Production analytics pipelines decouple click recording from click serving entirely. The read service returns the 302 immediately, then asynchronously enqueues a click event to a streaming log (Kafka, Kinesis, or a write-ahead log). A separate analytics consumer reads the stream and aggregates counts into a time-series store (ClickHouse, Druid, or even Postgres with batched UPDATEs). The dashboard shows eventually-consistent counts that may lag real-time by seconds to minutes. The user-visible impact is minimal; the system-level impact is enormous. Acknowledge this tradeoff explicitly — stating "I would emit a Kafka event and aggregate asynchronously" signals that you understand the write-amplification problem that synchronous analytics would create.
+
+### The Vanity URL Attack Surface
+
+Without rate limiting on the POST `/shorten` endpoint, several attacks become trivial: (1) namespace exhaustion — an attacker registers all desirable short custom aliases (brand names, dictionary words, common phrases) before legitimate users; (2) code enumeration — an attacker generates thousands of short codes and uses the create-API response to map the code space; (3) phishing infrastructure — an attacker creates thousands of short codes pointing to phishing pages using free anonymous access. Defenses: rate-limit POST `/shorten` by IP (e.g., 10 creates/minute for anonymous users), require authentication for custom alias creation, enforce a CAPTCHA or proof-of-work for high-volume anonymous shortening, and block creation of aliases that match known brand names or reserved words. At Bitly's scale, abuse prevention is a significant engineering surface area — acknowledge it even if it is formally out of scope.
+
+### Why You Don't Store the Full URL as the Primary Key
+
+Deduplication by using the destination URL as a primary key — so that two requests to shorten the same URL return the same short code — seems elegant but is operationally dangerous. URLs can legally be up to 2,083 characters (Internet Explorer's historical limit) or longer in practice; some tracking URLs with deeply nested parameters run to 8,000+ characters. A 2,000-character primary key creates: an enormous B-tree index where each entry is kilobytes rather than bytes, slow index scans and comparisons, large storage overhead, and performance problems in replication and backup tooling that serializes key values. The correct approach for deduplication is to hash the canonicalized destination URL (SHA-256 truncated to 32 bytes) and store that hash in a separate indexed column (`url_hash`). Look up by `url_hash` to find existing codes; keep `short_code` as the primary key (8 bytes, fixed-width, fast). The hash column is small, fixed-width, and can be indexed efficiently even at billions of rows.
+
+---
+
 ## Expected Depth by Level
 
 | Area | Mid | Senior | Staff+ |
 |---|---|---|---|
 | **Requirements** | Captures shorten + redirect; asks about scale when prompted. | Proactively names read-heavy as the dominant constraint; quantifies QPS and storage. | Frames the whole design around the 1000:1 ratio from the first minute. |
 | **Short code generation** | Proposes one approach (hash or counter). | Compares hash vs counter with tradeoffs; knows Base62 and why. | Brings up enumeration attacks and XOR-with-secret mitigation; discusses per-region counter ranges. |
-| **Collision handling** | Mentions UNIQUE constraint when asked. | Describes retry-with-salt and why truncation reintroduces collisions. | Reasons about probabilistic bounds; picks retry count based on birthday math. |
-| **Read scaling** | Says "add a cache" when prompted. | Designs cache + replicas + eviction/TTL; distinguishes TTL from URL expiration. | Leads with tiered cache (edge -> regional -> DB) and Zipfian hit-rate reasoning. |
-| **Write path** | Single write service. | Read/write service split with independent scaling. | Counter batching, Redis HA, UNIQUE as final correctness net even on failover. |
-| **Geo / CDN** | Not expected. | Mentions CDN for static; recognizes edge as an option. | Designs active-active regions with partitioned counter ranges and edge-executed redirects. |
+| **Collision handling** | Mentions UNIQUE constraint when asked. | Describes retry-with-salt and why truncation reintroduces collisions. | Reasons about probabilistic bounds; picks retry count based on birthday math; avoids read-before-write anti-pattern. |
+| **Read scaling** | Says "add a cache" when prompted. | Designs cache + replicas + eviction/TTL; distinguishes TTL from URL expiration. | Leads with tiered cache (edge -> regional -> DB) and Zipfian hit-rate reasoning; addresses cache stampede. |
+| **Write path** | Single write service. | Read/write service split with independent scaling. | Counter batching, Redis HA, UNIQUE as final correctness net even on failover; names SPOF on counter node. |
+| **Geo / CDN** | Not expected. | Mentions CDN for static; recognizes edge as an option. | Designs active-active regions with partitioned counter ranges and edge-executed redirects; discusses replication lag window. |
 | **Failure modes** | Names "DB down." | Walks through cache miss storms, Redis failover, write retries. | Chaos-tests the plan: region loss, counter-range exhaustion, cache stampedes, replication lag. |
-| **Product thinking** | Handles custom alias as a field. | Designs alias collision path and expiration enforcement. | Treats abuse, cold storage tiering, and cost-per-click as first-class concerns. |
+| **Product thinking** | Handles custom alias as a field. | Designs alias collision path and expiration enforcement. | Treats abuse, cold storage tiering, eventually-consistent analytics, and cost-per-click as first-class concerns. |

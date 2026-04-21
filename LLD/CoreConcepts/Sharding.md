@@ -995,6 +995,233 @@ graph TB
 
 ---
 
+## 🏭 Production Sharding: How Companies Actually Do It
+
+### Instagram: Sharding PostgreSQL with Django
+
+Instagram's 2012 sharding approach became an industry reference. They sharded PostgreSQL before moving to Cassandra:
+
+```mermaid
+graph TB
+    subgraph "Instagram's Approach (2012)"
+        PK[Photo ID = Shard Key]
+        PK --> SHARD_ID[Shard ID embedded in ID]
+        PK --> LOCAL_ID[Local ID within shard]
+        PK --> TIME[Timestamp milliseconds]
+
+        NOTE[ID = timestamp + shard_id + local_sequence<br/>64-bit integer, globally unique, sortable]
+    end
+
+    subgraph "ID Anatomy"
+        BIT64[64-bit Photo ID]
+        BIT64 --> B1[Bits 63-23: Epoch ms<br/>41 bits = 69 years]
+        BIT64 --> B2[Bits 22-10: Shard ID<br/>13 bits = 8192 shards]
+        BIT64 --> B3[Bits 9-0: Sequence<br/>10 bits = 1024/ms/shard]
+    end
+
+    style NOTE fill:#90EE90
+```
+
+**The key insight**: The shard ID is baked into every primary key. You never need a separate lookup table — just extract bits from the ID to find the shard.
+
+```python
+def get_shard(photo_id, num_shards=2048):
+    # Extract shard bits from ID
+    shard_id = (photo_id >> 10) & 0x1FFF  # Bits 10-22
+    return shard_id % num_shards
+```
+
+This is how Twitter's Snowflake ID works too (Twitter open-sourced it in 2010).
+
+---
+
+### Discord: Cassandra for Messages at Scale
+
+Discord stores 4 billion messages and handles 120+ million users. Their sharding story:
+
+```mermaid
+graph TB
+    subgraph "Discord Message Storage"
+        CK[Compound Key: channel_id + message_id]
+        CK --> PART[Partition Key: channel_id<br/>All messages in one channel → one node]
+        CK --> CLUSTER[Clustering Key: message_id (time-ordered UUID)<br/>Messages sorted chronologically within partition]
+
+        QUERY[Query: Last 50 messages in #general]
+        QUERY -->|Hits exactly ONE Cassandra partition| FAST[Fast single-partition query]
+    end
+
+    subgraph "Challenges They Faced"
+        HOT[🔥 Hot Channels: 50k+ members all reading same channel]
+        HOT --> SOL[Solution: Local in-process cache per gateway server<br/>+ dedicated Cassandra nodes for largest guilds]
+    end
+
+    style FAST fill:#90EE90
+    style HOT fill:#FFB6C1
+```
+
+**Discord's lesson**: Sharding by `channel_id` means all reads for a channel hit one Cassandra partition. Perfect for the "get latest messages" query. But massive public channels (game announcements, etc.) create hot partitions.
+
+---
+
+### Shopify: Vitess for MySQL Sharding
+
+Shopify shards MySQL using Vitess (YouTube's open-source MySQL sharding layer):
+
+```mermaid
+graph TB
+    subgraph "Shopify's Shard Architecture"
+        TENANT[Shard Key: shop_id]
+        TENANT --> VGATE[VTGate: Query Router<br/>Transparent to application]
+        VGATE --> S1[(MySQL Shard 1<br/>Shop 1-10K)]
+        VGATE --> S2[(MySQL Shard 2<br/>Shop 10K-20K)]
+        VGATE --> SN[(MySQL Shard N<br/>...)]
+
+        NOTE[Vitess handles cross-shard queries<br/>scatter-gather for analytics]
+    end
+
+    subgraph "Multi-Tenant Isolation"
+        BIG[Large merchant: Gymshark<br/>10M orders → dedicated shard]
+        SMALL[Small merchants: 1K shops<br/>shared shard]
+    end
+
+    style NOTE fill:#90EE90
+```
+
+**Key trick**: Shopify allocates small merchants to shared shards but moves large merchants to dedicated shards. This prevents one Gymshark Black Friday event from killing other merchants.
+
+---
+
+### Online Resharding with gh-ost and pt-online-schema-change
+
+The hardest part of sharding is doing it without downtime. Two battle-tested tools:
+
+**gh-ost** (GitHub's Online Schema Tool for MySQL):
+```bash
+# Doubles writes during migration (shadow table + triggers)
+# Throttles to keep replication lag < 1s
+gh-ost \
+  --host=db-primary \
+  --database=shopify \
+  --table=orders \
+  --alter="ADD COLUMN shard_id INT" \
+  --execute \
+  --max-lag-millis=1000 \    # Throttle if replica lag > 1s
+  --chunk-size=1000           # Migrate 1000 rows at a time
+```
+
+**How it works**:
+1. Creates a `_orders_gho` shadow table with new schema
+2. Copies rows in chunks (throttled)
+3. Uses MySQL binary log to replay concurrent writes to shadow table
+4. Atomic rename: `RENAME TABLE orders TO orders_old, _orders_gho TO orders`
+
+**Zero downtime**: The rename is a microsecond atomic operation in MySQL.
+
+---
+
+### Consistent Hashing in Practice: Over-Sharding
+
+**Production trick**: Create 10x more logical shards than physical machines. This lets you add machines without resharding:
+
+```mermaid
+graph TB
+    subgraph "Initial Setup: 4 Machines, 256 Logical Shards"
+        M1[Machine 1<br/>Shards 0-63]
+        M2[Machine 2<br/>Shards 64-127]
+        M3[Machine 3<br/>Shards 128-191]
+        M4[Machine 4<br/>Shards 192-255]
+    end
+
+    subgraph "Add Machine 5 (No Resharding!)"
+        M1B[Machine 1<br/>Shards 0-50]
+        M2B[Machine 2<br/>Shards 64-114]
+        M3B[Machine 3<br/>Shards 128-178]
+        M4B[Machine 4<br/>Shards 192-242]
+        M5[Machine 5<br/>Shards 51-63, 115-127, 179-191, 243-255]
+    end
+
+    NOTE[Logical shard assignments change<br/>but NO DATA MOVES between formats<br/>Just update the routing table]
+
+    style M5 fill:#90EE90
+    style NOTE fill:#90EE90
+```
+
+**Companies that do this**: DynamoDB (auto-partitions), MongoDB (configurable chunk count), Cassandra (token ranges).
+
+---
+
+### Shard Monitoring: What to Watch
+
+```mermaid
+graph TB
+    MONITOR[Shard Health Monitoring]
+
+    MONITOR --> M1[📊 Shard Size Distribution<br/>Alert if any shard > 2x average]
+    MONITOR --> M2[⚡ Write Throughput per Shard<br/>Alert if one shard > 3x average]
+    MONITOR --> M3[🔄 Replication Lag per Shard<br/>Alert if replica lag > 5s]
+    MONITOR --> M4[📈 Connection Count per Shard<br/>Alert if near max_connections]
+    MONITOR --> M5[💾 Storage per Shard<br/>Alert if > 70% full]
+
+    style M1 fill:#e1f5ff
+    style M2 fill:#FFE4B5
+    style M3 fill:#FFB6C1
+    style M4 fill:#FFE4B5
+    style M5 fill:#FFB6C1
+```
+
+```bash
+# Example: Check shard sizes in MySQL with Vitess
+SELECT
+    shard,
+    SUM(data_length + index_length) / 1024 / 1024 AS size_mb
+FROM vtgate_schema_info
+GROUP BY shard
+ORDER BY size_mb DESC;
+
+# Alert if max_shard_size > 2 * avg_shard_size
+```
+
+---
+
+### The Pre-Splitting Trick
+
+Before you have much data, create all your future shards upfront:
+
+```
+MongoDB: mongos --numInitialChunks=256
+DynamoDB: Request 128+ partitions upfront via AWS support for large tables
+Cassandra: Set num_tokens=256 per node from the start
+```
+
+**Why**: Empty shards are cheap. Moving data to new shards later is expensive. If you know you'll need 128 shards in 2 years, start with 128 (even if most are empty).
+
+---
+
+### Sharding Anti-Patterns from Production
+
+```mermaid
+graph TB
+    ANTI[Real Production Anti-Patterns]
+
+    ANTI --> A1[❌ Sharding by created_at<br/>All new writes → hotspot on latest shard<br/>Fix: Hash the timestamp or use compound key]
+
+    ANTI --> A2[❌ Sharding a small table<br/>10GB data doesn't need sharding<br/>Fix: Single DB + read replicas handles this]
+
+    ANTI --> A3[❌ Cross-shard foreign keys<br/>Referential integrity breaks across shards<br/>Fix: Enforce in application code or denormalize]
+
+    ANTI --> A4[❌ Changing the shard key later<br/>All data must move → major incident<br/>Fix: Choose your shard key very carefully upfront]
+
+    ANTI --> A5[❌ Too few shards<br/>'We'll start with 4 and add more'<br/>Fix: Start with 64+ for any serious system]
+
+    style A1 fill:#FFB6C1
+    style A2 fill:#FFE4B5
+    style A3 fill:#FFB6C1
+    style A4 fill:#FFB6C1
+    style A5 fill:#FFE4B5
+```
+
+---
+
 ## 🎤 Interview Strategy
 
 ### When to Mention Sharding

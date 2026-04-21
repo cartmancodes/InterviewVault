@@ -1097,6 +1097,306 @@ graph TB
 
 ---
 
+## 🏭 Production Caching Tricks
+
+### Multi-Tier Caching (L1 + L2)
+
+Netflix, Lyft, and Uber run two cache layers to get near-zero latency for their hottest keys:
+
+```mermaid
+graph LR
+    REQUEST[Request]
+
+    REQUEST --> L1[L1: In-Process Cache<br/>~10K entries, 0.01ms<br/>Caffeine / Guava]
+    L1 -->|L1 miss| L2[L2: Redis Cluster<br/>Millions of entries, 1ms]
+    L2 -->|L2 miss| DB[(Database<br/>50ms)]
+
+    NOTE[99% hit L1 or L2<br/>DB sees <1% of traffic]
+
+    style L1 fill:#90EE90
+    style L2 fill:#FFE4B5
+    style DB fill:#FFB6C1
+```
+
+```python
+class TwoTierCache:
+    def __init__(self):
+        self.l1 = TTLCache(maxsize=10_000, ttl=30)    # 30s in-process
+        self.l2 = redis.Redis()                         # External Redis
+
+    def get(self, key):
+        # L1 hit — near zero latency
+        if key in self.l1:
+            return self.l1[key]
+
+        # L2 hit — ~1ms
+        val = self.l2.get(key)
+        if val:
+            self.l1[key] = val    # Populate L1
+            return val
+
+        # DB hit — ~50ms
+        val = db.fetch(key)
+        self.l2.setex(key, 600, val)   # 10min in Redis
+        self.l1[key] = val             # 30s in-process
+        return val
+```
+
+**Netflix** uses this exact pattern with EVCache (Memcached) as L2. Their L1 cache (in each JVM) absorbs 90%+ of read traffic.
+
+---
+
+### TTL Jitter — Prevent Cache Avalanche
+
+Never set all keys to the same TTL. When a deployment happens or a batch expires together, every key expires simultaneously → database thundering herd.
+
+```python
+import random
+
+BASE_TTL = 600  # 10 minutes
+
+def set_with_jitter(redis, key, value, base_ttl=BASE_TTL):
+    # Add ±10% random jitter
+    jitter = random.randint(0, base_ttl // 10)
+    ttl = base_ttl + jitter
+    redis.setex(key, ttl, value)
+
+# Result: keys expire between 600-660 seconds
+# → staggered cache misses → DB load is spread out
+```
+
+**Production rule**: Always add 10-20% random jitter to TTLs for any large batch of cached objects.
+
+---
+
+### Cache Penetration — Negative Caching
+
+**Problem**: Users query for non-existent IDs (e.g., deleted users, invalid product IDs). Every request misses the cache and hits the DB.
+
+```mermaid
+sequenceDiagram
+    participant Attacker
+    participant Cache
+    participant DB
+
+    loop 10,000 times
+        Attacker->>Cache: GET user:999999 (doesn't exist)
+        Cache-->>Attacker: NULL (miss)
+        Attacker->>DB: SELECT * FROM users WHERE id=999999
+        DB-->>Attacker: Empty result — but DB was hit!
+    end
+
+    Note over DB: 💥 DB overloaded by "phantom" queries
+```
+
+**Solution: Cache the negative result**:
+
+```python
+NEGATIVE_SENTINEL = "__NOT_FOUND__"
+NEGATIVE_TTL = 60  # 1 minute
+
+def get_user(user_id):
+    cached = redis.get(f"user:{user_id}")
+
+    if cached == NEGATIVE_SENTINEL:
+        return None  # Known miss — don't hit DB
+
+    if cached is not None:
+        return deserialize(cached)
+
+    # DB query
+    user = db.get_user(user_id)
+
+    if user is None:
+        # Cache the negative result with SHORT TTL
+        redis.setex(f"user:{user_id}", NEGATIVE_TTL, NEGATIVE_SENTINEL)
+        return None
+
+    redis.setex(f"user:{user_id}", 600, serialize(user))
+    return user
+```
+
+**Bloom filter alternative**: Facebook uses Bloom filters to cheaply answer "does this key definitely NOT exist?" without DB queries. False positive rate ~1% is acceptable.
+
+---
+
+### Cache Warming — Prevent Cold Start
+
+After a deployment or Redis restart, you have an empty cache. First minutes see 100% miss rate:
+
+```mermaid
+graph TB
+    COLD[Cold Cache After Deploy]
+
+    COLD --> S1[Strategy 1: Lazy Warming<br/>Cache fills naturally as users request data<br/>⚠️ Slow — first users get DB latency]
+
+    COLD --> S2[Strategy 2: Proactive Warming<br/>Background job pre-populates hot keys before traffic hits<br/>✅ Fast — no cold start penalty]
+
+    COLD --> S3[Strategy 3: Snapshot Restore<br/>Restore Redis RDB snapshot from before deploy<br/>✅ Instant — if compatible with new code]
+
+    style S1 fill:#FFE4B5
+    style S2 fill:#90EE90
+    style S3 fill:#90EE90
+```
+
+```python
+# Proactive warming — run before deploying new instances
+def warm_cache():
+    # Get top 10,000 most-accessed user IDs from analytics
+    hot_user_ids = analytics.get_top_users(limit=10_000)
+
+    for user_id in hot_user_ids:
+        user = db.get_user(user_id)
+        redis.setex(f"user:{user_id}", 600, serialize(user))
+        time.sleep(0.001)  # Throttle to not overwhelm DB
+```
+
+**Twitter** warms timeline caches for active users on deploys. **Instagram** pre-warms feed caches for returning users.
+
+---
+
+### Cache Key Design
+
+Good key design prevents collisions, enables monitoring, and supports versioning:
+
+```python
+# ❌ Bad: Collisions, no namespace, no versioning
+redis.set("user_123", data)
+redis.set("123", data)  # Collides with user 123?
+
+# ✅ Good: Namespaced, versioned, clear
+KEY_VERSION = "v2"
+
+def cache_key(entity_type, entity_id, field=None):
+    parts = [KEY_VERSION, entity_type, str(entity_id)]
+    if field:
+        parts.append(field)
+    return ":".join(parts)
+
+# Examples:
+# "v2:user:123"
+# "v2:user:123:profile"
+# "v2:feed:456:home"
+# "v2:product:789:inventory"
+```
+
+**Version prefix trick**: When you change your data schema, increment `KEY_VERSION`. All old keys become unreachable (and eventually evicted by LRU) without needing explicit invalidation.
+
+---
+
+### Redis Data Structures for Common Patterns
+
+Redis isn't just key-value. Using the right data structure is 10-100x more memory efficient:
+
+```python
+# ❌ Storing full JSON objects for a leaderboard
+redis.set("score:user:1", json.dumps({"user_id": 1, "score": 9500}))
+redis.set("score:user:2", json.dumps({"user_id": 2, "score": 8200}))
+# Getting top 10 requires reading all keys + sorting in app
+
+# ✅ Redis sorted set for leaderboard
+redis.zadd("leaderboard:global", {
+    "user:1": 9500,
+    "user:2": 8200,
+    "user:3": 7100,
+})
+# Get top 10 in O(log N + K): already sorted!
+redis.zrevrange("leaderboard:global", 0, 9, withscores=True)
+
+# ✅ Redis hash for user profile (vs JSON string)
+redis.hset("user:123", mapping={
+    "name": "Alice",
+    "email": "alice@example.com",
+    "premium": "1",
+})
+# Update just one field without fetching full object
+redis.hset("user:123", "premium", "0")
+
+# ✅ Redis set for "who follows who"
+redis.sadd("followers:user:123", "user:456", "user:789")
+redis.sismember("followers:user:123", "user:456")  # O(1) check
+```
+
+---
+
+### Production Monitoring Metrics
+
+Your cache is healthy only if you're watching these:
+
+| Metric | Target | Action if Violated |
+|--------|--------|--------------------|
+| **Hit Rate** | > 90% | Add more cache, fix key design |
+| **Eviction Rate** | < 5%/min | Increase Redis memory |
+| **P99 Latency** | < 5ms | Check network, cluster health |
+| **Memory Usage** | < 80% | Scale Redis or reduce TTLs |
+| **Connected Clients** | < 80% of `maxclients` | Tune connection pools |
+
+```bash
+# Redis stats in production
+redis-cli info stats | grep -E "keyspace_hits|keyspace_misses|evicted_keys"
+
+# Hit rate calculation
+hit_rate = hits / (hits + misses) * 100
+# Target: > 90%
+
+# Redis INFO memory
+redis-cli info memory | grep -E "used_memory_human|mem_fragmentation_ratio"
+```
+
+---
+
+## 🌍 Real-World Company Examples
+
+```mermaid
+graph TB
+    subgraph "Netflix — EVCache"
+        N1[Multi-tier: JVM L1 + Memcached L2]
+        N2[~2 trillion cache hits/day]
+        N3[Saved ~99% of metadata DB calls]
+    end
+
+    subgraph "Twitter — Twemcache"
+        T1[Timeline cache: precomputed fan-out]
+        T2[Hot keys replicated across shards]
+        T3[Redis for rate limiting, Lua scripts]
+    end
+
+    subgraph "Facebook — Memcached + TAO"
+        F1[TAO: Read-through cache for social graph]
+        F2[Cache invalidation via McSqueal (MySQL binlog)]
+        F3[Thundering herd protection: lease tokens]
+    end
+
+    subgraph "Discord — Redis"
+        D1[Users online status: Redis sets]
+        D2[Guild member lists: Redis sorted sets]
+        D3[Moved hot guilds to separate Redis shards]
+    end
+
+    style N1 fill:#e1f5ff
+    style T1 fill:#FFE4B5
+    style F1 fill:#90EE90
+    style D1 fill:#FFB6C1
+```
+
+### Facebook's Lease Token (Thundering Herd Solution)
+
+Facebook published this pattern to handle cache stampedes at scale:
+
+```
+1. Client 1 misses cache for key K
+2. Cache returns a LEASE TOKEN (unique ID) to Client 1
+   "You have permission to fetch from DB"
+3. Clients 2, 3, 4 also miss key K
+4. Cache tells Clients 2-N: "WAIT — a lease is outstanding"
+5. Client 1 fetches from DB, writes to cache
+6. Clients 2-N retry and get the cached value
+```
+
+This prevents thousands of simultaneous DB queries for one expired key — exactly what `singleflight` in Go and Java's Guava `LoadingCache` implement.
+
+---
+
 ## 🎤 Caching in System Design Interviews
 
 ### When to Bring Up Caching

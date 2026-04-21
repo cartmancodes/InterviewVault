@@ -1060,6 +1060,38 @@ mindmap
 | **App Servers** | 100k connections<br/>64-512GB RAM<br/>8-64 cores | CPU > 70%<br/>Connections near limit<br/>Memory > 80% |
 | **Kafka** | 1M msgs/sec/broker<br/>5ms latency<br/>50TB storage | Throughput near 800k<br/>Growing consumer lag<br/>Partitions > 200k |
 
+### Production-Accurate Latency Numbers
+
+These are real-world ranges, not theoretical minimums:
+
+| Operation | Best Case | Typical Production | Notes |
+|-----------|-----------|-------------------|-------|
+| In-process cache (L1) | 0.01ms | 0.01ms | HashMap lookup |
+| Redis GET (same AZ) | 0.3ms | 1-2ms | +network overhead |
+| Redis GET (cross-region) | 50ms | 80-150ms | Speed of light |
+| PostgreSQL indexed read | 1ms | 5-15ms | Buffer pool hit |
+| PostgreSQL cold read | 5ms | 20-50ms | Disk access |
+| PostgreSQL full table scan | 50ms | 100ms-10s | Depends on table size |
+| Elasticsearch query | 5ms | 10-100ms | Depends on cluster size |
+| S3 GET | 10ms | 30-100ms | Object size matters |
+| CDN edge hit | 1ms | 5-20ms | Geographic proximity |
+| Cross-AZ network call | 0.5ms | 1-3ms | Same region, diff AZ |
+| Cross-region network call | 70ms | 80-200ms | Speed of light + routing |
+
+### Real Traffic Numbers for Context
+
+Use these when sizing your system design:
+
+| Service | Scale | Key Numbers |
+|---------|-------|-------------|
+| **Instagram** | 2B users | 100M photos/day, 500M stories/day |
+| **Twitter/X** | 400M users | 500M tweets/day, 300K QPS reads |
+| **Netflix** | 300M users | 15% of global internet bandwidth |
+| **Uber** | 130M users | 25M trips/day, 14M geo updates/sec at peak |
+| **WhatsApp** | 2B users | 100B messages/day, 2M connections/server |
+| **YouTube** | 2.5B users | 500 hours of video uploaded/minute |
+| **Shopify** | 2M merchants | 10K checkouts/min at Black Friday peak |
+
 > 💡 **Interview Tip**: Do your capacity calculations in context when you need them. If your interviewer asks "how many servers do we need," that's when you pull out the numbers. Walk through it: "We're expecting 50K requests per second, each server can handle maybe 5K requests, so we need around 10 servers plus some headroom."
 
 ---

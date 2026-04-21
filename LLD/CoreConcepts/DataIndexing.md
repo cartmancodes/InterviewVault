@@ -1144,6 +1144,211 @@ graph TB
 
 ---
 
+## 🏭 Production Indexing Tricks
+
+### Partial Indexes — Index Only What You Query
+
+A partial index is smaller, faster, and cheaper than a full-column index when your queries target a subset:
+
+```sql
+-- ❌ Full index: indexes ALL orders (millions of rows)
+CREATE INDEX idx_orders_status ON orders(status);
+
+-- ✅ Partial index: only indexes pending orders (thousands of rows)
+-- Queries like "WHERE status = 'pending'" use this tiny index
+CREATE INDEX idx_orders_pending ON orders(user_id)
+WHERE status = 'pending';
+
+-- ✅ Partial index for soft-deleted records
+CREATE INDEX idx_users_active ON users(email)
+WHERE deleted_at IS NULL;
+-- Result: 10x smaller, 10x faster for active user lookups
+```
+
+**Real example**: Shopify's order processing indexes only `status = 'processing'` orders since completed orders represent 99% of rows but are rarely queried.
+
+---
+
+### Functional (Expression) Indexes
+
+Index the result of a function, not the raw column:
+
+```sql
+-- ❌ This won't use an index on email
+SELECT * FROM users WHERE LOWER(email) = 'alice@example.com';
+
+-- ✅ Create a functional index on the expression
+CREATE INDEX idx_users_email_lower ON users(LOWER(email));
+
+-- Now this query uses the index
+SELECT * FROM users WHERE LOWER(email) = 'alice@example.com';
+
+-- ✅ Index on date truncation for date-range queries
+CREATE INDEX idx_events_day ON events(DATE_TRUNC('day', created_at));
+
+-- ✅ Index on JSON field (PostgreSQL)
+CREATE INDEX idx_orders_metadata_type
+ON orders ((metadata->>'order_type'));
+```
+
+---
+
+### CONCURRENTLY — Build Indexes Without Downtime
+
+```sql
+-- ❌ Blocks all writes while building (minutes on large tables!)
+CREATE INDEX idx_orders_user ON orders(user_id);
+
+-- ✅ Build in background — table stays fully writable
+CREATE INDEX CONCURRENTLY idx_orders_user ON orders(user_id);
+-- Takes longer, but zero downtime
+```
+
+**Important caveats**:
+- Can't run inside a transaction
+- Leaves an invalid index if it fails (must `DROP INDEX` and retry)
+- Use `pg_stat_progress_create_index` to monitor progress
+
+```sql
+-- Monitor index build progress (PostgreSQL 12+)
+SELECT phase, blocks_done, blocks_total,
+       ROUND(100.0 * blocks_done / blocks_total, 1) AS pct_done
+FROM pg_stat_progress_create_index;
+```
+
+---
+
+### Covering Indexes with INCLUDE (PostgreSQL 11+)
+
+Avoid heap fetches by including all needed columns in the index leaf:
+
+```sql
+-- Standard index — needs heap fetch for email + name
+CREATE INDEX idx_users_id ON users(id);
+
+-- SELECT email, name needs to fetch table row after finding id in index
+
+-- Covering index — all columns available in the index itself
+CREATE INDEX idx_users_id_covering ON users(id) INCLUDE (email, name);
+
+-- SELECT email, name FROM users WHERE id = 123
+-- → Index-only scan: NEVER touches the table heap!
+```
+
+**When to use**: Hot read paths where the same few columns are always fetched together. The tradeoff is larger index size and slower writes.
+
+---
+
+### Find and Kill Unused Indexes
+
+Every index slows down writes. Remove indexes nobody uses:
+
+```sql
+-- Find unused indexes (reset stats after each deployment)
+SELECT
+    schemaname,
+    tablename,
+    indexname,
+    idx_scan AS times_used,
+    pg_size_pretty(pg_relation_size(indexrelid)) AS index_size
+FROM pg_stat_user_indexes
+WHERE idx_scan = 0
+ORDER BY pg_relation_size(indexrelid) DESC;
+
+-- Bloated indexes (fragmentation from many updates/deletes)
+SELECT
+    tablename,
+    indexname,
+    pg_size_pretty(pg_relation_size(indexrelid)) AS index_size
+FROM pg_stat_user_indexes
+WHERE idx_scan < 100   -- Rarely used
+ORDER BY pg_relation_size(indexrelid) DESC;
+```
+
+**Production practice**: Run this monthly. Teams at GitHub and GitLab have found 30-40% of their indexes were unused, removing them improved write throughput by 15-20%.
+
+---
+
+### EXPLAIN ANALYZE — Debug Slow Queries
+
+```sql
+-- See what the query planner actually does
+EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
+SELECT * FROM orders WHERE user_id = 123 AND status = 'pending';
+
+-- Key things to look for:
+-- "Seq Scan" → missing index
+-- "Index Scan" → good, using index
+-- "Index Only Scan" → best, no heap fetch needed
+-- "Bitmap Heap Scan" → acceptable for range queries
+-- rows=XXX (actual) vs rows=YYY (estimated) → stale stats if far off
+-- Buffers: shared hit=X read=Y → high read means cold cache
+
+-- Fix stale statistics causing bad query plans
+ANALYZE orders;
+-- Or full vacuum + analyze
+VACUUM ANALYZE orders;
+```
+
+---
+
+### Index Fill Factor for Write-Heavy Tables
+
+PostgreSQL reserves space on each B-tree page for future updates. Reducing fill factor avoids costly page splits:
+
+```sql
+-- Default fill factor = 100% (no room for updates)
+-- Every update on an indexed column may cause a page split
+
+-- For frequently-updated tables, use 70-80% fill factor
+CREATE INDEX idx_orders_status ON orders(status)
+WITH (fillfactor = 70);
+
+-- Reduces page splits by leaving 30% free for in-place updates
+-- Slightly larger index, but faster writes on hot rows
+```
+
+**Use when**: The indexed column is updated frequently (e.g., status columns that change from `pending` → `processing` → `complete`).
+
+---
+
+### Write Amplification — Indexes Have Real Cost
+
+Every index on a table multiplies write cost:
+
+```mermaid
+graph TB
+    WRITE[One INSERT into orders]
+
+    WRITE --> T1[Write to table heap: 1 I/O]
+    WRITE --> I1[Update index: user_id: 1 I/O]
+    WRITE --> I2[Update index: status: 1 I/O]
+    WRITE --> I3[Update index: created_at: 1 I/O]
+    WRITE --> I4[Update index: email: 1 I/O]
+    WRITE --> WAL[Write WAL (transaction log): 1 I/O]
+
+    TOTAL[Total: 6 I/Os for 1 logical write]
+
+    style WRITE fill:#e1f5ff
+    style TOTAL fill:#FFB6C1
+```
+
+**Production rule**: Don't index columns you don't query. A write-heavy table with 10 indexes can be 5x slower than the same table with 2 indexes.
+
+**Monitoring**: Watch `pg_stat_user_tables.n_tup_upd` (updates/sec) vs index count to identify over-indexed hot tables.
+
+---
+
+### Real-World Indexing Failures
+
+**GitHub (2014)**: A missing index on `pull_requests.head_sha` caused a 30-minute outage. Every PR status check triggered a full table scan on 50M rows.
+
+**Shopify**: Periodic "why is checkout slow?" incidents traced to missing composite indexes. The fix: `(shop_id, status, created_at)` composite index dropped checkout query time from 500ms to 3ms.
+
+**Common pattern**: Systems work fine at 1M rows, break at 10M rows when indexes weren't designed for scale.
+
+---
+
 ## 📚 Related Concepts
 
 - [Data Modeling](./DataModelling.md) - Schema design and relationships

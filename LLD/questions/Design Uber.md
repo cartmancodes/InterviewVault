@@ -11,7 +11,8 @@
 4. [High-Level Design](#high-level-design)
 5. [Deep Dives](#deep-dives)
 6. [Scaling Journey: 0 to Infinity](#scaling-journey-0--)
-7. [Expected Depth by Level](#expected-depth-by-level)
+7. [Insider Tips and Tricks](#insider-tips-and-tricks)
+8. [Expected Depth by Level](#expected-depth-by-level)
 
 ---
 
@@ -47,7 +48,7 @@ Uber is a two-sided marketplace that pairs nearby drivers with riders in under a
 - CI/CD and deployment topology.
 
 **Back-of-envelope numbers:**
-- ~10M active drivers globally pinging every ~5s yields ~2M writes/sec on the location hot path.
+- ~10M active drivers globally pinging every ~4s yields ~2.5M writes/sec on the location hot path.
 - Match SLO: under 1 minute end to end, with per-driver accept windows of ~10s.
 - Peak local density: 100k requests per city cell during events.
 
@@ -120,7 +121,7 @@ Returns: streaming connection (SSE or websocket) with driver position and ETA.
                [Temporal / Step Fn]    <-- durable matching workflow
 ```
 
-**Write path (location ping):** driver app opens a websocket to Location Service; every N seconds (adaptive) it posts lat/lng; Location Service writes to Redis using `GEOADD` keyed by region.
+**Write path (location ping):** driver app opens a websocket to Location Service; every 4 seconds (adaptive) it posts lat/lng; Location Service writes to Redis using `GEOADD` keyed by region.
 
 **Read path (match):** rider posts `POST /rides`; Ride Service creates the row, emits a `RideRequested` event to Kafka. Match Service consumes, runs `GEOSEARCH` around pickup, picks the best candidate, acquires a Redis distributed lock on that `driverId` with a 10s TTL, and pushes the offer through Notification Service. On ACCEPT, lock is released, Ride row transitions to `ACCEPTED`. On timeout, workflow moves to the next candidate.
 
@@ -128,34 +129,46 @@ Returns: streaming connection (SSE or websocket) with driver position and ETA.
 
 ## Deep Dives
 
-### 1. Driver Location Ingestion at 2M writes/sec
+### 1. Driver Location Ingestion at Scale
 
 The naive "write every ping into Postgres with a B-tree on (lat, lng)" fails on two fronts: write amplification kills the database, and B-trees cannot efficiently answer "drivers within 3 km of this point."
 
-**Geohashing in Redis** wins here. `GEOADD` encodes lat/lng into a 52-bit integer (a geohash of sorts) and stores it in a sorted set. `GEOSEARCH ... BYRADIUS` runs in near-constant time against a bounded cell. Losing a few seconds of Redis state is acceptable because drivers re-ping within 5s; AOF + Sentinel covers the rest.
+**Geohashing in Redis** wins here. `GEOADD` encodes lat/lng into a 52-bit integer (a geohash variant) and stores it in a sorted set. `GEOSEARCH ... BYRADIUS` runs in near-constant time against a bounded cell. Losing a few seconds of Redis state is acceptable because drivers re-ping within 4s; AOF + Sentinel covers the rest.
 
-**Batch + adaptive ping rate:** The client itself decides how often to ping. Stationary drivers can drop to 30s; fast-moving drivers on a highway stay at 2s. Location Service can also coalesce writes in a 1-2s window per driver before flushing to Redis. This alone cuts the 2M/sec number by 3-5x.
+**Adaptive ping rate — the battery tradeoff:** The client decides how often to ping based on motion state. Stationary drivers drop to 30s; fast-moving drivers on a highway stay at 2-4s. The 4-second default is an empirical sweet spot: 1-second pings are more accurate but drain phone batteries by 30-40% per hour of driving, making drivers avoid the app. 30-second pings are too stale for ETA accuracy. Location Service can also coalesce writes in a short window per driver before flushing to Redis, cutting raw write volume by 3-5x in dense cities.
+
+**Handling GPS loss mid-trip:** A driver enters a tunnel — GPS blacks out for 2 minutes. If the system cancels trips on GPS loss, drivers lose income constantly in cities. The correct behavior: mark driver as "location unknown" after 30 seconds without an update, continue the trip, and resume tracking when GPS returns. The rider app shows "driver location temporarily unavailable." Only escalate to trip cancellation after an extended blackout (e.g., 15 minutes) combined with no driver activity signals at all.
+
+**Fire-and-forget writes:** Location updates are sent as lightweight UDP-like writes. If one update is dropped, the next arrives within 4 seconds. Use the last known position for ETA calculations and interpolate the car icon position on the map between updates to give riders a smooth visual experience.
 
 ### 2. Matching Algorithm and Proximity Search
 
-Matching is more than "nearest." A good score blends distance, driver ETA (accounting for one-way streets and traffic), driver acceptance rate, and current demand on the driver side. Practically:
+Matching is more than "nearest." A good score blends distance, driver ETA (accounting for one-way streets and traffic), driver acceptance rate, and current demand. The "phantom car" problem is critical here: a driver appearing 0.3 miles away on a straight-line map may require 1.5 miles of actual driving due to one-way streets and no-U-turn zones — showing "2 minutes away" destroys user trust. ETAs must use road-graph routing, not Euclidean distance.
+
+The full matching pipeline:
 
 1. `GEOSEARCH` returns the N closest drivers inside, say, a 3 km radius.
 2. Filter by `status = available` and matching vehicle class.
-3. Rank by estimated time-to-pickup, not straight-line distance.
-4. Offer the top candidate; on decline or timeout, try the next.
+3. Score by estimated time-to-pickup computed on the road network, not straight-line distance.
+4. Offer the top candidate; on decline or timeout, move to the next.
+5. Update ETA every 30 seconds as the driver's actual position and live traffic conditions change.
 
-The geospatial index must be correct at cell boundaries. Scatter-gather across neighboring cells handles riders near the edge.
+The geospatial index must handle cell-boundary riders correctly. Scatter-gather across neighboring cells prevents riders at the edge of a cell from missing a driver 200m away in the adjacent cell.
+
+**Dispatch must be single-writer per cell:** Without coordination, two Match Service instances could simultaneously read the same available drivers and assign both to the same rider. The invariant is enforced by sharding the dispatch service by geohash cell so exactly one instance owns each cell's write authority, or by acquiring a Redis distributed lock per `riderId` before any assignment transaction. Any given rider's assignment must be processed by exactly one writer.
+
+**Shard by region, not by user:** Sharding dispatch by `userId` distributes users evenly but puts New York and Tokyo drivers in the same shard — they can never be matched (geographic nonsense). Shard by city or metropolitan region: every request and driver in New York routes to the New York dispatch shard. Cross-region trips (airport to a neighboring city) are handled by a special inter-region coordinator, not the normal dispatch path.
 
 ### 3. Geospatial Index Choice
 
 Candidates in rough order of sophistication:
-- **PostGIS (Postgres):** Excellent SQL ergonomics, R-tree (GiST) indexes. Great at low scale. Struggles under 2M write/sec on hot cells.
+
+- **PostGIS (Postgres):** Excellent SQL ergonomics, R-tree (GiST) indexes. Great at low scale. Struggles under 2M+ write/sec on hot cells.
 - **Redis geohash (GEOADD / GEOSEARCH):** In-memory, simple, city-shardable. The sweet spot for most ride-hailing workloads.
-- **Google S2 / Uber H3:** Hierarchical cell coverings. H3 uses hexagons, which have uniform adjacency (six equidistant neighbors) unlike squares, making radius queries cleaner. Used by Uber in production for surge pricing cells and fleet balancing.
+- **Google S2 / Uber H3:** Hierarchical cell coverings. H3 uses hexagons, which have a critical property squares lack: every neighbor cell center is equidistant from the center cell. Square grids have two distances (edge-adjacent = 1 unit, diagonal = 1.41 units), causing inconsistency in proximity calculations. H3's hierarchical structure also allows multi-resolution queries — find drivers at resolution 9 (~174m cells), zoom out to resolution 7 (~5.1km) if none found. This variable-resolution search replaces multiple fixed-radius queries. Used by Uber in production for surge pricing cells and fleet balancing.
 - **Quadtree:** Textbook answer; fine pedagogically but rarely chosen over H3/S2 in practice.
 
-Answer in the interview: start with PostGIS, justify moving to Redis geohash at scale, and reference H3 for the globally sharded version.
+Answer in the interview: start with PostGIS, justify moving to Redis geohash at scale, and reference H3 for the globally sharded version with variable-resolution fallback.
 
 ### 4. Ride State Machine and Strong Consistency
 
@@ -166,23 +179,38 @@ REQUESTED -> MATCHING -> OFFERED -> ACCEPTED -> EN_ROUTE -> IN_TRIP -> COMPLETED
                        EXPIRED       CANCELLED   CANCELLED
 ```
 
-Every transition is a conditional update in Postgres: `UPDATE rides SET status = 'ACCEPTED' WHERE rideId = ? AND status = 'OFFERED'`. If zero rows change, the transition lost a race and the caller sees the current state. This gives us linearizability on the ride document itself.
+More granularly for the driver-facing states:
+
+```
+requested -> driver_assigned -> en_route_to_rider -> rider_picked_up -> en_route_to_destination -> completed | cancelled
+```
+
+Every transition is a conditional update in Postgres: `UPDATE rides SET status = 'ACCEPTED' WHERE rideId = ? AND status = 'OFFERED'`. If zero rows change, the transition lost a race and the caller sees the current state. This gives linearizability on the ride document itself.
+
+**Idempotency is mandatory:** Network retries can send the same transition twice. The state machine must be idempotent: applying the same transition twice from the same state must be a no-op, not an error. Use compare-and-swap (`UPDATE trips SET state='en_route' WHERE id=? AND state='driver_assigned'`) to enforce valid transitions atomically. A duplicate transition that hits the wrong source state should return the current state, not a 500.
 
 Driver exclusivity is enforced separately by a **Redis distributed lock keyed on `driverId` with a 10s TTL**. Match Service must acquire the lock before sending an offer; the lock auto-expires if the service crashes mid-dispatch. No two matchers can ever offer the same driver simultaneously. Postgres is the system of record; Redis is the dispatch mutex.
 
 ### 5. Driver Disconnections and Timeouts
 
 Two failure modes matter:
-- **Driver accepts but goes offline:** rider sees a phantom trip. Mitigation: Ride Service has a watchdog that expects the driver's location to keep ticking post-accept; if pings stop for 30s, the ride is auto-cancelled and re-queued.
-- **Driver never responds to an offer:** handled by the lock TTL + the matching workflow. Encode the full "offer A, wait 10s, offer B, wait 10s, ..." loop as a **Temporal (or AWS Step Functions) workflow** so it survives Match Service crashes. Without durable execution, a pod restart mid-dispatch silently drops the request.
+
+- **Driver accepts but goes offline:** rider sees a phantom trip. Ride Service has a watchdog that expects the driver's location to keep ticking post-accept. If pings stop for 30 seconds, the driver is marked "location unknown." If blackout exceeds 15 minutes with no activity, the ride is auto-cancelled and re-queued. Short tunnels and LTE drops must not cancel active trips — only sustained, prolonged silence warrants escalation.
+- **Driver never responds to an offer:** handled by the lock TTL plus the matching workflow. Encode the full "offer A, wait 10s, offer B, wait 10s, ..." loop as a **Temporal (or AWS Step Functions) workflow** so it survives Match Service crashes. Without durable execution, a pod restart mid-dispatch silently drops the request. The workflow also handles the case where the rider cancels while an offer is in-flight — the workflow must check for cancellation before issuing each successive offer.
 
 ### 6. Peak-Demand Surge Handling
 
 Event lets out: 100k ride requests hit the same cell in 60 seconds. Defenses:
+
 - **Kafka in front of Match Service** absorbs the burst; consumers scale horizontally on lag.
-- **Partition by geohash prefix** so a single city's surge doesn't starve other cities' consumers.
-- **Expand search radius progressively** (3 km -> 5 km -> 8 km) as queue depth on that cell grows, rather than holding riders hostage waiting for a perfect local driver.
-- **Surge pricing feedback loop** pulls more drivers in, but that is a product control, not a backend fix.
+- **Partition by geohash prefix** so a single city's surge does not starve other cities' consumers.
+- **Expand search radius progressively** (3 km → 5 km → 8 km) as queue depth on that cell grows, rather than holding riders hostage waiting for a perfectly local driver.
+- **Surge pricing as an admission control signal, not just revenue:** When demand exceeds supply in a region, surge pricing raises prices. The dual effect: (1) some demand-insensitive riders get served faster; (2) some price-sensitive riders voluntarily defer, reducing queue depth. From a systems perspective, surge pricing is a feedback loop that adjusts input rate (ride requests) to match processing capacity (available drivers). Without it, the queue grows unboundedly during peak events. Treating surge as purely a revenue feature misses this architectural role.
+- **Hot-cell autoscaling:** Kafka partitions per H3 prefix let the orchestrator spin up extra Match Service pods specifically for the surging cell, without over-provisioning the whole city.
+
+### 7. Data Retention and Privacy
+
+Trip data (route, fare, timestamps) can be retained for years for billing and dispute resolution. Precise driver location history is personally identifiable information (PII) and falls under GDPR/CCPA with short retention requirements — often 30 days. The systems storing these must be separate, with different retention policies, access controls, and deletion workflows. This is a compliance requirement, not a product choice: failing it results in regulatory fines. The location ingest pipeline must be designed from the start with retention TTLs and data-class tagging so compliance tooling can act on it without requiring a rewrite later.
 
 ---
 
@@ -215,7 +243,7 @@ This section is my own framing for how a ride-hailing backend concretely evolves
 **Architecture:**
 - Split out a **Location Service** that writes driver positions to **Redis** using `GEOADD`. Postgres no longer sees ping traffic.
 - Upgrade driver app to a persistent **websocket** to Location Service (one long-lived connection per driver instead of HTTPS setup cost every 5s).
-- Introduce **adaptive ping intervals** on the client: 2s while moving, 15-30s while parked.
+- Introduce **adaptive ping intervals** on the client: 2-4s while moving, 15-30s while parked.
 - Match Service still runs synchronously but now queries Redis `GEOSEARCH` instead of PostGIS.
 - Dispatch exclusivity moves off `SELECT FOR UPDATE` onto a **Redis `SET NX PX 10000`** lock keyed on `driverId`.
 
@@ -232,7 +260,7 @@ This section is my own framing for how a ride-hailing backend concretely evolves
 
 **Architecture:**
 - **City-sharded Redis:** one Redis per city (or per region). Client app includes city in its login session so the gateway routes pings to the right shard.
-- **Geospatial index becomes H3 cells**, not raw geohashes. Each driver is tagged with their H3 cell at resolution ~9 (~200m edge); matching scans the pickup cell plus its six neighbors.
+- **Geospatial index becomes H3 cells**, not raw geohashes. Each driver is tagged with their H3 cell at resolution ~9 (~174m edge); matching scans the pickup cell plus its six neighbors. H3's hexagonal grid ensures all six neighbors are equidistant, making the neighbor scan uniform and consistent.
 - **Kafka in front of Match Service.** `POST /rides` enqueues a `RideRequested` event partitioned by H3 prefix. Match Service consumers scale horizontally per partition. Consumer lag becomes the autoscaling signal.
 - **Temporal workflow** owns the "offer driver A -> wait 10s -> offer driver B -> ..." loop. Survives pod restarts. Retries are free and safe.
 - Postgres gets **read replicas** for rider history and driver profile reads. Writes still go to a single primary per region.
@@ -274,6 +302,37 @@ This section is my own framing for how a ride-hailing backend concretely evolves
 - **Dynamic pricing, batching (Pool), and matching become an ML pipeline** that reads from the same Redis/H3 substrate, but feature generation and model serving are their own subsystem.
 
 **What you skip (intentionally, forever):** A single global database. There is no operational reason to join a Tokyo ride against a New York ride in the hot path, and every attempt to build one becomes the bottleneck.
+
+---
+
+## Insider Tips and Tricks
+
+### H3 Hexagonal Grid: Why Hexagons Beat Squares for Proximity
+Uber's H3 library uses a hierarchical hexagonal grid. Hexagons have a critical property squares lack: every neighbor cell center is equidistant from the center cell. Square grids have two distances (edge-adjacent = 1 unit, diagonal = 1.41 units), which causes inconsistency in proximity calculations. H3's hierarchical structure also allows multi-resolution queries — find drivers at resolution 9 (~174m cells), zoom out to resolution 7 (~5.1km) if none found. This variable-resolution search replaces multiple fixed-radius queries.
+
+### Driver Location Updates Every 4 Seconds — The Tradeoff Is Battery vs Accuracy
+Updating driver GPS every 1 second gives high accuracy but drains phone battery by 30-40% per hour of driving — drivers would avoid the app. Every 30 seconds is too stale for ETAs. 4 seconds is the empirical sweet spot. The location update is a lightweight UDP-like write (fire-and-forget): if one update is lost, the next one arrives 4 seconds later. Use the last known position for ETA calculations; show the "fuzzy" car position on the map with interpolation between updates.
+
+### The Dispatch Service Must Be Single-Writer per Cell
+Assigning two drivers to the same rider is catastrophic. Without coordination, two dispatch service instances could simultaneously read the same available drivers and assign both to the same rider. Solution: the dispatch service is sharded by `geohash cell` with exactly one instance owning each cell's write authority. Alternatively, use Redis with a distributed lock per `(riderId)` for the assignment transaction. The invariant: any given rider's assignment must be processed by exactly one writer.
+
+### Surge Pricing Is an Admission Control Signal, Not Just Revenue
+When demand exceeds supply in a region, surge pricing raises prices. The intended effect is dual: (1) some demand-insensitive riders get served faster; (2) some price-sensitive riders voluntarily defer, reducing queue depth. From a systems perspective, surge pricing is a feedback loop that adjusts input rate (ride requests) to match processing capacity (available drivers). Without it, the queue grows unboundedly during peak events. Treating surge as purely a revenue feature misses this architectural role.
+
+### Trip State Machine: Every Transition Must Be Idempotent
+The trip states: `requested → driver_assigned → en_route_to_rider → rider_picked_up → en_route_to_destination → completed | cancelled`. Each transition is triggered by a driver action (accept, arrive, start, end). Network retries can send the same transition twice. The state machine must be idempotent: applying the same transition twice from the same state should be a no-op, not an error. Store the current state in the DB; use compare-and-swap (`UPDATE trips SET state='en_route' WHERE id=? AND state='driver_assigned'`) to enforce valid transitions.
+
+### GPS Loss Mid-Trip Must Not Cancel the Trip
+A driver enters a tunnel (GPS blackout for 2 minutes). If the system cancels trips on GPS loss, drivers would lose income constantly in cities. The correct behavior: mark driver as "location unknown" after 30 seconds without update, continue the trip, resume tracking when GPS returns. The rider app shows "driver location temporarily unavailable." Only escalate to trip cancellation after an extended blackout (e.g., 15 minutes) combined with no driver activity.
+
+### Driver Location Data Has Stricter Retention Limits Than Trip Data
+Trip data (route, fare, timestamps) can be retained for years for billing and dispute resolution. Precise driver location history is personally identifiable information (PII) and falls under GDPR/CCPA with short retention requirements (often 30 days). The systems for storing these must be separate, with different retention policies and access controls. This is a compliance requirement, not a product choice — failing it results in regulatory fines.
+
+### The "Phantom Car" Problem: Map Position vs Actual Reachability
+A driver appears to be 0.3 miles from a rider on the map, but the actual route (one-way streets, no U-turn zones) requires 1.5 miles of driving — 8 minutes, not 2. Showing "2 minutes away" based on straight-line distance is wrong and destroys user trust. ETAs must use road-graph routing (time on road network), not Euclidean distance. Update ETA every 30 seconds as the driver's position and traffic conditions change.
+
+### Shard Dispatch by City/Region, Not by User
+A single dispatch service for all 8 billion people on Earth is impractical. Sharding by userId distributes users but puts New York and Tokyo drivers in the same shard — they can never be matched (geographic nonsense). Shard by city or metropolitan region: every request and driver in New York routes to the New York dispatch shard. Cross-region trips (airport to neighboring city) are handled by a special inter-region coordinator, not the normal dispatch path.
 
 ---
 

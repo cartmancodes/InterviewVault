@@ -25,6 +25,7 @@
   - [Stage 3: 1K – 100K Users](#stage-3-1k--100k-users)
   - [Stage 4: 100K – 10M Users](#stage-4-100k--10m-users)
   - [Stage 5: 10M+ Users](#stage-5-10m-users)
+- [Insider Tips and Tricks](#insider-tips-and-tricks)
 - [Expected Depth by Level](#expected-depth-by-level)
 
 ---
@@ -135,16 +136,18 @@ Key ideas:
 2. Client uploads the bytes directly to S3. The app tier never sees the file body, which saves bandwidth and keeps request sizes small.
 3. S3 emits an `ObjectCreated` event onto a queue (SQS / Kafka).
 4. A pool of **encoding workers** consumes the event and produces variants:
-   - Photos: thumbnail (150px), small (320px), medium (640px), large (1080px). Stripped EXIF, re-encoded as WebP/JPEG.
-   - Videos: HLS segments at 480p / 720p / 1080p, plus a poster frame.
-5. Variants are written back under deterministic keys (e.g. `media/.../1080.webp`). The `media` row is updated to `status=ready`.
+   - Photos: thumbnail (150px), small (320px), medium (640px), large (1080px). EXIF metadata (GPS coordinates, device serial numbers, shooting timestamps) is stripped before re-encoding — this is both a privacy requirement and a correctness one, since EXIF data can expose sensitive user information the uploader never intended to share publicly. Variants are re-encoded as WebP/JPEG.
+   - Videos: HLS segments at 480p / 720p / 1080p, plus a poster frame. To reduce perceived processing delay, the first 10 seconds of video are encoded synchronously at the lowest bitrate (~1–2s of encoding time), emitting a `partial_ready` status so the client can begin streaming immediately. Full-ladder encoding for all bitrates continues asynchronously in the background.
+5. Variants are written back under **deterministic S3 keys** (e.g. `media/{userId}/{mediaId}/1080.webp`). Deterministic naming is essential for CDN cache predictability: a CDN edge node can cache a variant indefinitely by URL, and there is no cache-invalidation thundering herd if the same key is re-requested. The `media` row is updated to `status=ready`.
 6. The client then calls `POST /posts` with `mediaIds`. The Post Service refuses to accept media not in `ready` state, or writes the post but hides it until ready.
 
-**Delivery:** reads go through the CDN (CloudFront / Akamai). The CDN caches each variant at edge POPs keyed by object URL. URLs are versioned so that replacing a variant invalidates cleanly. The client picks a variant based on device pixel density and viewport so we only ship bytes the user will actually see.
+**Delivery:** reads go through the CDN (CloudFront / Akamai). The CDN caches each variant at edge POPs keyed by object URL. URLs are versioned so that replacing a variant invalidates cleanly. The client picks a variant based on device pixel density and viewport — critically, the original upload bytes are **never served to end users**. Serving the original would expose unstripped EXIF metadata and impose 8–20 MB payloads on mobile clients; all user-facing traffic flows through CDN-cached derived variants only.
 
 **Why this design:**
 - Direct-to-S3 uploads shield the API tier from 8MB+ bodies.
 - Async encoding decouples upload latency from transcode cost.
+- EXIF stripping at encode time is a privacy and safety control, not optional.
+- The first-10-seconds synchronous encoding trick eliminates the "processing" spinner users see on video posts, dramatically improving perceived upload quality.
 - Multi-resolution variants let mobile clients on slow networks get a small image quickly, then progressively load higher resolutions.
 - CDN keeps origin read load bounded even when a post goes viral.
 
@@ -157,7 +160,7 @@ When a user opens the app, query "give me the last N posts from every user I fol
 When a user posts, enqueue a fan-out job. For each follower, prepend `(postId, createdAt)` to a per-follower Redis list (`feed:{userId}`). Feed reads become a single `LRANGE`. Latency is excellent. The catch: a celebrity with 100M followers generates 100M writes per post, which is infeasible and creates thundering-herd write storms.
 
 **Hybrid (the production answer):**
-- Normal users (under some follower threshold, e.g. 10K) use **push**. Their posts are fanned out to each follower's precomputed feed list.
+- Normal users (under some follower threshold) use **push**. Their posts are fanned out to each follower's precomputed feed list. The threshold itself is **not a fixed constant** — it is a dynamic, per-account value computed from measured write amplification and queue depth. During viral events an account can grow from 5K to 500K followers in hours; the routing flag must update automatically without manual ops intervention. If fan-out workers are overloaded, raising the threshold temporarily reduces write pressure; the system monitors that feedback loop continuously.
 - Celebrities / high-fan-out accounts use **pull**. Their posts are *not* fanned out. Instead, at feed-read time, the Feed Service:
   1. Reads the precomputed list (captures posts from normal followees).
   2. Separately queries recent posts from the user's celebrity followees (a small set — typically dozens, not millions).
@@ -167,7 +170,8 @@ This bounds the worst case on both sides: write amplification is capped by the t
 
 **Edge cases:**
 - New follow: backfill the follower's precomputed feed with the followee's recent posts.
-- Unfollow: either tombstone on read or lazily rebuild; a stale entry for a few minutes is acceptable.
+- **Unfollow:** do *not* attempt to synchronously remove entries from the Redis feed list — scanning a 1,000-entry list for all posts by `authorId` is O(N) and adds latency to what users expect to be an instant action. Instead, filter at read time: when assembling a feed page, check whether each entry's `authorId` is still in the user's follow set; silently skip entries from unfollowed accounts. A periodic background reconciliation job rebuilds stale feed lists to remove accumulated dead entries.
+- **Celebrity pagination:** when the hybrid feed merges the precomputed list with a live celebrity query, the celebrity query window must be snapped at page 0. If the celebrity query is re-run on every paginated request, new posts will inject into the middle of the feed mid-scroll, breaking the user's reading context. On the first page request, record the upper-bound timestamp and encode it in the cursor; subsequent pages pass that timestamp as a `before=` parameter so the celebrity window stays frozen for the duration of the scroll session.
 - Celebrity demoted / user gains followers past the threshold: migrate them at a quiet time and update their routing flag.
 
 ### 3. Stories and 24-Hour Ephemeral Storage
@@ -178,25 +182,25 @@ Stories are short-lived media that expire 24 hours after posting. They have very
 - Each story has a hard TTL.
 
 **Storage model:**
-- Story media itself lives in the same S3 pipeline as posts — same encoding workers, same CDN. The only difference is an `expiresAt` tag on the object, and a lifecycle policy on the bucket that physically deletes objects 24h after creation.
+- Story media itself lives in the same S3 pipeline as posts — same encoding workers, same CDN. The only difference is an `expiresAt` tag on the object, and an **S3 lifecycle policy** on the bucket that physically deletes objects 25+ hours after creation. Physical deletion is handled entirely by the lifecycle policy — the application layer does not need to issue delete calls per-expiry.
 - Story metadata lives in a separate table `stories(userId, storyId, mediaId, createdAt, expiresAt)` with a TTL index (DynamoDB TTL or a sweeper job on a SQL table).
-- The **active stories index** is a per-user Redis sorted set `stories:{userId}` scored by `createdAt`. On read we `ZRANGEBYSCORE` with `min = now - 24h` to get just the live ones. Expired entries are swept by the TTL.
+- The **active stories index** is a per-user Redis sorted set `stories:{userId}` scored by `createdAt`. On read, `ZRANGEBYSCORE` with `min = now - 86400` returns only live stories. Entries are **not eagerly deleted from the sorted set on expiry** — eager deletion adds write pressure at exactly the moment (24h after posting) that is least predictable and would create write spikes. Instead, the system relies on lazy read-time filtering via `ZRANGEBYSCORE` plus a background sweeper that removes entries older than 25h, aligned with the S3 lifecycle window.
 
 **Read path:** "whose stories should I see?" pulls the list of followees, fans out reads to each `stories:{userId}` sorted set, filters to those with any entry newer than 24h, and returns the tray. Because stories are scoped to followees and bounded to the last 24h, the working set is small enough to cache aggressively.
 
-**Why this is different from feed:** we deliberately do *not* fan out story entries to each viewer's timeline. Stories are discovered by walking the followee list on open, because the set of live stories is tiny (hours of content, not years) and the write fan-out cost would dwarf the read cost.
+**Why stories are deliberately not fanned out:** write fan-out cost would completely dominate read cost here. Stories are discovered by walking the followee list on open because the set of live stories is tiny (hours of content, not years), bounded to the last 24h, and per-followee lookups are cheap sorted-set reads. Fan-out would require writing to every follower's timeline on every story post — for a user with millions of followers, this is the same infeasible write amplification as the celebrity feed problem, but for content that expires in 24h. The read path is cheap enough that the savings never justify the write cost.
 
 ### 4. Consistent Feed Rendering and Pagination
 
 Naive pagination (`LIMIT 20 OFFSET N`) breaks as new posts arrive at the top: items shift down, a user scrolls, and they see duplicates or skips. Instagram-style feeds use **cursor-based pagination**:
 
-- The server returns a `nextCursor` that encodes the `(createdAt, postId)` of the oldest item on the page.
-- Subsequent requests pass that cursor; the server returns items strictly older than it.
+- The server returns a `nextCursor` that encodes the composite `(createdAt, postId)` of the oldest item on the page. Using both fields matters: `createdAt` alone is not unique (two posts can share the same millisecond timestamp), so `postId` serves as a tiebreaker to make the cursor fully deterministic.
+- Subsequent requests pass that cursor; the server applies `WHERE (created_at, post_id) < (:cursor_ts, :cursor_id)` to return items strictly older than the cursor, using the same composite ordering.
 - New posts arriving at the top don't disturb already-paginated pages.
 
-**Consistency within a session:** when the feed is assembled from a Redis precomputed list plus a live celebrity query, we snapshot the celebrity query window to the first-page cursor's upper bound so that pagination doesn't keep injecting new celebrity posts mid-scroll.
+**Consistency within a session:** when the feed is assembled from a Redis precomputed list plus a live celebrity query, the celebrity query window is snapped to the first-page cursor's upper bound (a timestamp encoded in the cursor). All subsequent pages pass that timestamp as a `before=` constraint to the celebrity query, so no new celebrity posts inject into the middle of an ongoing scroll session. The cursor is opaque to the client — it is base64-encoded JSON containing `{ "ts": <epoch_ms>, "postId": "<id>", "celeb_before": <epoch_ms> }`.
 
-**Read-your-writes:** if a user just posted, they expect to see it on their own profile immediately. Profile reads go straight to the Posts DB, not the feed cache, which gives strong consistency for the self-view. For the feed of their followers, the slight fan-out delay (seconds) is acceptable.
+**Read-your-writes:** if a user just posted, they expect to see it on their own profile immediately. Profile reads go straight to the Posts DB (the write primary or a synchronous replica), not the feed cache, which gives strong consistency for the self-view. The Posts DB is the source of truth; the feed cache is an eventually-consistent derived view. For the feed of their followers, the slight fan-out delay (seconds) is acceptable and within the stated NFR of eventual consistency.
 
 ---
 
@@ -282,6 +286,42 @@ This section is an original walkthrough of how an Instagram-shaped system is rea
 **What you skip (deliberately):** nothing architectural; from here the work is in ML ranking, integrity systems, cost optimization, and ad delivery — all of which are separate design problems.
 
 **Failure modes at this scale** are no longer architectural; they're operational: hot-key storms, cross-region replication lag during network events, CDN origin shield failures. The architecture is stable; the game becomes observability and capacity.
+
+---
+
+## Insider Tips and Tricks
+
+### Never Serve the Original Upload Bytes to End Users
+
+Raw uploads contain EXIF metadata — GPS coordinates, device serial numbers, shooting timestamps — that users don't expect to expose publicly. Beyond privacy, a raw 12MP JPEG from a modern phone is 8–20 MB, which creates unacceptable load times on mobile. Always serve a derived variant (EXIF-stripped, re-encoded, sized for the viewport). The original upload lives in cold storage only for DRM and DMCA takedown workflows.
+
+### The Celebrity Threshold Is a Continuously Tuned Knob, Not a Fixed Number
+
+The fan-out-on-write vs. fan-out-on-read threshold (e.g., "10K followers") is not a single constant. It should be dynamic, computed per-account based on measured write amplification and queue depth. During viral events, an account can grow from 5K to 500K followers in hours — you need the routing flag to update without manual ops. Similarly, if your fan-out workers are overloaded, raising the threshold temporarily reduces write pressure; monitoring that feedback loop is part of operating the system at scale.
+
+### Feed List Bounded Size Means You Must Handle Cache Rebuilds
+
+Each user's precomputed Redis feed list is capped (e.g., 1,000 entries). If a user is inactive for months and their list expires or is evicted, their first feed request triggers a cold rebuild: query all followees' recent posts, merge-sort by timestamp, populate Redis. For a user following 2,000 accounts this can be 2,000 DB queries or a large fan-out read — enough to spike DB latency. The production pattern is asynchronous pre-warming: detect the stale list during the request, return the freshly built feed, and asynchronously repopulate Redis before the user scrolls to the second page.
+
+### Cursor Pagination Must Snap the Celebrity Query Window at Page 0
+
+The hybrid feed merges a precomputed list (for normal followees) with live queries against celebrity accounts. If the celebrity query is re-run on every paginated request, new posts from celebrities will keep injecting into the middle of the feed mid-scroll — breaking the user's reading context. On the first page request, snapshot the celebrity query's upper bound (a timestamp) and encode it in the cursor. Subsequent pages pass that timestamp to the celebrity query as a `before=` parameter, so the celebrity window stays frozen for the duration of that scroll session.
+
+### Unfollow Doesn't Clean Up Feed Entries Synchronously
+
+When a user unfollows someone, their precomputed Redis feed list still contains that person's posts. Removing them synchronously on unfollow would require scanning the entire list for entries by `authorId`, which is O(N). Instead, filter at read time: when assembling the feed page, check if the `authorId` for each `postId` is still in the follower's follow set. If not, skip the entry. Periodically run a background reconciliation job that rebuilds the feed list to remove stale entries.
+
+### Video HLS Segmenting Strategy Affects Startup Latency
+
+For video, the first few HLS segments need to be available before the client can start playback. If encoding is fully asynchronous, there's a window where the post exists but the video cannot play. The production trick: encode just the first 10 seconds at the lowest bitrate synchronously (fast, ~1–2s), emit a `partial_ready` status, and let the client start streaming immediately. Full-ladder encoding continues in the background. This dramatically reduces the perceived "processing" delay for video uploads.
+
+### Stories Sorted Set Must Filter on Read, Not on Write
+
+A user's active stories are stored in a Redis sorted set `stories:{userId}` scored by `createdAt`. On read, `ZRANGEBYSCORE` with `min = now - 86400` returns only live stories. Do not delete entries from the sorted set on expiry eagerly — it adds write load at the exact time (24h after posting) that is least predictable. Instead, rely on lazy read-time filtering plus a periodic background sweeper that removes entries older than 25h. The S3 lifecycle policy handles physical object deletion independently.
+
+### Perceptual Hashing Catches Re-Uploaded Content That Byte-Hashing Misses
+
+A simple SHA-256 of the media bytes will not catch a re-upload of the same photo that has been slightly cropped, had a filter applied, or was re-saved at a different JPEG quality. Perceptual hashing (pHash or dHash) generates a fingerprint based on the visual content — two near-duplicate images produce hashes with a Hamming distance under a threshold (typically < 10 bits for strong similarity). Instagram uses perceptual hashing for copyright enforcement and to prevent ban evasion by reuploading removed content with minor edits.
 
 ---
 

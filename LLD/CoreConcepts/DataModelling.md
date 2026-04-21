@@ -973,6 +973,271 @@ mindmap
 
 ---
 
+## 🏭 Production Data Modeling Tricks
+
+### UUID vs Auto-Increment IDs
+
+```mermaid
+graph LR
+    subgraph "Auto-Increment (1, 2, 3...)"
+        A1[✅ Smaller storage: 8 bytes]
+        A2[✅ Sequential writes: better B-tree]
+        A3[❌ Exposes business data: 'order #1001']
+        A4[❌ Shard hotspot: all inserts go to last page]
+        A5[❌ Merge conflicts across databases]
+    end
+
+    subgraph "UUID v4 (random)"
+        B1[❌ Larger: 16 bytes or 36-char string]
+        B2[❌ Random writes: B-tree fragmentation]
+        B3[✅ Opaque: no business leakage]
+        B4[✅ Shard-safe: distributes naturally]
+        B5[✅ Merge-safe: globally unique]
+    end
+
+    subgraph "UUID v7 (time-ordered)"
+        C1[❌ Larger: 16 bytes]
+        C2[✅ Sequential in time: good B-tree]
+        C3[✅ Opaque]
+        C4[✅ Shard-safe]
+        C5[✅ Sortable by creation time]
+        C6[🌟 Best of both worlds]
+    end
+
+    style C6 fill:#90EE90
+```
+
+**Production recommendation**: Use **UUID v7** (time-ordered UUID) for new systems. It's globally unique (safe for sharding), roughly sequential (good for B-tree inserts), and sortable. Available in PostgreSQL 17+ and most modern UUIDs libraries.
+
+```sql
+-- PostgreSQL: Use gen_random_uuid() for v4 or install pg_uuidv7 for v7
+CREATE TABLE orders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    -- or with UUID v7: DEFAULT uuid_generate_v7()
+    user_id UUID NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+---
+
+### Soft Deletes — Never Delete, Always Archive
+
+```sql
+-- ❌ Hard delete: permanent, breaks audit trails, can't recover
+DELETE FROM users WHERE id = 123;
+
+-- ✅ Soft delete: mark as deleted, keep the row
+ALTER TABLE users ADD COLUMN deleted_at TIMESTAMPTZ;
+
+-- "Delete" a user
+UPDATE users SET deleted_at = NOW() WHERE id = 123;
+
+-- Query active users (add to all queries or use a view)
+SELECT * FROM users WHERE deleted_at IS NULL;
+
+-- Partial index for active users (avoid indexing deleted rows)
+CREATE INDEX idx_users_active_email ON users(email)
+WHERE deleted_at IS NULL;
+```
+
+**When to use soft deletes**:
+- Regulatory compliance (GDPR requires data retention periods)
+- Audit trails (finance, healthcare)
+- Undo functionality
+
+**When NOT to use**: High-write tables (logs, events) where soft deletes bloat the table. Use archival tables instead.
+
+---
+
+### Zero-Downtime Schema Migrations (Expand/Contract)
+
+Adding NOT NULL columns or renaming columns breaks live deployments. The safe pattern:
+
+```mermaid
+graph LR
+    P1[Phase 1: Expand<br/>Add new column nullable<br/>Deploy code that writes to both]
+    P2[Phase 2: Backfill<br/>Populate new column<br/>for existing rows]
+    P3[Phase 3: Constrain<br/>Add NOT NULL after backfill<br/>Update reads to use new column]
+    P4[Phase 4: Contract<br/>Remove old column<br/>Cleanup old code]
+
+    P1 --> P2 --> P3 --> P4
+
+    style P1 fill:#e1f5ff
+    style P2 fill:#FFE4B5
+    style P3 fill:#FFE4B5
+    style P4 fill:#90EE90
+```
+
+```sql
+-- Phase 1: Add column nullable (instant, no lock)
+ALTER TABLE users ADD COLUMN phone_number VARCHAR(20);
+
+-- Phase 2: Backfill in batches (throttled to avoid DB overload)
+UPDATE users SET phone_number = 'UNKNOWN'
+WHERE id BETWEEN 1 AND 10000 AND phone_number IS NULL;
+-- ... repeat in batches ...
+
+-- Phase 3: Add constraint (only safe after full backfill)
+ALTER TABLE users ALTER COLUMN phone_number SET NOT NULL;
+
+-- Phase 4: Deploy code that no longer uses old column, then drop
+ALTER TABLE users DROP COLUMN old_phone;
+```
+
+**Tools**: Flyway, Liquibase, gh-ost (GitHub's online schema change tool for MySQL), pgroll for PostgreSQL.
+
+---
+
+### Denormalized Counters — Keep Them Async
+
+Storing counts in the parent row (e.g., `like_count` on posts) is a denormalization trick:
+
+```sql
+-- ❌ Slow: count query on every page load
+SELECT COUNT(*) FROM likes WHERE post_id = 123;
+
+-- ✅ Fast: read pre-computed count
+SELECT like_count FROM posts WHERE id = 123;
+-- But how do you keep it accurate?
+```
+
+**Safe async update pattern**:
+
+```python
+# On like:
+# 1. Insert into likes table (source of truth)
+db.execute("INSERT INTO likes (user_id, post_id) VALUES (?, ?)", user_id, post_id)
+
+# 2. Async increment counter (via message queue or direct Redis)
+redis.incr(f"like_count:{post_id}")
+
+# 3. Background job periodically syncs Redis → DB
+# (handles Redis failures)
+def sync_like_counts():
+    for post_id in redis.scan("like_count:*"):
+        count = redis.get(f"like_count:{post_id}")
+        db.execute("UPDATE posts SET like_count = ? WHERE id = ?",
+                   count, post_id)
+```
+
+**Shopify** uses this pattern for order counts per storefront. **Instagram** pre-computes like counts and stores them in a separate table updated via background workers.
+
+---
+
+### Event Sourcing — Store What Happened, Not Current State
+
+Instead of storing the current state, store every change as an immutable event:
+
+```mermaid
+graph LR
+    subgraph "Traditional (State-Based)"
+        T1[orders table]
+        T1 --> TR1[{id: 1, status: 'delivered', total: 50}]
+        NOTE1[One row per order<br/>History lost on update]
+    end
+
+    subgraph "Event Sourcing"
+        E1[order_events table]
+        E1 --> EV1[{order_id: 1, type: 'created', data: {...}}]
+        E1 --> EV2[{order_id: 1, type: 'paid', data: {...}}]
+        E1 --> EV3[{order_id: 1, type: 'shipped', data: {...}}]
+        E1 --> EV4[{order_id: 1, type: 'delivered', data: {...}}]
+        NOTE2[Replay events to get current state<br/>Full audit trail built-in]
+    end
+
+    style NOTE1 fill:#FFE4B5
+    style NOTE2 fill:#90EE90
+```
+
+```sql
+CREATE TABLE order_events (
+    id          BIGSERIAL PRIMARY KEY,
+    order_id    UUID NOT NULL,
+    event_type  VARCHAR(50) NOT NULL,  -- 'created', 'paid', 'cancelled'
+    event_data  JSONB NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Current state = replay of all events for that order
+SELECT event_type, event_data, created_at
+FROM order_events
+WHERE order_id = '...'
+ORDER BY created_at;
+```
+
+**When to use**: Financial ledgers, order management, audit systems.
+**When NOT to use**: Simple CRUD with no history requirements (adds complexity).
+
+**Companies using event sourcing**: Shopify (order events), financial institutions (transaction ledgers), any GDPR-compliant audit system.
+
+---
+
+### CQRS — Different Models for Reads and Writes
+
+Command Query Responsibility Segregation separates the write model (normalized, consistent) from the read model (denormalized, fast):
+
+```mermaid
+graph TB
+    subgraph "Write Side (Command)"
+        CMD[Create Order Command]
+        WRITE_DB[(Normalized PostgreSQL<br/>Source of truth)]
+        CMD --> WRITE_DB
+        WRITE_DB -->|Events| MQ[Message Queue<br/>Kafka]
+    end
+
+    subgraph "Read Side (Query)"
+        MQ -->|Project events| READ_DB[(Denormalized<br/>Elasticsearch / Redis<br/>Precomputed views)]
+        QUERY[Get My Feed Query]
+        QUERY --> READ_DB
+    end
+
+    NOTE[Writes: consistent, normalized<br/>Reads: fast, denormalized<br/>Eventually consistent]
+
+    style WRITE_DB fill:#e1f5ff
+    style READ_DB fill:#90EE90
+```
+
+**Twitter's feed**: Writes go to a normalized DB. A background fan-out process writes tweet IDs to each follower's timeline cache (Redis sorted set). Reads come from the cache, not the DB. This is CQRS in practice.
+
+---
+
+### Time-Series Data Modeling
+
+IoT, metrics, and logs need special modeling:
+
+```sql
+-- ❌ Wrong: all data in one table, millions of rows
+CREATE TABLE metrics (
+    id         BIGSERIAL PRIMARY KEY,
+    sensor_id  INT,
+    value      FLOAT,
+    timestamp  TIMESTAMPTZ
+);
+
+-- ✅ Right: partition by time + use TimescaleDB or native partitioning
+CREATE TABLE metrics (
+    sensor_id  INT,
+    value      FLOAT,
+    timestamp  TIMESTAMPTZ NOT NULL
+) PARTITION BY RANGE (timestamp);
+
+-- PostgreSQL creates separate physical tables per partition
+CREATE TABLE metrics_2026_01 PARTITION OF metrics
+FOR VALUES FROM ('2026-01-01') TO ('2026-02-01');
+
+-- Or use TimescaleDB (automatic partitioning + compression)
+SELECT create_hypertable('metrics', 'timestamp', chunk_time_interval => INTERVAL '1 day');
+```
+
+**Rules for time-series**:
+- Partition by time — queries on recent data only touch recent partitions
+- Drop old partitions instead of DELETE (instant, no vacuum needed)
+- Compress old chunks (TimescaleDB achieves 90%+ compression)
+- Index on `(sensor_id, timestamp)` for per-sensor time range queries
+
+---
+
 ## 📚 Related Concepts
 
 - [Sharding](./Sharding.md) - Horizontal partitioning strategies

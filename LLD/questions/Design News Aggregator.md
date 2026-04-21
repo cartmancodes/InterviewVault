@@ -25,6 +25,7 @@
   - [Stage 3: 1K – 100K Users](#stage-3-1k--100k-users)
   - [Stage 4: 100K – 10M Users](#stage-4-100k--10m-users)
   - [Stage 5: 10M+ Users](#stage-5-10m-users)
+- [Insider Tips and Tricks](#insider-tips-and-tricks)
 - [Expected Depth by Level](#expected-depth-by-level)
 
 ---
@@ -56,10 +57,10 @@ A news aggregator like Google News pulls articles from thousands of publishers w
 
 | Entity | Description |
 |---|---|
-| **Article** | A single news item ingested from a publisher. Fields: `articleId`, `sourceId`, `url`, `title`, `summary`, `thumbnailUrl`, `publishedAt`, `language`, `rawText`, `shingleHash`, `clusterId`. |
-| **Source (Publisher)** | An outlet the system pulls from (NYT, BBC, local blog). Fields: `sourceId`, `feedUrl`, `type` (RSS/API/sitemap), `trustScore`, `lastPolledAt`, `pollInterval`. |
-| **Cluster (Story)** | A group of articles describing the same real-world event. Fields: `clusterId`, `representativeArticleId`, `topic`, `category`, `firstSeenAt`, `hotness`, `articleCount`. |
-| **User** | A feed consumer. Fields: `userId`, `locale`, `region`, `categoryAffinity`, `sourceAffinity`, `lastFeedCursor`. |
+| **Article** | A single news item ingested from a publisher. Fields: `articleId`, `sourceId`, `url`, `canonicalUrl`, `title`, `summary`, `thumbnailUrl`, `publishedAt`, `language`, `rawText`, `simHash`, `minHashSignature`, `clusterId`, `namedEntities`. |
+| **Source (Publisher)** | An outlet the system pulls from (NYT, BBC, local blog). Fields: `sourceId`, `feedUrl`, `type` (RSS/API/sitemap), `trustScore`, `authorityScore`, `lastPolledAt`, `pollInterval`, `publishRate`. |
+| **Cluster (Story)** | A group of articles describing the same real-world event. Fields: `clusterId`, `representativeArticleId`, `topic`, `category`, `firstSeenAt`, `hotness`, `articleCount`, `canonicalEntities`. |
+| **User** | A feed consumer. Fields: `userId`, `locale`, `region`, `categoryAffinity`, `sourceAffinity`, `shortTermInterestVector`, `longTermInterestVector`, `lastFeedCursor`. |
 
 Clusters are the user-facing unit. A user scrolling the feed sees one card per cluster; tapping a cluster expands into its member articles.
 
@@ -92,17 +93,17 @@ The feed endpoint returns clusters, not raw articles. Cursor is opaque and encod
 The system splits cleanly into an **ingest plane** (write path) and a **serve plane** (read path), connected by a shared article/cluster store.
 
 **Ingest plane:**
-1. **Feed Poller** — a scheduler iterates registered sources on their polling cadence (1–30 min) and fetches RSS/sitemap deltas.
-2. **Fetcher** — downloads the article HTML, runs readability extraction for title, summary, image, and clean text.
-3. **Normalizer** — canonicalizes URLs, strips tracking params, detects language, generates a content fingerprint (SimHash / MinHash shingles).
-4. **Deduper** — checks fingerprints against a rolling window to drop exact or near-exact republishes.
-5. **Clusterer** — groups new articles with existing live clusters based on fingerprint similarity and title/entity overlap; creates new clusters when no match is found.
+1. **Feed Poller** — a scheduler iterates registered sources on their adaptive polling cadence (60s–6h depending on publish rate) and fetches RSS/sitemap deltas.
+2. **Fetcher** — downloads the article HTML, runs readability extraction for title, summary, image, and clean text. Follows all redirects to determine the final URL.
+3. **Normalizer** — canonicalizes URLs (strips tracking params like `?utm_source=`, `?ref=`; applies per-domain rules), detects language, generates a SimHash fingerprint and MinHash signature, and runs named entity extraction.
+4. **Deduper** — checks SimHash fingerprints against a rolling 72-hour window; articles within Hamming distance 3 are near-duplicates collapsed to the highest-authority canonical. Also deduplicates at the canonical URL level before fingerprinting.
+5. **Clusterer** — groups new articles with existing live clusters using MinHash LSH for candidate retrieval and TF-IDF cosine + entity overlap for scoring; creates new singleton clusters for unmatched articles. A separate batch job runs every 5–15 minutes to merge singletons into emerging clusters.
 6. **Indexer** — writes the cluster and article records to the primary store and pushes searchable documents into Elasticsearch.
 
 **Serve plane:**
-1. **Feed Service** — builds a user's page by pulling the top-K fresh clusters filtered by language/region/category and applying a personalization re-rank.
+1. **Feed Service** — builds a user's page by pulling the top-K fresh clusters filtered by language/region/category, applying source authority as a ranking feature, and running a personalization re-rank.
 2. **Cache Layer** — Redis holds a global "hot feed" and per-user personalized pages; CDN fronts static assets and thumbnails.
-3. **Click Tracker** — logs the click event asynchronously and 302s to the publisher.
+3. **Click Tracker** — logs the click event asynchronously (dwell time, article clicked, cluster context) and 302s to the publisher. These events feed the personalization pipeline.
 
 Article text is never served — only the headline, summary, and a thumbnail URL.
 
@@ -112,61 +113,61 @@ Article text is never served — only the headline, summary, and a thumbnail URL
 
 ### 1. Ingest Pipeline
 
-The poller is the throttle point. A naive per-minute sweep of 100K sources would hammer publisher servers and burn bandwidth. Instead, each source gets an adaptive `pollInterval` derived from its historical publish rate: a 24/7 wire service gets polled every 60s; a weekly blog every 6h. A priority queue of `(nextPollAt, sourceId)` entries is consumed by a pool of fetcher workers.
+**Crawl scheduling is the throttle point.** RSS and Atom feeds are pull-based: there is no push; the system must poll each source URL repeatedly to discover new articles. A naive per-minute sweep of 100K sources would hammer publisher servers and burn bandwidth. The correct model is an **adaptive crawl scheduler**: each source tracks its historical publish rate and derives a `pollInterval` from it — a 24/7 breaking-news wire gets polled every 60 s; a weekly blog every 6 h. The scheduler is a priority queue of `(nextPollAt, sourceId)` entries consumed by a pool of fetcher workers. On every successful fetch, the interval is recalculated from the measured inter-article gap, using exponential smoothing so a single burst does not cause over-polling.
 
-Fetches fail often (timeouts, 403s, malformed feeds). The pipeline treats each source independently — one bad publisher cannot stall the queue. Failures use exponential backoff capped at the source's normal interval; repeated failures trigger an operator alert.
+**Canonical URL resolution must precede fingerprinting.** The same article frequently lives at multiple URLs: HTTP vs HTTPS, www vs non-www, mobile subdomain vs desktop, trailing slash variants, and query parameters appended by tracking systems (`?utm_source=twitter`, `?ref=homepage`). If this is not resolved before deduplication, the same article is indexed 5+ times as distinct records. The normalizer follows all HTTP redirects to the final destination URL, then applies a stripping ruleset (a maintained list of known tracking parameter names) and per-domain rules compiled from past observations. Only then is the canonical URL stored and fingerprinted.
 
-After fetch, extraction runs through a library like Readability or Trafilatura. The extracted text is **not stored long-term** — only the fingerprint and summary survive, which keeps storage cost linear in cluster count rather than article count.
+**Failure isolation is mandatory at this layer.** Fetches fail often — timeouts, 403s, malformed XML, gzip bombs, DNS failures. Each source runs in an independent task; one bad publisher cannot stall the queue. Failures use exponential backoff capped at the source's normal interval; after a configurable threshold of consecutive failures the source is flagged for operator review. The pipeline is pipelined through Kafka topics (`raw-fetched` → `extracted` → `deduped` → `clustered`) so each stage scales independently and a slow clustering worker cannot block the fetchers.
 
-A message broker (Kafka) separates fetch, extract, dedupe, and cluster so each stage scales independently and a slow clustering worker cannot block the fetchers.
+After fetch, extraction runs through a library like Readability or Trafilatura. The extracted text is **not stored long-term** — only the fingerprint, summary, and named entities survive. This keeps storage cost linear in cluster count rather than article count.
 
 ### 2. Clustering and Deduplication
 
-Two distinct problems:
+These are two distinct problems that are often conflated.
 
-**Deduplication** catches the same article republished at different URLs (wire services, syndication). A SimHash over the article's shingles produces a 64-bit signature; articles within Hamming distance ≤ 3 are considered duplicates and collapsed to a single canonical article. Signatures live in Redis keyed by a 16-bit prefix bucket so lookup is O(bucket size) instead of O(N).
+**Deduplication** catches the same article republished at different URLs — wire service syndication being the canonical example. A SimHash over the article's shingles produces a 64-bit signature; articles within Hamming distance ≤ 3 are considered near-duplicates and collapsed to a single canonical article. Exact content hash deduplication alone is insufficient here: even minor editorial changes (a regional outlet adds a byline or appends a local paragraph to an AP wire story) produce a completely different MD5 but a very similar SimHash. Signatures are stored in Redis keyed by a 16-bit prefix bucket so lookup is O(bucket size) rather than O(N). When duplicates are found, the canonical is chosen by highest source authority score, with earliest publish timestamp as a tiebreaker. Non-canonical duplicates are linked to the canonical rather than dropped entirely, preserving the multi-outlet signal.
 
-**Clustering** groups different articles about the same story. This is online clustering — articles arrive continuously and must be placed without re-partitioning the world. The approach:
+**Clustering** groups different articles about the same story — different text, same event. This cannot run pairwise on the full corpus (O(n²)), and it cannot happen in real time in the ingestion hot path. The production approach is a hybrid:
 
-1. Extract named entities and a TF-IDF vector from the article title + summary.
-2. Compute MinHash signatures and query an LSH (locality-sensitive hashing) index keyed on shingles to find candidate clusters.
-3. Score each candidate with cosine similarity of the TF-IDF vector plus entity-overlap bonus.
-4. If the top score clears a threshold, join that cluster; otherwise mint a new cluster.
+1. **Real-time path**: for each incoming article, extract named entities and a TF-IDF vector from title + summary, compute MinHash shingles, and query an LSH index for candidate clusters within a 48-hour window. Score each candidate with cosine similarity plus entity-overlap bonus. If the top score clears a threshold, join that cluster; otherwise mint a new singleton cluster. This completes in milliseconds per article.
+2. **Batch path**: every 5–15 minutes, a clustering job uses MinHash LSH to find candidate pairs among recent singleton clusters and applies a finer similarity model to merge them. This is where "200 outlets all published about the stock market crash" gets consolidated — the real-time path creates 200 singletons; the batch job merges them into one cluster.
 
-Clusters have a **lifespan**: a cluster stops accepting new members 48 hours after its first article, because a story that re-surfaces later is usually a follow-up worth its own cluster. Expired clusters drop out of the hot index but remain queryable in cold storage.
+Clusters have a **lifespan**: a cluster stops accepting new members 48 hours after its first article. A story that re-surfaces later is usually a follow-up worth its own cluster. Expired clusters drop out of the hot index but remain queryable in cold storage.
 
-Trade-off: tighter thresholds over-split (many small clusters for one story); looser thresholds merge unrelated stories. The system ships with a threshold tuned on a labeled dev set and re-evaluated offline.
+**Breaking news requires a special fast path.** When a major event breaks, the first few articles have no cluster yet and the normal pipeline would wait for the next batch job. A breaking-news detector watches named entity co-occurrence counts using a count-min sketch over a 15-minute sliding window. A sudden spike in articles mentioning the same named entities triggers immediate real-time promotion of the emerging cluster — skipping the wait for the next batch clustering run.
+
+**Entity normalization is the hardest part of clustering.** "Apple," "Apple Inc," "AAPL," and "the Cupertino company" must all resolve to the same canonical entity for entity-overlap scoring to work. This requires an NLP pipeline (spaCy or a BERT-based NER model) on every ingested article plus a normalization lookup against an entity knowledge base (Wikidata-style). Without normalization, entity overlap scores are systematically underestimated and related articles are split into separate clusters.
+
+Trade-off: tighter thresholds over-split (many small clusters for one story); looser thresholds merge unrelated stories. The system ships with a threshold tuned on a labeled dev set and re-evaluated offline as the entity model improves.
 
 ### 3. Personalization
 
-The out-of-the-box feed is a global hot list. Personalization is a re-ranker on top, not a separate feed.
+The out-of-the-box feed is a global hot list ranked by hotness × source authority. Personalization is a re-ranker on top, not a separate feed.
 
-**Signals:**
-- Explicit: chosen categories, followed sources.
-- Implicit: click history, dwell time, source preferences derived from past clicks, device locale.
+**Implicit signals dominate because users do not fill out interest surveys.** The behavioral signals collected are: articles clicked (strong positive signal), articles that appeared in the feed but were scrolled past without clicking (weak negative), dwell time after clicking (how long the user spent on the article before returning — strong positive), topics and sources clicked repeatedly over a long window (long-term interest model), and topics clicked in the last few hours (short-term interest model). These are collected via the click tracker and a scroll-event beacon.
 
-**Flow:**
-1. A feature service computes a per-user vector of category weights and source weights, updated nightly in batch plus a lightweight online update after each click.
-2. On a feed request, the service fetches the top 500 candidate clusters from the global hot list for the user's locale.
-3. A lightweight scorer (logistic regression or gradient-boosted tree over ~30 features) ranks those 500 down to the 20 returned per page.
-4. Diversity logic enforces a cap per source and per category so one publisher cannot dominate.
+**User representation is a two-vector model.** A long-term interest vector (updated nightly by a batch job) captures stable preferences — a user who consistently reads technology and finance content. A short-term interest vector (updated after every click by a lightweight online job) captures session intent — the same user who just clicked three articles about a specific earnings report. The final ranking blends both, with short-term given higher weight for recent clusters and long-term for background filling.
 
-Scoring runs in ~5 ms at the feed server; the expensive feature generation is pre-computed. Candidate generation is cached per-region for 30–60s because the hot list changes slowly relative to request rate.
+**Flow at request time:**
+1. The feed service fetches the top 500 candidate clusters from the regional hot list for the user's locale.
+2. A lightweight scorer (logistic regression or gradient-boosted tree over ~30 features: long-term affinity, short-term affinity, source authority, freshness decay, topic importance, cluster size) ranks those 500 down to the 20 returned per page.
+3. Diversity logic enforces a cap per source and per category so one publisher cannot dominate.
+
+Scoring runs in ~5 ms at the feed server because the expensive feature generation is pre-computed. Candidate generation is cached per-region for 30–60 s because the hot list changes slowly relative to request rate.
 
 ### 4. Freshness and Breaking-News Spikes
 
-Two tensions: articles must appear within 30 min of publish, but the feed must cache aggressively to stay under 200 ms.
+Two opposing forces: articles must appear within 30 min of publish, but the feed must cache aggressively to stay under 200 ms.
 
-**Freshness mechanism:**
-- A "new articles" Kafka topic feeds a side process that invalidates cached feed pages whenever a cluster's hotness changes materially (new members, sudden click velocity).
-- The global hot-list cache has a short TTL (30–60 s). Personalized pages use a longer TTL (2–5 min) because a given user's re-rank is stable over that window.
-- Cache keys include a `contentVersion` stamp so a new version is published as a cache-aside write; old keys expire naturally.
+**Freshness is a ranking feature, not just a filter.** A 2-hour-old article about a breaking story should rank above a 5-minute-old article about a minor local event. Pure chronological ordering over-rewards recency; pure relevance ranking can surface stale content. Production feeds blend these with an explicit freshness score: exponential decay from publish time with a configurable half-life (typically ~4 hours for general news, shorter for markets or sports). The final rank score is `freshness_score × source_authority × personalization_score × topic_importance`. The decay half-life is a tunable parameter adjusted per category — sports scores decay faster than investigative pieces.
 
-**Breaking news** produces a thundering herd — everyone requests the same trending cluster. Defenses:
-- Edge CDN caches the cluster detail response for 10–30 s; every POP absorbs most load.
-- A request-coalescing layer at the feed service dedupes concurrent upstream fetches for the same cluster to a single DB read.
-- Auto-scaling on the feed service keyed on request rate, not CPU, because the service is largely cache-reads.
-- The clusterer itself must absorb a flood of correlated incoming articles on a breaking event. It shards cluster ownership by `clusterId` hash, so a single hot cluster is still pinned to one worker — this worker keeps the cluster's fingerprint cache in memory, making membership checks O(1).
+**Cache invalidation is event-driven, not TTL-only.** A "new articles" Kafka topic feeds a side process that invalidates cached feed pages whenever a cluster's hotness changes materially — new members joining the cluster, or a sudden spike in click velocity. The global hot-list cache has a short TTL (30–60 s) as a backstop. Personalized pages use a longer TTL (2–5 min) because a given user's re-rank is stable over that window. Cache keys include a `contentVersion` stamp so a new version is published as a cache-aside write; old keys expire naturally without a blocking delete.
+
+**Breaking news produces a thundering herd** — everyone requests the same trending cluster simultaneously. Defenses in layers:
+- Edge CDN caches the cluster detail response for 10–30 s; every POP absorbs the vast majority of load.
+- A request-coalescing layer at the feed service dedupes concurrent upstream fetches for the same cluster to a single DB read — N concurrent misses become 1 read.
+- Auto-scaling on the feed service is keyed on request rate, not CPU, because the service is largely cache reads. Pre-warmed capacity is triggered by the breaking-news detector before the spike fully materializes.
+- The clusterer shards cluster ownership by `clusterId` hash, so a single hot cluster is pinned to one worker whose fingerprint cache stays in process memory, making membership checks O(1) and avoiding distributed locking on the write-hot path.
 
 ---
 
@@ -211,7 +212,7 @@ Two tensions: articles must appear within 30 min of publish, but the feed must c
 
 **Architecture:**
 - Introduce Kafka with topics: `raw-fetched`, `extracted`, `deduped`, `clustered`. Each stage is a separate worker fleet scaled independently.
-- **Clustering worker**: for each new article, compute MinHash shingles, query an LSH index (stored in Redis or a dedicated service like Elasticsearch with custom similarity) for candidate clusters within a 48-hour window, score candidates with TF-IDF cosine + entity overlap, join or mint.
+- **Clustering worker**: for each new article, compute MinHash shingles, query an LSH index (stored in Redis or a dedicated service like Elasticsearch with custom similarity) for candidate clusters within a 48-hour window, score candidates with TF-IDF cosine + entity overlap, join or mint. A batch job every 10 minutes merges singleton clusters.
 - **Elasticsearch** indexes both articles and clusters. It powers category filters (`category:tech`), text search, and the candidate-retrieval step for ranking.
 - Feed service reads the top-N clusters from a Redis sorted set keyed by `(region, category)` with score = hotness. The sorted set is rebuilt every 30 seconds by a background job.
 - Per-user state is minimal: a locale and optional category filter. Personalization is still "choose your categories," not ML.
@@ -228,12 +229,12 @@ Two tensions: articles must appear within 30 min of publish, but the feed must c
 **Goal:** personalize the feed and keep p99 latency sane across regions.
 
 **Architecture:**
-- **Precomputed personalized feeds**: for each active user, a nightly batch job (Spark) computes a category/source affinity vector. A streaming job updates the vector after each click. On feed request, the service pulls the top 500 candidate clusters for the user's region from Elasticsearch and re-ranks with a gradient-boosted model.
+- **Precomputed personalized feeds**: for each active user, a nightly batch job (Spark) computes a long-term category/source affinity vector. A streaming job updates the short-term vector after each click. On feed request, the service pulls the top 500 candidate clusters for the user's region from Elasticsearch and re-ranks with a gradient-boosted model incorporating both vectors plus source authority and freshness decay.
 - **Cache strategy**: two tiers. L1 is a per-user precomputed page held in Redis for 2–5 minutes. L2 is the regional hot list cached for 30 s. Cache miss for L1 triggers on-demand re-ranking.
-- **Click tracking**: Kafka `user-events` topic feeds both the online feature updater and an analytics warehouse (BigQuery / Snowflake).
+- **Click tracking**: Kafka `user-events` topic feeds both the online feature updater (for short-term interest) and an analytics warehouse (BigQuery / Snowflake). Dwell time is captured by a beacon that fires when the user navigates back.
 - **Multi-region**: deploy ingest in one primary region (to keep clustering globally consistent) and replicate the cluster/article store to two additional regions. Feed services run regionally and read the local replica.
 - **Thumbnail delivery** moves to a global CDN with long cache-control headers.
-- **Source tier**: 50K+ publishers, polled by a dedicated poller cluster with a distributed priority queue (Redis ZSET or a custom scheduler).
+- **Source tier**: 50K+ publishers, polled by a dedicated poller cluster with a distributed priority queue (Redis ZSET or a custom scheduler) using adaptive intervals per source.
 
 **What you skip:** edge personalization (personalization still happens in a regional data center, not at the POP), ML-driven clustering, cross-region active-active writes.
 
@@ -250,11 +251,51 @@ Two tensions: articles must appear within 30 min of publish, but the feed must c
 - **Multi-region active serve**: every region has a full read replica of the cluster and article stores and its own Elasticsearch cluster fed from a global change-data-capture stream.
 - **Clustering workers shard by clusterId hash**, and the hot-cluster shard keeps its fingerprint table in process memory. Within-shard updates are single-threaded per cluster, avoiding locks.
 - **Request coalescing + negative caching** at the feed service stop stampedes: a miss on a popular cluster is filled once and shared across all concurrent waiters.
-- **Autoscaling** on feed service keyed on RPS per region with pre-warmed capacity triggered by a "breaking-news detector" watching cluster hotness velocity.
+- **Autoscaling** on feed service keyed on RPS per region with pre-warmed capacity triggered by a "breaking-news detector" watching cluster hotness velocity and named entity spike counts.
 - **Storage tiering**: hot clusters (<48h) in Redis + Elasticsearch; warm (<30d) in Postgres/DynamoDB; cold archive in object storage with a batch-served historical API.
-- **Cost controls**: reduce poll frequency for low-yield sources automatically; sample click events for analytics; compress thumbnails aggressively at the edge.
+- **Cost controls**: reduce poll frequency for low-yield sources automatically using adaptive interval logic; sample click events for analytics at high traffic; compress thumbnails aggressively at the edge.
 
 This is where the system stops being a CRUD app and becomes a pipeline-plus-CDN, with the edge doing real per-user work. The next failure modes are organizational — content policy, source trust scoring, and ML quality — rather than infrastructure.
+
+---
+
+## Insider Tips and Tricks
+
+### RSS Is Pull-Based — You Need a Crawl Scheduler, Not Just a Parser
+
+RSS/Atom feeds require polling: you must periodically fetch each feed URL to discover new articles. This makes the ingestion tier a web crawler. The crawl frequency must adapt to each source's publish rate — a breaking-news site publishes every 5 minutes; a blog publishes weekly. Adaptive crawl intervals (back off on slow sources, accelerate on fast ones) reduce unnecessary load while minimizing freshness lag.
+
+### Deduplication Requires Near-Duplicate Detection, Not Just Exact Hashing
+
+The same story is published by hundreds of outlets simultaneously (AP wire → regional papers). Exact content hash deduplication misses these near-duplicates. SimHash (locality-sensitive hashing for text) produces fingerprints where similar articles have small Hamming distance. Store all SimHashes in a lookup table; articles within Hamming distance 3-4 are considered duplicates. Only the canonical version (highest-authority source, earliest timestamp) is indexed; the rest are linked to it.
+
+### Clustering Is a Batch Operation, Not a Real-Time One
+
+Grouping articles about the same event ("stock market crash" from 200 outlets) requires comparing all recent articles pairwise — O(n²) in the naive case. This cannot run in the ingestion hot path. Production approach: batch clustering every 5-15 minutes using MinHash LSH (Locality Sensitive Hashing) to find candidate pairs efficiently, then apply a finer similarity model. Real-time ingestion creates "singleton clusters"; the batch job merges them.
+
+### Article Canonicalization Is Harder Than It Looks
+
+The "same article" exists at multiple URLs (HTTP vs HTTPS, www vs non-www, trailing slash, query parameters, mobile vs desktop URL). Canonical URL determination requires: (1) follow all redirects to the final URL; (2) strip known tracking parameters (`?utm_source=`, `?ref=`); (3) apply per-domain rules (some sites always redirect mobile URLs to canonical). Without this, the same article is indexed 5+ times under different URLs.
+
+### Source Authority Ranking Determines Story Prominence
+
+Not all sources are equal. An article from Reuters should rank above one from an unknown blog even if the blog published first. Maintain a source authority score (PageRank-like, updated weekly) based on: number of inbound links from other trusted sources, historical accuracy signals, Alexa/SimilarWeb traffic rank. Source authority is a ranking feature, not a filter — low-authority sources can still appear, just lower in the feed.
+
+### Personalization Requires Implicit Signal Collection, Not Surveys
+
+Users don't fill out interest surveys. Personalization is built from: articles clicked (strong positive), articles scrolled past without clicking (weak negative), time spent reading (dwell time — strong positive), topics clicked repeatedly over time (long-term interest model), topics clicked recently (short-term interest model). A two-tower model (user embedding + article embedding) or collaborative filtering over user-article interaction matrices is the production approach.
+
+### Breaking News Requires a Fast Path That Bypasses Clustering
+
+When a major event breaks, the first article about it has no cluster yet. The normal pipeline would wait for the batch clustering job. Breaking news detection (sudden spike in articles mentioning the same named entities in a short window) must trigger real-time promotion of the story — skipping the wait for cluster formation. Named entity extraction (NER) on incoming articles and a count-min sketch over entity mentions in the last 15 minutes provides the signal.
+
+### Entity Extraction Enables Cross-Article Navigation
+
+Extracting named entities (people, companies, places, events) from each article allows "more articles about [Apple Inc]" navigation. This requires an NLP pipeline (spaCy, BERT-based NER) running on every ingested article. Entity normalization is the hard part: "Apple," "Apple Inc," "AAPL," and "the Cupertino company" must all resolve to the same canonical entity. An entity knowledge base (Wikidata, Freebase-style) is required for normalization at scale.
+
+### Freshness vs Relevance Is a Genuine Tension in Feed Ranking
+
+A 2-hour-old article about a breaking story is more relevant than a 5-minute-old article about a minor local event. Pure chronological ordering favors recency; pure relevance ranking may surface stale content. Production feeds blend: a "freshness score" (exponential decay from publish time, half-life of ~4 hours for news) multiplied by a relevance score (personalization × source authority × topic importance). The decay rate is a tunable parameter that can be adjusted by category.
 
 ---
 
@@ -263,5 +304,5 @@ This is where the system stops being a CRUD app and becomes a pipeline-plus-CDN,
 | Level | Expected Depth |
 |---|---|
 | **Mid (L4)** | Functional/non-functional requirements laid out cleanly. A working high-level design with ingest, store, serve split. At least one deep dive on deduplication or freshness with concrete mechanisms (SimHash, caching). Acknowledges but does not implement clustering and personalization. |
-| **Senior (L5)** | All of the above plus a credible clustering design (LSH / MinHash, threshold tuning, cluster lifespan). Discusses cache hierarchy (L1 per-user, L2 regional) and freshness vs. latency trade-off. Identifies the hot-cluster write problem and proposes shard-by-clusterId. Covers breaking-news spikes and request coalescing. |
-| **Staff (L6+)** | Drives the conversation end-to-end. Proposes edge-side personalization with origin-published candidate lists. Discusses multi-region write topology for the ingest plane versus regional serve replicas. Quantifies trade-offs with rough math (storage per article, fingerprint lookup cost, cache hit-rate targets). Brings up content policy, source trust, cold-storage economics, and how the clustering quality is measured and retrained offline. |
+| **Senior (L5)** | All of the above plus a credible clustering design (LSH / MinHash, threshold tuning, cluster lifespan, real-time singleton + batch merge pattern). Discusses cache hierarchy (L1 per-user, L2 regional) and freshness vs. latency trade-off including exponential decay scoring. Identifies the hot-cluster write problem and proposes shard-by-clusterId. Covers breaking-news spikes, request coalescing, and adaptive crawl scheduling. |
+| **Staff (L6+)** | Drives the conversation end-to-end. Proposes edge-side personalization with origin-published candidate lists. Discusses multi-region write topology for the ingest plane versus regional serve replicas. Quantifies trade-offs with rough math (storage per article, fingerprint lookup cost, cache hit-rate targets). Brings up canonical URL resolution, entity normalization at scale, source authority scoring, implicit signal collection for personalization (dwell time, scroll past), the two-vector long-term/short-term user model, breaking-news fast-path via NER + count-min sketch, cold-storage economics, and how clustering quality is measured and retrained offline. |

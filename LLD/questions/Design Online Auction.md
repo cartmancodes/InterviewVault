@@ -26,7 +26,8 @@
    - [Stage 3: 1K to 100K Users](#stage-3-1k100k-users)
    - [Stage 4: 100K to 10M Users](#stage-4-100k10m-users)
    - [Stage 5: 10M+ Users](#stage-5-10m-users)
-7. [Expected Depth by Level](#expected-depth-by-level)
+7. [Insider Tips and Tricks](#insider-tips-and-tricks)
+8. [Expected Depth by Level](#expected-depth-by-level)
 
 ---
 
@@ -99,13 +100,13 @@ Returns the current snapshot. This is the REST fallback when a viewer first load
 
 ```
 POST /auctions/{auctionId}/bids
-Body: { "amount": 58.00 }
+Body: { "amount": 58.00, "idempotencyKey": "client-uuid-v4" }
 -> 201 Created { "bidId": "...", "status": "ACCEPTED", "currentPrice": 58.00 }
 -> 409 Conflict { "status": "REJECTED", "reason": "TOO_LOW", "currentPrice": 60.00 }
 -> 410 Gone    { "status": "REJECTED", "reason": "AUCTION_CLOSED" }
 ```
 
-The bid endpoint is the heart of the system. It either linearizes the bid into the auction's sequence and returns the new price, or tells the client why it was rejected. The client learns the current price from the 409 response so it can retry intelligently.
+The bid endpoint is the heart of the system. It either linearizes the bid into the auction's sequence and returns the new price, or tells the client why it was rejected. The client learns the current price from the 409 response so it can retry intelligently. The `idempotencyKey` is client-generated and used to deduplicate retries — especially important on flaky mobile networks where the response may not reach the client.
 
 ```
 GET /auctions/{auctionId}/stream   (WebSocket or SSE upgrade)
@@ -125,7 +126,7 @@ The architecture has four responsibilities: accept bids in order, persist them d
 
 2. **Auction Service** handles auction CRUD (list, get snapshot). It reads `Auction` rows from the database, cached in Redis for hot items. It is effectively stateless.
 
-3. **Bid Service** handles `POST /bids`. This is the critical write path. Its job is to take a bid, decide whether it beats the current price, and if so update both the authoritative record and emit an event. It enforces the total ordering guarantee.
+3. **Bid Service** handles `POST /bids`. This is the critical write path. Its job is to take a bid, assign a server-side receive timestamp at the moment of entry (before any queue or lock), decide whether it beats the current price, and if so update both the authoritative record and emit an event. It enforces the total ordering guarantee.
 
 4. **Database (Postgres)** is the system of record. Two tables matter: `auctions` (one row per auction with `current_price`, `highest_bidder_id`, `version`) and `bids` (append-only, one row per bid attempt, accepted or rejected, with server-assigned timestamp and monotonic sequence number per `auctionId`).
 
@@ -133,9 +134,9 @@ The architecture has four responsibilities: accept bids in order, persist them d
 
 6. **Event Bus (Kafka)** carries a stream per auction (or per-auction partition key). When the Bid Service accepts a bid, it produces a `BidAccepted` event. Fanout Service instances consume these events and push updates to connected WebSocket clients.
 
-7. **Fanout Service** maintains WebSocket connections and subscribes to the event bus. Because gateway routing sends all viewers of a given auction to the same fanout-service shard, each accepted bid event needs only one Kafka consumer on that shard to push to all local subscribers.
+7. **Fanout Service** maintains WebSocket connections and subscribes to the event bus. Because gateway routing sends all viewers of a given auction to the same fanout-service shard (keyed by `auctionId`, not `userId`), each accepted bid event needs only one Kafka consumer on that shard to push to all local subscribers. Sharding by `auctionId` is the key design decision: it means a single Kafka message triggers a fan-out to all local connections on those nodes — O(1) Kafka publishes per accepted bid rather than O(viewers).
 
-8. **Auction Closer** is a scheduled component that transitions auctions from ACTIVE to CLOSED at `endTime`. At low scale it is a cron job polling for due auctions; at high scale it is a timer wheel or a delayed-job queue (e.g., Redis sorted set keyed by `endTime`).
+8. **Auction Closer** is a scheduled component that transitions auctions from ACTIVE to CLOSED at `endTime`. At low scale it is a cron job polling for due auctions; at high scale it is a distributed lease system backed by a Redis sorted set (ZADD with score = `endTime`), where multiple closer instances compete for per-auction leases so there is no single point of failure.
 
 The bid write path is where correctness lives. The read and fanout path is where scale lives. The closer is where the edge case lives.
 
@@ -147,6 +148,8 @@ The bid write path is where correctness lives. The read and fanout path is where
 
 A bid is accepted only if its amount is strictly greater than the current highest. Two bids arriving within a millisecond for the same auction must be evaluated sequentially, and the second one must see the first one's effect. This is a classic read-modify-write.
 
+**Server-side timestamp assignment**: the very first thing the Bid Service does upon receiving a request — before enqueuing, before locking, before any database call — is record the server-side receive timestamp. This timestamp is the bid's canonical "arrived at" time. Client-supplied timestamps must never be used for ordering: a client clock can be seconds ahead or behind, and a bidder with a fast clock gains a systematic advantage in last-second scenarios. The server-assigned timestamp is stored in the `bids` table and is the authoritative record for fairness and audit.
+
 The simplest correct implementation is a single-row pessimistic lock in Postgres:
 
 ```sql
@@ -155,17 +158,30 @@ SELECT current_price, version FROM auctions WHERE id = $1 FOR UPDATE;
 -- application checks: new_bid > current_price AND now() < end_time
 UPDATE auctions SET current_price = $2, highest_bidder_id = $3, version = version + 1
   WHERE id = $1;
-INSERT INTO bids (auction_id, bidder_id, amount, status, seq) VALUES (...);
+INSERT INTO bids (auction_id, bidder_id, amount, status, arrived_at, seq) VALUES (...);
 COMMIT;
 ```
 
-`SELECT FOR UPDATE` serializes all bidders on that auction through the row lock. Correct, simple, and it performs fine at tens of bids per second per auction. Optimistic concurrency control (check `version` in the UPDATE's WHERE clause and retry on zero-row update) is an alternative that avoids the lock hold during the network round trip.
+`SELECT FOR UPDATE` serializes all bidders on that auction through the row lock. Correct, simple, and it performs fine at tens of bids per second per auction.
 
-At higher contention, the database row lock becomes the bottleneck. The next step is to move the arbitration into Redis with an atomic Lua script:
+**Optimistic concurrency control** is the right next step before introducing Redis. Rather than holding the row lock across a network round trip, include the version in the UPDATE's WHERE clause and retry on a zero-row update (indicating a concurrent write won the race):
+
+```sql
+UPDATE auctions
+SET current_price = $2, highest_bidder_id = $3, version = version + 1
+WHERE id = $1 AND version = $expected_version AND current_price < $2;
+-- if 0 rows updated: re-read and retry
+```
+
+This eliminates the lock hold duration and lets Postgres handle more concurrent readers, at the cost of explicit retry logic in the application. It is the right intermediate step before moving to Redis.
+
+At higher contention, the database row lock becomes the bottleneck even with optimistic concurrency. The next step is to move the arbitration into Redis with an atomic Lua script:
 
 ```
--- KEYS[1] = auction key, ARGV[1] = new_amount, ARGV[2] = bidder_id, ARGV[3] = now
+-- KEYS[1] = auction key, ARGV[1] = new_amount, ARGV[2] = bidder_id, ARGV[3] = server_now_ms
 local cur = redis.call('HGET', KEYS[1], 'current_price')
+local endTime = redis.call('HGET', KEYS[1], 'end_time')
+if tonumber(ARGV[3]) >= tonumber(endTime) then return {0, 'CLOSED'} end
 if tonumber(ARGV[1]) <= tonumber(cur) then return {0, cur} end
 redis.call('HSET', KEYS[1], 'current_price', ARGV[1], 'highest_bidder_id', ARGV[2])
 return {1, ARGV[1]}
@@ -175,13 +191,19 @@ Redis executes this script single-threaded per key, giving exact linearizability
 
 ### 2. Fairness Under Burst Traffic
 
-A popular auction's final 30 seconds is a thundering herd. If the system accepts bids from whichever server happens to win the race, fairness (bids are processed roughly in the order the bidders pressed the button) degrades. Three mechanisms help.
+A popular auction's final 30 seconds is a thundering herd. If the system accepts bids from whichever server happens to win the race, fairness (bids are processed roughly in the order the bidders pressed the button) degrades. Several mechanisms work together to ensure fairness.
 
-First, assign a server-side receive timestamp at the Bid Service entry, before any locking or queueing. This timestamp, not wall-clock of the database write, is the bid's logical arrival time. It goes into the `bids` table and is the tiebreaker if two bids have the same amount (which in our model is a rejection, but still useful for audit).
+First, assign a server-side receive timestamp at the Bid Service entry, before any locking or queueing. This timestamp, not wall-clock of the database write, is the bid's logical arrival time. It goes into the `bids` table and is the tiebreaker if two bids have the same amount (which in our model is a rejection, but still useful for audit). Client-supplied timestamps must be discarded entirely for ordering purposes.
 
 Second, funnel all bids for a given auction through a single writer. In the Kafka-based design, use `auctionId` as the partition key so all bids for one auction go to one partition and are processed by one consumer. This makes ordering intrinsic to the transport rather than something the database has to enforce. A single-writer partition at tens of thousands of events per second is well within Kafka's envelope.
 
 Third, smooth the spike with a short in-memory queue at the Bid Service. Rather than letting 500 concurrent Postgres transactions all fight over one row, serialize them through a per-auction queue in the process and process them one at a time. Client-visible latency rises from 20 ms to maybe 200 ms under the worst bursts, but no bid is dropped and processing order matches arrival order.
+
+Fourth, enforce a **minimum bid increment** inside the critical section. The check `new_bid > current_price` is not sufficient: without a minimum increment, bidders can grind the price up by $0.01 indefinitely. The real-world convention is a tiered increment table (e.g., +$1 under $100, +$5 between $100–500, +$50 above $5,000). The check inside the Lua script or the `SELECT FOR UPDATE` block must be `new_bid >= current_price + min_increment(current_price)`. This must be enforced in the same atomic operation as the price comparison — enforcing it only at the application layer before the lock leaves a TOCTOU gap.
+
+Fifth, deduplicate retries using **idempotency keys**. A bidder on a flaky mobile network may receive no response and retry. Without deduplication, a retry after another bid has landed could succeed at a price the user never intentionally submitted. The Bid Service checks a Redis key `idempotency:{key}` with a 30-second TTL at entry; if the key exists, the original result is returned immediately without re-executing the bid logic. The TTL of 30 seconds covers the realistic retry window while bounding memory usage.
+
+Sixth, consider **soft close** as a product-level fairness mechanism. If a bid arrives within N seconds (typically 30–120) of the current `end_time`, the `end_time` is extended by N seconds atomically inside the Lua script using `HINCRBY`. This prevents bid sniping — the practice of placing a bid in the last 3 seconds to deny competitors time to respond. Soft close is a single additional line in the Lua script and costs essentially nothing in latency.
 
 ### 3. Real-time Price Updates to Viewers
 
@@ -189,15 +211,17 @@ Viewers want the price to update within a second of a bid landing. Polling does 
 
 WebSockets (or SSE for one-way streams) invert the model. A viewer opens a persistent connection to a Fanout Service instance. The gateway routes the connection by `auctionId` using consistent hashing, so all viewers of the same auction land on the same fanout shard, say two or three nodes for redundancy. Each fanout node subscribes to the Kafka partition for the auctions it handles.
 
+**Fan-out sharding must be by `auctionId`, not by `userId`.** All viewers of the same auction need to receive the same `BidAccepted` event. If connections were sharded by `userId`, an accepted bid event would need to be broadcast to potentially thousands of different shards — one per viewer. By sharding on `auctionId`, all viewers of a given auction land on a small number of Fanout Service nodes, and a single Kafka message from the Bid Service triggers a fan-out to all local connections on those nodes. This is the difference between O(1) Kafka publishes and O(viewers) Kafka publishes per accepted bid. At 100,000 viewers on a single auction, O(viewers) fan-out via Kafka would create catastrophic write amplification.
+
 When the Bid Service accepts a bid, it emits `BidAccepted(auctionId, newPrice, bidder, ts)`. The fanout node consumes that event and iterates over its local map of `auctionId -> Set<WebSocketConnection>`, writing the update to each. With tens of thousands of local connections per auction and a few-hundred-byte payload, this is a few megabits of outbound traffic per event on that node, which a modern server handles without strain.
 
-For the long tail of viewers on flaky networks, clients reconnect with a `lastSeenTs`, and the server replays missed events from a short Redis ring buffer per auction. The REST `GET /auctions/{id}` remains available as the cold-start fallback.
+For the long tail of viewers on flaky networks, clients reconnect with a `lastSeenSeq` (a monotonic sequence number per auction), and the server replays missed events from a short Redis ring buffer per auction — a Redis list capped at the last N events (e.g., 100 events or 60 seconds of history, whichever is smaller). On reconnect, the Fanout Service reads the ring buffer, filters to events after `lastSeenSeq`, and delivers them before switching to live consumption. This avoids a full database read on every reconnect and keeps the missed-event replay path sub-millisecond. The REST `GET /auctions/{id}` remains available as the cold-start fallback for clients that have no `lastSeenSeq`.
 
 ### 4. Auction-closing Race Conditions
 
 Auctions close at `endTime`. A bid submitted at `endTime - 1ms` should win; a bid submitted at `endTime + 1ms` must lose. Both clocks (client's and server's) are suspect, so the server's clock is authoritative and the check happens inside the same critical section as the bid arbitration.
 
-In the Redis Lua script, extend the check:
+In the Redis Lua script, the `end_time` check is atomic with the price comparison, so there is no window where a bid and a close operation interleave incorrectly:
 
 ```
 local endTime = redis.call('HGET', KEYS[1], 'end_time')
@@ -206,9 +230,9 @@ if tonumber(ARGV[3]) >= tonumber(endTime) then return {0, 'CLOSED'} end
 
 This guarantees that the close check and the bid update are atomic with respect to each other. There is no window where one bidder sees "still open" and updates while another sees "closed" and rejects.
 
-The asynchronous closer is a separate concern. A worker (or a Redis ZADD-based delayed queue keyed on `endTime`) fires at `endTime`, performs one final atomic operation that sets `status = CLOSED` in Redis, then persists the final state to Postgres and emits `AuctionClosed`. If a bid's Lua execution lost the race by microseconds, the closer's CAS wins and the bid is rejected. If the closer crashes, a second worker picks up the lease from the ZADD queue and completes the close; the atomic CAS makes repeated attempts safe.
+**Soft close** is implemented atomically inside the same Lua script. If the bid passes all checks and arrives within the soft-close window (e.g., `end_time - now < 30s`), the script executes `HINCRBY auction_key end_time 30000` (adding 30 seconds in milliseconds) before returning success. Because this runs inside the same single-threaded Lua execution, the `end_time` extension and the price update are atomic — no external observer can see a state where the bid was accepted but `end_time` has not yet been extended. The cost is a single additional Redis command inside the script, essentially zero overhead.
 
-One subtle extension seen in real auctions is soft close: if a bid arrives in the last 30 seconds, extend `endTime` by 30 seconds. This is a simple HINCRBY on the end time inside the same Lua script, with the same atomicity guarantee.
+**The Auction Closer must use a distributed lease, not a simple cron job.** A cron-based closer running on a single machine is a single point of failure: if that machine is down at exactly the scheduled close time, the auction stays open indefinitely. The production-grade pattern uses a Redis sorted set: all active auctions are stored with `ZADD active_auctions <endTime_epoch_ms> <auctionId>`. Multiple Closer Service instances continuously scan for auctions where `endTime <= now` using `ZRANGEBYSCORE`. The first instance to pick up an auction acquires a per-auction distributed lease: `SET lease:{auctionId} {instanceId} NX PX 30000` (30-second TTL). Only the lease holder proceeds to close the auction. If the lease holder crashes mid-close, another instance picks up the auction after the TTL expires and retries. The atomic CAS in Redis (checking `status = ACTIVE` before setting `status = CLOSED`) makes repeated close attempts fully idempotent.
 
 ### 5. Durability and Fault Tolerance of the Bid Log
 
@@ -216,7 +240,9 @@ Accepting a bid in Redis and acknowledging to the client before Postgres has it 
 
 First, use Redis with AOF persistence set to `appendfsync everysec` (or `always` at the cost of throughput) plus a replica in a separate availability zone, so a node failure loses at most a second of accepted bids.
 
-Second, and more importantly, write the accepted bid to Kafka synchronously before ACKing the client. Kafka with `acks=all` and replication factor 3 gives durable storage with low-millisecond latency. The write order is: Redis Lua arbitrates -> Bid Service publishes to Kafka with `acks=all` -> Bid Service ACKs the client. Postgres then consumes the Kafka stream and updates itself asynchronously. Redis can be rebuilt from Kafka at startup, so Redis is a cache of state, not the system of record; Kafka is the log, and Postgres is the queryable projection.
+Second, and more importantly, write the accepted bid to Kafka synchronously before ACKing the client. Kafka with `acks=all` and replication factor 3 gives durable storage with low-millisecond latency. The write order is: Redis Lua arbitrates -> Bid Service publishes to Kafka with `acks=all` -> Bid Service ACKs the client. Postgres then consumes the Kafka stream and updates itself asynchronously. Redis can be rebuilt from Kafka at startup, so **Redis is a cache of state derived from Kafka, not the system of record; Kafka is the log, and Postgres is the queryable projection.**
+
+**A critical subtlety: Redis Lua atomicity does not survive Redis failover.** The Lua script executes atomically on a single Redis primary node — but Redis replication is asynchronous. If the primary fails immediately after executing the Lua script, the replica that takes over as the new primary may not have received the most recent writes due to replication lag. A bid that was accepted milliseconds before the failover might be invisible to the new primary, creating an inconsistency where the client received an ACK for a bid that the new primary does not know about. This is precisely why the Kafka write with `acks=all` must happen synchronously before the client ACK: Kafka's durable log is the source of truth, and on Redis startup or failover recovery, the Bid Service replays the Kafka log (or a recent snapshot plus a tail replay) to reconstruct the current auction state. Redis is a performance layer — a fast cache — not the authoritative store. Losing Redis is a performance degradation, not a data loss event.
 
 ---
 
@@ -267,6 +293,42 @@ Second, and more importantly, write the accepted bid to Kafka synchronously befo
 **Goal**: global scale, multi-region, resilient to single-region failure, hero auctions with hundreds of thousands of concurrent viewers worldwide.
 
 **Architecture**: pin each auction to a "home region" where its Bid Service leader and primary Redis shard live; all bids route there via the API gateway, which adds maybe 100-150 ms of latency for a distant bidder but preserves the single-writer invariant that makes bid ordering tractable. Viewer fanout is regional: regional Fanout Service clusters consume the auction's Kafka stream via geo-replication (MirrorMaker or equivalent) and push to local WebSocket clients, so the read path is low-latency everywhere even though writes are centralized per auction. For hero auctions that exceed a single Redis shard, further shard the single auction itself: split the ordered-bid log into an acceptance tier (many Redis instances each owning a range of bidder IDs, doing a fast local "is this bid even plausible?" reject) with a single coordinator that linearizes the surviving candidates. This is effectively a two-level filter: 99% of low bids are rejected locally without contending on the coordinator. Reconciliation between Redis and Postgres is continuous via Kafka consumers, with a dead-letter queue for any accepted-bid event that fails to project.
+
+---
+
+## Insider Tips and Tricks
+
+### Server-Assigned Timestamps Beat Client Timestamps Every Time
+
+Client clocks can differ by seconds — enough for a "last second" bidder to legitimately place a bid at t=T-0.5s on their clock, which arrives at the server at t=T+1.5s after network delay. If you use client-supplied timestamps for bid ordering, the bidder who happened to have a fast clock wins a systematic advantage. Always assign the server-side receive timestamp at the first point of entry into your Bid Service, before any queue or lock, and make that timestamp the bid's canonical "arrived at" time for fairness and audit.
+
+### Soft Close Is Essential for Any Serious Auction Product
+
+Pure deadline-based auctions reward bid sniping — waiting until the last 3 seconds to place a bid so competitors have no time to respond. Real auction houses (eBay used to do this, most fine-art auctions do) implement soft close: if a bid arrives within N seconds (typically 30–120) of the current end time, the end time is extended by N seconds. From a systems standpoint, this is just an atomic `HINCRBY` on the `end_time` field inside the same Redis Lua script that validates and accepts the bid, so it costs essentially nothing.
+
+### Minimum Bid Increment Prevents Price Grinding
+
+Without a minimum increment, bidders can place bids $0.01 above the current price indefinitely. In the real world, minimum increments scale with the current price (e.g., +$1 under $100, +$5 between $100–500, +$50 above $5,000). This rule must be enforced inside the critical section that checks `new_bid > current_price` — adding a `new_bid >= current_price + min_increment(current_price)` check. Failing to enforce this makes auctions painful to operate and invites abuse.
+
+### Idempotency Keys Prevent Duplicate Bids on Mobile Retries
+
+A bidder on a flaky mobile network taps "Place Bid," the request reaches your server, gets accepted, but the response never returns. The client retries. Without an idempotency key, the second request places a second bid. The bid amount is already the highest, so it's immediately rejected as "too low" — harmless in this case — but if another bid landed between the two attempts, the retry could win at a higher price the user never intentionally submitted. Give each bid submission a client-generated `idempotencyKey` and deduplicate at the Bid Service using a Redis key with a 30-second TTL.
+
+### Reserve Price Requires Hiding the Current High Bid
+
+Many auctions have a secret reserve price: the item only sells if the winning bid meets it. This changes your API contract significantly: `GET /auctions/{id}` must not expose `currentPrice` as the true high bid if the reserve has not been met — instead it shows "current bid: $X, reserve not met." The `currentPrice` in your database is still accurate; you apply a display-layer transformation. If the reserve is met, the display changes to "reserve met" and shows the actual current price. You need this logic in your read path, not just in your closing logic.
+
+### Fan-out Sharding by Auction ID, Not by User ID
+
+For viewer fanout, shard your WebSocket connections by `auctionId`, not by `userId`. The reason: all viewers of the same auction need to receive the same `BidAccepted` event. If you shard by `userId`, the accepted bid event would need to be broadcast to potentially thousands of different shards — one per viewer. By sharding on `auctionId`, all viewers of a given auction land on a small number of Fanout Service nodes, and a single Kafka message from the Bid Service triggers a fan-out to all local connections on those nodes. This is the difference between O(1) Kafka publishes and O(viewers) Kafka publishes per accepted bid.
+
+### Redis Lua Script Atomicity Does Not Survive Redis Failover
+
+Your Redis Lua bid arbitration script executes atomically on a single Redis node. But if that node fails and the primary role transfers to a replica, there's a brief window where the replica might not have the most recent in-memory state (async replication lag). A bid accepted milliseconds before the failover might not appear in the new primary's state. The solution is to write accepted bids to Kafka with `acks=all` synchronously before ACKing the client, and on Redis startup, replay the Kafka log to reconstruct the current auction state. Redis is then a cache of state derived from Kafka, not the system of record.
+
+### The Auction Closer Must Use a Distributed Lease, Not a Cron Job
+
+A cron-based closer running on a single machine is a single point of failure. If the machine is down at 8:00 PM exactly when an important auction should close, the auction stays open indefinitely. Use a distributed lease: store all active auction end times in a Redis sorted set (ZADD with score = endTime). Multiple closer instances continuously scan for auctions with `endTime <= now`. Whichever instance picks up an auction first acquires a per-auction lease (Redis SET NX with TTL). Only the lease holder performs the close. If the lease holder dies, another instance picks up the auction after the TTL expires and closes it safely — idempotent CAS in Redis makes repeated close attempts safe.
 
 ---
 

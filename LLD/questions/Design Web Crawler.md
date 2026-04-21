@@ -12,7 +12,8 @@
 4. [High-Level Design](#high-level-design)
 5. [Deep Dives](#deep-dives)
 6. [Scaling Journey: 0 to Infinity](#scaling-journey-0--)
-7. [Expected Depth by Level](#expected-depth-by-level)
+7. [Insider Tips and Tricks](#insider-tips-and-tricks)
+8. [Expected Depth by Level](#expected-depth-by-level)
 
 ---
 
@@ -121,54 +122,95 @@ No public user-facing API - the consumers are other internal systems (ML trainin
 
 ### 1. URL Frontier
 
-The frontier is more than a single FIFO queue. A naive queue fails politeness because URLs from the same domain cluster together. The canonical design is a two-level structure:
+The frontier is more than a single FIFO queue. A naive queue fails politeness because URLs from the same domain cluster together and get bulk-fetched, effectively DDoSing target hosts. The canonical design is a two-level structure:
 
-- **Front queues** bucket URLs by priority (e.g., PageRank-ish score, freshness need).
-- **Back queues** are partitioned by domain - each back queue holds URLs for exactly one host, and a worker pulls at the domain's allowed rate.
+- **Front queues** bucket URLs by priority. Priority is computed from multiple signals: estimated PageRank of the source page, recency of last crawl (fresher = higher priority), link depth from seed (shallower = higher priority), and content quality heuristics. This is not pure BFS — BFS wastes budget on pagination and near-duplicate pages.
+- **Back queues** are partitioned by domain — each back queue holds URLs for exactly one host, and a dedicated worker thread pulls from that queue at the domain's allowed rate.
 
 A router moves URLs from front to back queues while a separate scheduler assigns back queues to fetcher threads, respecting per-domain crawl delay. This guarantees politeness without starving high-priority URLs.
 
-Durability: the frontier must survive crashes. Use SQS, Kafka, or a Redis list with AOF persistence so that an in-flight URL is either acked after successful fetch or re-delivered after a visibility timeout.
+**Durability is non-negotiable.** The frontier must survive crashes. Use SQS, Kafka, or a Redis list with AOF persistence so that an in-flight URL is either acked after successful fetch or re-delivered after a visibility timeout. At 10B URLs you cannot rebuild the frontier from scratch — treat it as a durable append-only log backed by disk-persistent storage (Kafka topic compaction or RocksDB). An in-memory frontier is a single-point-of-failure that invalidates the entire fault-tolerance goal.
+
+**Frontier sizing:** At 10B URLs averaging ~100 bytes per URL record (URL string + metadata), the frontier itself is ~1 TB of durable storage. This rules out Redis-only approaches for large crawls — Kafka or a purpose-built disk-backed queue is required.
 
 ### 2. Politeness and Rate Limiting
 
+Politeness is not a courtesy; it is a technical and legal requirement.
+
 - Enforce a default of **1 request per second per domain**, overridden by `Crawl-Delay` in `robots.txt` if present.
-- Track `last_request_time` per domain in Redis with a TTL. A fetcher checks `now - last_request_time >= crawl_delay` before issuing a request; otherwise it sleeps or yields the URL back to the frontier.
-- Add **jitter** on retries to avoid synchronized thundering herds against the same host after a failure.
-- Route URLs from the same domain to the same fetcher shard so politeness decisions are local (no distributed lock needed on the hot path).
+- Track `last_request_time` and `next_fetch_time` per domain in Redis with a TTL. A fetcher checks `now >= next_fetch_time[domain]` before issuing a request; if not, it re-queues the URL with a delay rather than spinning. Sleeping in the fetcher thread wastes thread capacity — re-queue and move on.
+- **Domain affinity is required for correctness.** Route URLs from the same domain to the same fetcher shard using consistent hashing on `hash(domain) % N`. If multiple fetcher shards can pull from the same domain's back-queue simultaneously, you need a distributed lock on `next_fetch_time[domain]` — an expensive hot path. Domain affinity makes politeness state local to one shard, eliminating cross-shard coordination on the critical path.
+- Add **jitter** on retries (exponential backoff with ±20% jitter) to avoid synchronized thundering herds against the same host after a 429 or 503 response.
+- Treat `Retry-After` headers as authoritative. A server telling you to wait 60 seconds means your `next_fetch_time[domain]` should be `now + 60s`, not `now + crawl_delay`.
+- Log per-domain error rates. A domain returning >10% 5xx in a rolling window should have its crawl rate halved automatically. Persistent 4xx (404, 410) should trigger URL removal from the frontier, not retry.
 
 ### 3. Deduplication via Bloom Filter
 
-Two kinds of dedup matter:
+Two distinct deduplication problems must be solved independently:
 
-- **URL dedup** - "have I already enqueued this URL?" A billion-URL set at 32 bytes per URL would be 32 GB in RAM. A Bloom filter with 1% false-positive rate needs ~1.2 GB for 1B elements - dramatic savings.
-- **Content dedup** - many URLs serve identical content (mirrors, session IDs, tracking params). Hash the normalized text (SHA-256 or SimHash) and dedup in the Metadata DB before writing to the text store.
+**URL dedup** ("have I already enqueued this URL?"):
+- A billion-URL exact hash set at 32 bytes per URL requires 32 GB in RAM. A Bloom filter at 1% false-positive rate needs ~1.2 GB for 1B elements — a 96% reduction.
+- Bloom filters have **no false negatives** (a URL we have seen is never incorrectly reported as new) but a ~1% **false positive rate** (a new URL is occasionally skipped). For a web crawler this tradeoff is entirely acceptable — missing 1% of valid URLs is unnoticeable at web scale.
+- For higher confidence, layer a secondary exact check (DynamoDB lookup) only when the Bloom filter says "maybe seen." This two-tier design keeps the hot path fast (Bloom filter in Redis) while preserving correctness for important URLs.
+- **URL normalization must happen before dedup.** `http://example.com/page?a=1&b=2` and `http://example.com/page?b=2&a=1` are the same page. Canonicalize by: lowercasing the scheme and host, sorting query parameters alphabetically, stripping fragment identifiers (`#section`), removing common tracking parameters (`utm_source`, `fbclid`, etc.), and resolving relative paths. Two URLs that normalize to the same canonical form count as one.
 
-Trade-off: a Bloom filter has **false positives** (skip a URL we have not actually seen) but **no false negatives**. For URL dedup this is acceptable - missing a rarely-linked URL is cheap; re-crawling a popular one is not. If precision matters, layer a secondary exact check (DynamoDB lookup) only when the Bloom filter says "maybe seen."
+**Content dedup** ("is this page's content materially different from something I've already stored?"):
+- Exact dedup (SHA-256 of full HTML) catches verbatim duplicates but misses near-duplicates: mobile vs. desktop versions, paginated versions of the same article, session-ID-parameterized pages, CDN mirrors.
+- **SimHash** produces a 64-bit fingerprint where similar documents have small Hamming distances. Two documents with Hamming distance ≤ 3 are treated as near-duplicates. Store all SimHashes; a new page within distance 3 of an existing one is marked as near-duplicate and not re-indexed.
+- Use a two-stage pipeline: exact hash first (cheap, handles verbatim duplicates), SimHash second (handles near-duplicates). Only novel content reaches the text store.
 
 ### 4. robots.txt and Crawler Ethics
 
-- On first contact with a domain, fetch `https://{host}/robots.txt`.
-- Parse `User-agent`, `Disallow`, `Allow`, `Crawl-Delay`, and `Sitemap` directives.
-- Cache parsed rules in Redis keyed by host, with a 24-hour TTL so updates propagate.
-- Every URL is checked against the domain's rules before fetch. Disallowed URLs are dropped, not retried.
-- Respect `nofollow` on anchors when extracting outbound links.
-- Sitemaps are a crawling shortcut - ingest them into the frontier directly to discover deep URLs that are not reachable via link graph.
+`robots.txt` is not optional. Courts in the US (under CFAA) and EU have treated repeated violations as trespass-to-chattels or unauthorized computer access claims. Beyond legality, aggressive crawlers get entire IP ranges permanently blacklisted by major CDNs and hosts — progressively shrinking the addressable web for that crawler.
 
-### 5. Distributed Crawling
+- On first contact with a domain, fetch `https://{host}/robots.txt` synchronously before any other request to that domain.
+- Parse `User-agent`, `Disallow`, `Allow`, `Crawl-Delay`, and `Sitemap` directives. Your user-agent string must match the `User-agent` rules declared in robots.txt. Using a generic agent string to dodge restrictions is detectable and grounds for blacklisting.
+- Cache parsed rules in Redis keyed by host, with a 24-hour TTL so updates propagate within a day.
+- Every URL is checked against the domain's rules before fetch. Disallowed URLs are dropped and marked in the Metadata DB so they are not re-discovered and re-checked on every crawl cycle.
+- If `robots.txt` is unreachable (503, timeout), apply conservative defaults: assume no restrictions but slow the crawl rate to 0.1 req/sec until the file is accessible. Do not assume unreachability means "crawl freely."
+- Respect `nofollow` on anchors when extracting outbound links — both the link-level `rel="nofollow"` attribute and the page-level `<meta name="robots" content="nofollow">` directive.
+- Sitemaps declared in `robots.txt` are a crawling shortcut — ingest `sitemap.xml` files into the frontier directly to discover deep URLs unreachable via the link graph. Sitemaps also carry `<lastmod>` timestamps useful for recrawl scheduling.
 
-- **Fetchers** are stateless and horizontally scalable. Partition the frontier by `hash(domain) % N` so each fetcher owns a disjoint set of domains - this keeps politeness local.
-- **Parsers** are also stateless and scale on queue depth. They do not need domain affinity because parsing has no politeness constraints.
-- **Coordination**: the Metadata DB and Redis are the only shared state. Everything else is pull-based from queues.
-- **Back-pressure**: if blob storage or the text store gets slow, parser consumers lag, SQS queue depth grows, and auto-scaling adds parsers. Fetchers do not need to slow down unless the frontier itself backs up.
-- **Crawler traps**: cap traversal depth at ~15-20 hops from seed, cap URLs per domain per crawl, and detect pathological link farms by watching per-domain URL discovery rates.
+### 5. Distributed Crawling and Spider Traps
 
-### 6. Storage Layout
+**Scaling fetchers:**
+- Fetchers are stateless and horizontally scalable. Partition the frontier by `hash(domain) % N` so each fetcher owns a disjoint set of domains — this keeps politeness state local and avoids distributed locks.
+- Parsers are also stateless and scale on queue depth. They do not need domain affinity because parsing has no politeness constraints.
+- The Metadata DB and Redis are the only shared state. Everything else is pull-based from queues.
+- Separate the frontier service from the fetcher service. These two components have completely different scaling profiles: the frontier is I/O-bound (reading/writing URL queues, dedup checks) and benefits from high storage throughput; the fetcher is network-bound (making HTTP requests, waiting for responses) and benefits from high concurrency with non-blocking I/O. Coupling them in one binary prevents independent scaling.
 
-- **Raw HTML**: S3, path `raw/{crawl_id}/{yyyy-mm-dd}/{sha1(url)}.html.gz` - gzip compressed, immutable.
-- **Text**: S3, partitioned the same way. Columnar formats (Parquet) are tempting for downstream analytics.
-- **Metadata**: DynamoDB with `url_hash` as partition key and a GSI on `domain` for per-domain queries.
-- **Seen set and domain counters**: Redis cluster, sharded by key hash.
+**Spider traps — the silent budget killers:**
+Spider traps are URL spaces that expand infinitely and can consume the entire crawl budget. They exist both legitimately (calendar navigation: `?month=next` → `?month=next` from that page) and maliciously (adversarial sites designed to exhaust crawler resources).
+
+Defenses must operate at multiple levels:
+1. **Max URL depth limit**: stop crawling beyond N hops from the seed (typically 15-20). URLs at depth > N are dropped, not queued.
+2. **Per-domain URL count cap**: stop after M URLs from any single domain per crawl run (e.g., 1M URLs). Emit an alert when a domain hits the cap — it signals either a trap or a legitimately large site that needs manual review.
+3. **URL normalization**: collapse `?month=jan&year=2020` and `?year=2020&month=jan` to the same canonical URL before queuing. Many traps exploit parameter reordering.
+4. **Per-domain discovery rate monitoring**: if a single domain is generating >10K new URLs/minute, flag it. Legitimate sites do not have infinite unique URL spaces.
+5. **Path segment repetition detection**: URLs with repeated path segments (`/a/b/a/b/a/b/`) are almost always traps.
+
+**Back-pressure:**
+If blob storage or the text store slows down, parser consumers lag, queue depth grows, and auto-scaling adds parsers. Fetchers do not need to slow down unless the frontier itself backs up. Monitor queue lag metrics (not just queue depth) to distinguish "growing because we're producing fast" from "growing because downstream is slow."
+
+### 6. DNS Resolution at Scale
+
+DNS is one of the most commonly overlooked bottlenecks in crawler design. At 23,000 pages/second, you need 23,000 DNS lookups/second. The OS DNS resolver (`/etc/resolv.conf`) is a single-threaded blocking stub resolver — it is not built for this load.
+
+Solutions, in order of increasing scale:
+- **Application-level DNS cache**: maintain a per-process cache of `domain → IP` mappings, expiring each entry at its TTL. This eliminates repeated lookups for the same domain, which is common since many URLs share domains.
+- **Dedicated async resolver library**: use `c-ares` (C library with async DNS) or language-equivalent. This allows hundreds of concurrent DNS requests per fetcher process without blocking threads.
+- **Local recursive resolver**: run Unbound or BIND locally on each fetcher host. Requests are served from the local resolver's cache, bypassing public DNS for repeat lookups. TTL-compliant — the resolver respects the actual record TTL.
+- **Multiple upstream DNS providers**: configure failover between Cloudflare (1.1.1.1), Google (8.8.8.8), and a self-hosted resolver. Public resolvers rate-limit aggressively at crawler-scale query rates.
+- **Pre-resolution**: batch-resolve all domains in the frontier before handing URLs to fetcher workers. Domains not resolvable after 3 retries are marked unreachable in the Metadata DB and skipped.
+
+### 7. Storage Layout
+
+- **Raw HTML**: S3, path `raw/{crawl_id}/{yyyy-mm-dd}/{sha1(url)}.html.gz` — gzip compressed, immutable objects. Retention policy: 30 days in S3 Standard, then Glacier for archival. Raw HTML is needed for reprocessing but is not on the hot read path.
+- **Text content**: S3, partitioned the same way. For downstream ML pipelines, write Parquet files partitioned by domain and crawl date to enable efficient columnar scans.
+- **Metadata**: DynamoDB with `url_hash` as partition key and a GSI on `domain` for per-domain queries (e.g., "how many URLs from example.com have we crawled?"). TTL attribute on records to auto-expire low-value URL metadata.
+- **Seen set and domain counters**: Redis Cluster, sharded by key hash. RedisBloom module for the Bloom filter; standard Redis hashes for per-domain `next_fetch_time` and error counts.
+- **Frontier**: Kafka topics partitioned by `hash(domain) % partitions`. Topic retention sufficient to hold the full frontier depth (days, not hours). Consumer group per fetcher fleet. Key compaction for the "current state" topic (one record per URL).
+- **Event stream for downstream consumers**: Kafka topic `pages.extracted` emitting `{url, content_hash, s3_path, fetched_at, domain, depth}`. Consumers (search indexers, ML pipelines) are fully decoupled from the crawl pipeline.
 
 ---
 
@@ -266,6 +308,40 @@ Each stage builds on the previous. The goal is to understand the failure mode th
 **What you skip**: Nothing. This is the asymptote.
 
 **Failure mode**: Not a scaling failure - more a diminishing-returns regime. Further gains come from smarter prioritization (what to crawl), not more throughput (how fast to crawl). The next frontier is quality, not quantity.
+
+---
+
+## Insider Tips and Tricks
+
+### Ignoring robots.txt Has Legal Consequences, Not Just Reputational Ones
+The Hierarchical Exemption From Compliance (HEFC) principle in robots.txt is advisory, but courts in the US and EU have treated ignoring it as a basis for trespass-to-chattels or Computer Fraud and Abuse Act claims. Beyond legality, aggressive crawling results in your IP ranges being permanently blacklisted by major sites. Respect `Crawl-delay` directives and the `Disallow` paths, or your crawler will have a shrinking addressable web.
+
+### Crawl Budget: Every Page Visit Has a Cost
+Google's concept of "crawl budget" — the number of URLs a crawler will fetch from a domain in a given period — applies to your own crawler too. Spending crawl budget on thin, duplicate, or low-value pages means high-value pages get crawled less frequently. Prioritize URLs by predicted content quality (page rank estimate, content freshness signals, link depth) in the URL frontier, not pure BFS order. BFS crawlers waste budget on pagination and near-duplicate pages.
+
+### Bloom Filter False Positive Rate Is an Acceptable Tradeoff
+A Bloom filter answers "have I seen this URL before?" with no false negatives (never misses a seen URL) but ~1% false positive rate (occasionally thinks a new URL is old). The consequence: ~1% of new, valid URLs are skipped. For a web crawler, this is entirely acceptable — the web is vast enough that missing 1% is unnoticeable. The benefit: a Bloom filter for 10B URLs uses ~10GB RAM vs hundreds of gigabytes for a hash set.
+
+### The URL Frontier Must Be Persistent, Not In-Memory
+If the URL frontier (the queue of URLs to crawl) lives in memory and the process crashes, you lose all frontier state. At 10B URLs, you cannot rebuild from scratch in reasonable time. The frontier must be backed by disk-persistent storage (RocksDB, a dedicated Kafka topic, or a database). Checkpointing progress is not optional for a large-scale crawler; treat the frontier as a durable append-only log.
+
+### Per-Domain Politeness Is Infrastructure-Level, Not Application-Level
+Rate limiting your crawler to 1 request/second per domain is not done in application code — it must be enforced in the fetcher tier. Implementation: maintain a per-domain "next fetch time" value in Redis. Before fetching, check if `now >= next_fetch_time[domain]`; if not, re-queue the URL. This requires the URL-to-fetcher assignment to be consistent (same domain always goes to the same fetcher shard) to avoid inter-shard coordination for per-domain state.
+
+### Spider Traps Can Consume Infinite Crawl Budget
+Infinite URL spaces exist legitimately (calendar navigation: `?month=next`, `?month=next` from that page, etc.) and maliciously (adversarial sites to waste crawler resources). Defenses: (1) max URL depth limit (stop crawling beyond N hops from the seed); (2) per-domain URL count cap (stop after M URLs from any single domain); (3) URL normalization (collapse `?month=jan&year=2020` and `?year=2020&month=jan` to the same canonical URL before queuing).
+
+### DNS Resolution Is a Throughput Bottleneck at Scale
+A crawler fetching 10,000 URLs/second needs 10,000 DNS lookups/second. The OS DNS resolver is not built for this. Solutions: maintain a local DNS cache keyed by domain with a TTL equal to the record's TTL; use a dedicated DNS resolver like `c-ares` (asynchronous DNS) or a local unbound/bind instance; pre-resolve all domains in the URL frontier in batch before handing them to fetchers.
+
+### Content Deduplication via SimHash Prevents Near-Duplicate Indexing
+The web has massive duplication: mobile vs desktop versions, HTTP vs HTTPS mirrors, paginated versions of the same article. Exact deduplication (hash the full content) misses near-duplicates. SimHash produces a 64-bit fingerprint where similar documents have Hamming distances < 3. Store all SimHashes in a lookup structure; when a new page's SimHash is within distance 3 of an existing one, mark it as a near-duplicate and don't index it (but do record the crawl to prevent re-crawling).
+
+### Separate the URL Frontier Service from the Fetcher Service
+These two components have completely different scaling profiles. The frontier is I/O-bound (reading/writing URL queues, dedup checks) and benefits from high storage throughput. The fetcher is network-bound (making HTTP requests, waiting for responses) and benefits from high concurrency with non-blocking I/O. Coupling them in one binary means you can't scale each independently. The frontier scales with URL volume; the fetcher scales with target site response times.
+
+### JavaScript-Rendered Content Is Inaccessible to HTTP-Only Crawlers
+About 30% of the modern web requires JavaScript execution to render meaningful content (SPAs, React/Vue apps). A simple HTTP fetcher gets raw HTML with `<div id="root"></div>` and no content. Solutions: (1) maintain a separate JavaScript rendering pool (headless Chrome via Puppeteer/Playwright) for known JS-heavy domains — expensive but necessary; (2) fetch both raw HTML and rendered HTML, use the one with more content; (3) explicitly decide your crawler won't support JS rendering and document the limitation.
 
 ---
 

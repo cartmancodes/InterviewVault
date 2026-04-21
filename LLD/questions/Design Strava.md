@@ -22,7 +22,8 @@
    - [5. Global Heatmaps](#5-global-heatmaps)
    - [6. Friend Activity Feed and Realtime Sharing](#6-friend-activity-feed-and-realtime-sharing)
 6. [Scaling Journey: 0 to infinity](#scaling-journey-0--)
-7. [Expected Depth by Level](#expected-depth-by-level)
+7. [Insider Tips and Tricks](#insider-tips-and-tricks)
+8. [Expected Depth by Level](#expected-depth-by-level)
 
 ---
 
@@ -180,21 +181,27 @@ The time-series store and the object store hold the same data at different tiers
 
 ### 1. GPS Ingest Pipeline
 
-**Problem:** 10M concurrent activities at 1 Hz = 10M points/sec sustained. Writing each point synchronously to a durable relational DB would require ~10M write IOPS, which is not achievable on a single primary and wasteful (each point is tiny and almost never read individually). Meanwhile, phones have spotty connectivity and will retry in bursts, so instantaneous peaks can be 5-10x the sustained rate.
+**Problem:** 10M concurrent activities at 1 Hz = 10M points/sec sustained. Writing each point synchronously to a durable relational DB would require ~10M write IOPS, which is not achievable on a single primary and wasteful (each point is tiny and almost never read individually). Meanwhile, phones have spotty connectivity and will retry in bursts, so instantaneous peaks can be 5-10x the sustained rate. A further complication: raw GPS samples off a consumer phone are noisy — ±5-15 meter positional errors, occasional dropout spikes where a point teleports 500 m then snaps back, and complete signal loss in tunnels or canyons.
 
 **Solution:**
 
 1. **Batched upload from the phone.** The phone samples at 1 Hz locally and flushes in batches (e.g., every 30-60 seconds, or on wifi reappearance). Each batch has a monotonic `batch_id` per activity so the server can detect duplicates and gaps.
 2. **Stateless ingest service.** The service does the minimum work: validate shape, attach `user_id` and `activity_id`, and produce the batch to Kafka. No DB write, no segment match, no aggregate update on the hot path. This is what lets one fleet handle millions of concurrent streams on modest hardware.
 3. **Kafka as the durable buffer.** Partition the `gps.raw` topic by `activity_id` so all points for one activity land on one partition in order. Retention is long enough (hours-to-days) that downstream consumers can reprocess on failure without re-asking the phone.
-4. **Downstream consumers fan out:**
-   - **Time-series writer** writes each point into Timescale / Influx for recent-activity analytical queries.
+4. **GPS smoothing before storage.** A preprocessing consumer reads from `gps.raw` and applies noise reduction before any point reaches a durable store:
+   - **Outlier removal:** discard points that imply physically impossible speeds (e.g., >250 km/h for a runner, >600 km/h for a cyclist). These are GPS spikes, not real movement.
+   - **Kalman filter or Douglas-Peucker simplification:** Kalman smooths noisy coordinates using a statistical model of movement; Douglas-Peucker removes collinear intermediate points that add no geometric information. A 1-hour run at 1 Hz yields ~3,600 raw points; after Douglas-Peucker at a 5-meter tolerance, that often drops to 200-400 points — a 10x reduction with negligible visual difference.
+   - **Gap filling:** if GPS is lost for <30 seconds (tunnel), linearly interpolate positions between the last good point and the first recovered point. Mark these synthetic points as estimated in the schema so they can be excluded from precision analytics.
+   - Store the smoothed trace, not the raw one. This reduces time-series storage by 5-10x and makes downstream geometric matching more reliable.
+5. **Downstream consumers fan out from the smoothed stream:**
+   - **Time-series writer** writes each smoothed point into Timescale / Influx for recent-activity analytical queries.
    - **Blob assembler** buffers the stream per activity and, on `complete`, writes a single compressed GPX/FIT blob to S3. That blob is the canonical long-term copy.
    - **Stream processor (Flink / Kafka Streams)** maintains rolling aggregates per activity (distance, elevation gain) so the activity detail page has summary fields populated even before the blob is fully written.
+6. **Elevation correction.** GPS altitude is unreliable (±20-30 m errors). A separate enrichment step queries a Digital Elevation Model (DEM) — a globally gridded dataset (SRTM or ASTER, several TB total) — to replace each point's GPS altitude with the ground elevation at that coordinate. The DEM is queried per activity bounding box, fetching the relevant elevation patches in a single batch lookup rather than one query per point.
 
 **Tradeoff:** end-to-end latency from phone sample to "queryable on server" is seconds-to-tens-of-seconds, not milliseconds. That's acceptable because the live UX is served by on-device computation — the server doesn't need to be fresh to keep the athlete's phone displaying correct pace.
 
-**Why not write each point to Postgres directly?** The per-point write amplification (WAL, index maintenance, replication) would cost orders of magnitude more than the information content is worth. Time-series stores are column-oriented with compression tuned for this shape and get 10-50x better per-byte and per-IOP economics.
+**Why not write each point to Postgres directly?** The per-point write amplification (WAL, index maintenance, replication) would cost orders of magnitude more than the information content is worth. Time-series stores are column-oriented with compression tuned for this shape and get 10-50x better per-byte and per-IOP economics. Additionally, mixing GPS time-series rows with relational metadata in Postgres forces every segment query and leaderboard lookup to wade through millions of time-series rows it has no interest in.
 
 ### 2. Offline-First Recording on the Phone
 
@@ -208,70 +215,74 @@ The time-series store and the object store hold the same data at different tiers
 - On `complete`, the phone sends the `ended_at` plus a client-computed summary. The server reconciles: it already has most batches, will request any missing ranges, and then kicks off async processing.
 - If the phone dies before `complete`, the server still has every batch that was successfully uploaded and can "recover" the activity on next login.
 
-**Tradeoff:** duplicate effort. The phone computes aggregates, and so does the server (because the phone's numbers aren't trustworthy — clock skew, paused-while-uploading mid-point, tampering). The server's numbers are canonical for leaderboards; the phone's numbers are canonical for live UX. They are allowed to disagree by small amounts.
+**Two-truth model:** the phone computes aggregates during the activity, and the server recomputes them after upload. These numbers are allowed to differ by small amounts because of clock skew, GPS smoothing applied server-side, and DEM-corrected elevation replacing GPS altitude. The server's numbers are canonical for leaderboards and public display; the phone's numbers are canonical for live UX during the recording. Surfacing this reconciliation clearly in the UI ("Your GPS recorded 12.1 km; server confirmed 12.05 km after correction") avoids athlete confusion.
+
+**Tradeoff:** duplicate computation. Accept it — the correctness guarantee of server-side recomputation is worth the redundancy. Any shortcut that trusts the phone's numbers for leaderboards opens the door to trivial manipulation.
 
 ### 3. Segment Matching
 
-**Problem:** When a new activity completes, determine which of the millions of community segments the athlete traversed, and for each, the time spent. Naive approach — compare the new polyline against every segment — is O(segments) per activity; at millions of segments × 10M daily activities it's catastrophic.
+**Problem:** When a new activity completes, determine which of the millions of community segments the athlete traversed, and for each, the time spent. Naive approach — compare the new polyline against every segment — is O(segments) per activity; at millions of segments × 10M daily activities it's catastrophic. Compounding this, segment matching cannot block the activity upload response — if matching takes 30-60 seconds, the athlete cannot stare at a spinner waiting for their KOM to appear.
 
-**Solution:** Spatial pre-filter, then geometric match.
+**Solution:** Spatial pre-filter, then geometric match, fully asynchronous.
 
-1. **Bounding-box index of segments** stored in a spatial index (R-tree in PostGIS, or S2/H3/geohash cells). At segment-creation time each segment's bounding box and the set of geohash cells its polyline crosses are indexed.
-2. **Pre-filter by cell overlap.** For a new activity, compute the geohash cells its polyline crosses (typically dozens to hundreds at an appropriate precision) and fetch only the segments that share at least one cell. This drops the candidate set from millions to typically hundreds.
-3. **Geometric match.** For each candidate segment, walk the activity's GPS points and look for (a) the point closest to the segment's `start_point` within a tolerance (e.g., 10 m), then (b) a continuous sub-path through the activity that tracks the segment's polyline within tolerance to `end_point`. Record the elapsed time between those two moments as a `SegmentEffort`.
-4. **Run asynchronously.** The matcher consumes from Kafka after the blob assembler has the complete trace. Results are written to the `SegmentEfforts` table and forwarded to the Leaderboard Updater.
+1. **Asynchronous job enqueue.** The moment the blob assembler writes the complete trace to S3, a `segment_match_requested` event is enqueued to Kafka. The athlete immediately sees their activity with status "Analyzing segments..." The matcher runs entirely off the critical path.
+2. **Bounding-box index of segments** stored in a spatial index (R-tree in PostGIS, or S2/H3/geohash cells). At segment-creation time each segment's bounding box and the set of geohash cells its polyline crosses are indexed.
+3. **Pre-filter by cell overlap.** For a new activity, compute the geohash cells its polyline crosses (typically dozens to hundreds at an appropriate precision) and fetch only the segments that share at least one cell. This drops the candidate set from millions to typically hundreds.
+4. **Geometric match.** For each candidate segment, walk the activity's GPS points and look for (a) the point closest to the segment's `start_point` within a tolerance (e.g., 10 m), then (b) a continuous sub-path through the activity that tracks the segment's polyline within tolerance to `end_point`. Record the elapsed time between those two moments as a `SegmentEffort`.
+5. **Tolerance tuning per activity type.** Bikes follow roads closely — a 5-meter tolerance is sufficient and tight enough to reject a parallel path. Runners on trails deviate more and GPS is noisier in tree cover — a 15-20 meter tolerance is appropriate. Too tight misses real efforts due to GPS drift; too loose credits efforts on adjacent paths.
+6. **Results written downstream.** Segment efforts are written to the `SegmentEfforts` table and forwarded to the Leaderboard Updater. A notification service checks if any effort is a new KOM/PR and, if so, enqueues a push notification to the athlete.
 
-**Why not match live during the activity?** It's wasteful — the athlete may abandon, pause, or go off-route. It also requires streaming segment data to the phone, which bloats the install. Post-hoc matching on the server is simpler and runs once against the final polyline.
+**Why not match live during the activity?** It's wasteful — the athlete may abandon, pause, or go off-route. It also requires streaming segment data to the phone, which bloats the install. Post-hoc matching on the server is simpler, runs once against the final smoothed polyline, and benefits from DEM-corrected elevation for climbing segments.
 
-**Tradeoff: correctness vs cost.** Tolerance is a tuning knob. Too tight and real efforts get missed (a GPS blip pushes a point 15m off the trail). Too loose and a runner on a parallel trail gets credited for a different segment's effort. Strava tunes this per activity type (bike tolerances are looser than run because bikes deviate less from roads).
-
-**Technology:** PostGIS with GiST index on segment bounding boxes, or Uber's H3 / Google's S2 hex-cell indexes for more uniform cell sizes than geohash. H3 is especially nice here because cell neighbors are well-defined and resolution is explicit.
+**Technology:** PostGIS with GiST index on segment bounding boxes, or Uber's H3 / Google's S2 hex-cell indexes for more uniform cell sizes than geohash. H3 is especially nice here because cell neighbors are well-defined, resolution is explicit, and the hierarchy (coarser cells for pre-filtering, finer cells for match) maps directly onto the two-phase approach.
 
 ### 4. Leaderboards
 
-**Problem:** For each segment, serve top-K efforts across multiple slices — all-time, this year, this month, by gender, by age group, by "people you follow" — with low read latency and fresh updates as new efforts arrive. Efforts arrive at ~the rate of completed activities (100s/sec at scale); leaderboards are read at orders-of-magnitude-higher rates (every segment view hits them).
+**Problem:** For each segment, serve top-K efforts across multiple slices — all-time, this year, this month, by gender, by age group, by "people you follow" — with low read latency and fresh updates as new efforts arrive. Efforts arrive at ~the rate of completed activities (100s/sec at scale); leaderboards are read at orders-of-magnitude-higher rates (every segment view hits them). A `SELECT MIN(elapsed_time) ... LIMIT 10` against a table with 500K efforts for a popular segment requires scanning all 500K rows — unacceptable at read scale.
 
 **Solution:** Precomputed, incrementally updated materialized views in Redis.
 
-1. **Redis Sorted Set per (segment, scope).** Key like `lb:{segment_id}:alltime:M:30-34`, member = `user_id`, score = `elapsed_s`. `ZADD` on new effort is O(log n); `ZRANGE 0 99` for top-100 is O(log n + k).
+1. **Redis Sorted Set per (segment, scope).** Key like `lb:{segment_id}:alltime:M:30-34`, member = `user_id`, score = `elapsed_s`. `ZADD` on new effort is O(log n); `ZRANGE 0 99` for top-100 is O(log n + k). For a popular segment with 500K efforts, the sorted set holds 500K members but `ZRANGE` for the top 10 is still O(log N + K) — effectively constant compared to a table scan.
 2. **Write path.** When the Segment Matcher produces a `SegmentEffort`, the Leaderboard Updater publishes to all relevant sorted sets: the all-time board, the this-year board, the this-month board, the gender-partitioned boards, and the age-group boards. Each update is a single `ZADD`, so the fanout cost is bounded (constant number of scope sets per effort).
-3. **"People you follow" leaderboards** cannot be precomputed per (segment, user) — combinatorial explosion. Instead, compute on read: fetch the viewing user's follow list (small, bounded by product limit e.g. 1000), then `ZINTERSTORE` or application-side merge their efforts on this segment. Acceptable because this view is read rarely compared to the global one.
+3. **"People you follow" leaderboards** require a different approach. Precomputing a sorted set per `(segment_id, user_id)` is a combinatorial explosion. Instead: at write time, when a user completes a segment, fan out a `ZADD` to sorted sets for each of their followers (`lb:{segment_id}:following:{follower_id}`). This mirrors the social feed fan-out pattern — writes are amplified but reads are O(1). For users with massive follower counts, fall back to merge-on-read: fetch the viewing user's follow list and `ZINTERSTORE` their efforts on this segment at query time.
 4. **Yearly / monthly boards** live on per-period keys (`lb:{segment_id}:2026`) so they naturally expire via TTL or get swept at period rollover.
 5. **Cheater / private effort filtering.** Leaderboard entries are "logical" — on read, the service hydrates entries with current privacy/flagging state from Postgres and filters. A user who goes private disappears from the visible top-K without needing to re-sort the set.
 
 **Tradeoff:** storage. Each segment carries ~dozens of sorted sets. Millions of segments × dozens of scopes × thousands of entries = non-trivial Redis footprint. Mitigate by only materializing "active" segments (ones with efforts in the last N months) and rebuilding cold ones lazily on first read.
 
-**Why not just query Postgres?** A `SELECT ... ORDER BY elapsed_s LIMIT 100 WHERE segment_id = ? AND year = 2026 AND gender = 'M'` works functionally but every leaderboard view is a sort, and at read-heavy scale that's the bottleneck. Redis sorted sets move the sort to write time (once) and make reads O(1)-ish.
+**Why not just query Postgres?** A `SELECT ... ORDER BY elapsed_s LIMIT 100 WHERE segment_id = ? AND year = 2026 AND gender = 'M'` works functionally but every leaderboard view is a sort, and at read-heavy scale that's the bottleneck. Redis sorted sets move the sort to write time (once) and make reads O(log n + k) regardless of total effort count.
 
 ### 5. Global Heatmaps
 
-**Problem:** Render a world map where pixel brightness reflects how many activities have passed through that location. Across all Strava users, the corpus is billions of GPS points. Rendering this live per request is impossible; even the data volume involved exceeds what one viewport can pull.
+**Problem:** Render a world map where pixel brightness reflects how many activities have passed through that location. Across all Strava users, the corpus is billions of GPS points. Rendering this live per request is impossible; even the data volume involved exceeds what one viewport can pull. The challenge extends to privacy: the heatmap must never reveal where individual athletes live, even if their start/end points are clustered at a residential address.
 
-**Solution:** Offline tile pipeline.
+**Solution:** Offline tile pipeline with privacy obfuscation baked in.
 
-1. **Quantize points to map tiles.** Every GPS point is mapped to a pixel inside a (zoom, x, y) tile at some set of zoom levels (e.g., 3-15). For zoom 14 at equator, one tile covers ~2.4 km per side at 256 px — roughly 10 m/pixel.
-2. **Aggregate pass-counts per pixel.** A batch job (Spark / Flink) reads the GPS corpus from S3 and produces, per (activity_type, zoom, x, y), a 256×256 grid of counts. Each point contributes +1 to the pixel it hits; line-drawing between successive points ensures segments between samples count too.
-3. **Colorize and emit tile images.** Apply a log-scale colormap (heatmap brightness) and write a PNG (or vector MVT) tile to object storage. The CDN fronts these tiles with long cache TTLs.
-4. **Refresh cadence.** Full global rebuild is expensive; do it weekly. Incremental updates (just the last week's activities, merged into last-good tiles) can run daily or hourly for regions with heavy activity.
-5. **Privacy.** Only activities marked public contribute. Additionally, "start/end obfuscation zones" around homes are excised — any point within N meters of a user's declared home coordinate is dropped before aggregation, so the heatmap never reveals where individuals live.
+1. **Privacy filtering first.** Before any point contributes to the heatmap, drop any point that falls within a user's declared privacy zone (a configurable radius around home/work coordinates). This is done in the batch job, not at render time — the heatmap tile itself never contains home-area density, even if a million athletes start their runs from the same neighborhood park.
+2. **Quantize points to map tiles.** Every remaining GPS point is mapped to a pixel inside a (zoom, x, y) tile at zoom levels 3-15. For zoom 14 at equator, one tile covers ~2.4 km per side at 256 px — roughly 10 m/pixel.
+3. **Aggregate pass-counts per pixel.** A batch job (Spark / Flink) reads the GPS corpus from S3 and produces, per (activity_type, zoom, x, y), a 256×256 grid of counts. Each point contributes +1 to the pixel it hits; line-drawing between successive points ensures segments between samples count too.
+4. **Colorize and emit tile images.** Apply a log-scale colormap (heatmap brightness) and write a PNG (or vector MVT) tile to object storage. The CDN fronts these tiles with long cache TTLs.
+5. **Refresh cadence.** Full global rebuild is expensive; do it weekly. Incremental updates (just the last week's activities, merged into last-good tiles) can run daily or hourly for regions with heavy activity. Hot urban tiles (cities, popular trail heads) are refreshed more frequently than rural tiles that change rarely.
+6. **Privacy zones are enforced at aggregation time, not at query time.** Because tiles are pre-rendered and served from CDN, there is no per-request opportunity to apply per-user privacy zones. Instead the batch job excises all privacy-zone-adjacent points before writing any pixel data. This means athletes cannot retroactively remove their data from older heatmap tiles without a full tile rebuild for the affected zoom/region — a known product limitation documented in Strava's privacy settings.
 
 **Why pre-render tiles instead of vector overlays?** At global zoom levels, sending raw point data to the client is gigabytes. PNG tiles are tiny (~10s of KB) and the CDN handles scale.
 
-**Tradeoff:** freshness vs cost. Tiles are hours-to-days stale. That's fine — the heatmap is an aggregate view, not a live tracker.
+**Tradeoff:** freshness vs cost. Tiles are hours-to-days stale. That's fine — the heatmap is an aggregate view, not a live tracker. The privacy tradeoff (no retroactive removal from existing tiles without rebuild) is acceptable given the privacy zones excise the most sensitive data (home/work) proactively.
 
 ### 6. Friend Activity Feed and Realtime Sharing
 
-**Problem:** Show a user's friends' recent activities in a chronological feed. Each activity's completion must reach every follower's feed within seconds-to-tens-of-seconds, at 10M+ DAU scale.
+**Problem:** Show a user's friends' recent activities in a chronological feed. Each activity's completion must reach every follower's feed within seconds-to-tens-of-seconds, at 10M+ DAU scale. The problem is structurally identical to Twitter's home timeline — a well-studied fan-out problem with a known solution, but with specific constraints imposed by the athlete social graph (follow counts are typically much smaller than Twitter celebrities, but a handful of pro athletes have millions of followers).
 
-**Solution:** Fan-out on write, with a fallback for celebrity fan-out.
+**Solution:** Fan-out on write for normal athletes, hybrid fan-out for celebrities.
 
 1. **On activity `complete`,** publish an `activity.completed` event to Kafka.
 2. **Feed Fanout Service** consumes the event, looks up the poster's followers in a follow-graph store, and writes one `FeedEntry` row per follower to a per-user feed store (Redis list / sorted set by timestamp, or a Cassandra partition per user).
 3. **Read** is then a cheap range scan against a single key: `LRANGE feed:{user_id} 0 N`.
-4. **Celebrity exception.** For users with very large follower counts (pro athletes with millions of followers), per-follower fanout is expensive and mostly wasted — most followers never open the app that day. For these, skip fanout and merge-on-read: `GET /feed` fetches the viewer's fanned-out entries plus pulls recent activities for any celebrities they follow. Small constant-size union at read time.
-5. **Realtime push** (optional): when a follower's device is active, a WebSocket channel pushes new feed entries as they're fanned out, so the feed updates without polling. Falls back to pull on reconnect.
+4. **Celebrity exception.** For users with very large follower counts (pro athletes with millions of followers), per-follower fanout is expensive and mostly wasted — most followers never open the app that day. For these, skip fanout and merge-on-read: `GET /feed` fetches the viewer's fanned-out entries plus pulls recent activities for any celebrities they follow. Small constant-size union at read time. The threshold (e.g., >50K followers) is a configurable cutoff.
+5. **KOM/PR notifications are a separate concern.** When the segment matcher determines that an athlete has set a new KOM or personal record, a notification event flows to a dedicated Notification Service — not through the social feed. The feed shows activities; the notification system shows achievements. Conflating them creates ordering and deduplication nightmares.
+6. **Realtime push** (optional): when a follower's device is active, a WebSocket channel pushes new feed entries as they're fanned out, so the feed updates without polling. Falls back to pull on reconnect.
 
-**Tradeoff:** fanout-on-write trades write amplification (O(followers) writes per activity) for cheap reads. It's the right choice when reads vastly outnumber writes, which they do for a social product.
+**Tradeoff:** fanout-on-write trades write amplification (O(followers) writes per activity) for cheap reads. It's the right choice when reads vastly outnumber writes, which they do for a social product. The celebrity hybrid prevents the pathological case where one pro athlete completing a race triggers 2M Redis writes synchronously.
 
 ---
 
@@ -354,17 +365,54 @@ Beyond this, scaling is mostly cost and operational engineering — renegotiate 
 
 ---
 
+## Insider Tips and Tricks
+
+### GPS Traces Are Noisy — Smoothing Is Required Before Storage
+
+Raw GPS points from a phone contain ±5-15 meter errors, dropout spikes (a point teleporting 500m then back), and tunnels where GPS is lost. Before storing, apply: (1) Kalman filter or Douglas-Peucker simplification to remove noise and reduce point count; (2) outlier removal (discard points implying physically impossible speeds like 300km/h); (3) gap filling for short GPS dropouts via linear interpolation. Store the smoothed trace, not the raw one.
+
+### Activity Data Is Time-Series — Separate It from Relational Metadata
+
+Activity metadata (name, type, start time, athlete ID, distance, duration) belongs in a relational DB (Postgres). The GPS trace (thousands of lat/lng/elevation/timestamp tuples per activity) is time-series data that belongs in a time-series store (TimescaleDB, InfluxDB) or a columnar format in S3 (Parquet). Mixing them means scanning thousands of time-series rows for relational queries, or doing geo lookups on a relational DB that's not optimized for spatial queries.
+
+### Segment Matching Is Computationally Expensive — Run It Asynchronously
+
+A segment is a defined stretch of road. When an activity is uploaded, every segment in the world must be checked against the activity's GPS trace to see if the athlete "completed" that segment. There are millions of segments and an activity can match thousands. This cannot run synchronously during upload. Enqueue a "match segments" job to a queue; workers process it in the background. The athlete sees "Analyzing segments..." for 30-60 seconds after upload before KOMs/PRs appear.
+
+### Segment Leaderboards Use Bounded Sorted Sets, Not Full Scans
+
+For a popular segment with 500K efforts, "find top 10 times" as a `SELECT MIN(elapsed_time) ... LIMIT 10` requires scanning all 500K rows. Use Redis sorted sets: `ZADD segment:{id}:leaderboard elapsed_time effortId` on each segment completion. `ZRANGE` for the top 10 is O(log N + K). For the "friends leaderboard" subset: maintain a separate sorted set per `(segmentId, userId)` pair for the athlete's social graph — fan-out at write time when a friend completes a segment.
+
+### Elevation Data Cannot Come from GPS Alone
+
+GPS altitude is highly inaccurate (±20-30 meters). Strava corrects elevation using a digital elevation model (DEM) — a database mapping lat/lng to ground elevation. On activity upload, replace the GPS altitude for each point with the DEM elevation at that coordinate. This is the "Correct Elevation" feature. The DEM database is several TB of globally gridded elevation data (SRTM, ASTER). Query it with the activity's bounding box for all relevant elevation patches.
+
+### Privacy Zones Are Enforced at Query Time, Not Storage Time
+
+Athletes configure "privacy zones" — circular areas (typically home/work) where their start/end points are hidden. Storing obfuscated traces creates permanent data loss. Instead, store the full trace and apply privacy zone filtering at query time: if any trace point falls within the athlete's privacy zone, clip the displayed trace to start/end outside the zone radius. This allows athletes to change zone settings retroactively without re-processing all historical activities.
+
+### Heatmaps Require Pre-Aggregated Raster Tiles, Not Real-Time Queries
+
+Strava's global heatmap (showing where all athletes have ever run/ridden) represents billions of GPS points. Querying individual activities at heatmap render time is impossible. The architecture: a periodic batch job (daily or weekly) rasterizes all activities into a tile pyramid (Mercator projection, zoom levels 1-16). Each tile is a PNG with per-pixel activity density encoded as color intensity. Tiles are pre-generated and served from CDN — zero query cost at render time.
+
+### Social Feed for Athlete Activities Is the Same Fan-Out Problem as Twitter
+
+When an athlete completes an activity, their followers should see it in their feed. This is identical to social media feed design: fan-out on write for athletes with few followers, hybrid approach for popular athletes (pros with 100K followers). Precomputed feed sorted sets in Redis per follower, async workers on activity upload. The segment leaderboard notification ("You got KOM!") is a separate notification service, not part of the feed.
+
+---
+
 ## Expected Depth by Level
 
 | Area | Mid | Senior | Staff+ |
 |---|---|---|---|
 | **Requirements** | Captures record + view; asks about scale when prompted. | Proactively names offline-tolerance and availability-over-consistency as load-bearing; quantifies 10M concurrent and ingest bandwidth. | Frames the whole design around "phone is source of truth during recording" and derives the ingest/async-enrichment split from that. |
 | **GPS ingest** | Uploads the full GPX at end. | Batched upload during activity, Kafka as durable buffer, idempotent batch IDs. | Explicit partitioning strategy on `activity_id`, tradeoff between time-series DB and blob store with tiering; reasoning about write amplification. |
+| **GPS quality** | Assumes GPS is accurate. | Mentions noise and applies basic outlier removal. | Full smoothing pipeline: Kalman/Douglas-Peucker simplification, outlier removal by speed threshold, gap filling for tunnels, DEM elevation correction replacing GPS altitude — and explains why storing the raw trace is wasteful. |
 | **Offline recording** | Says "retry on network." | Designs a local append-only log with monotonic batch IDs and server reconciliation. | Reconciles client-computed vs server-computed aggregates; articulates the two-truth model and which is canonical for which surface. |
 | **Segment matching** | Mentions checking GPS against segments. | Spatial pre-filter via geohash / R-tree, then geometric match; knows it's async post-complete. | H3 vs S2 vs geohash tradeoffs, tolerance tuning per activity type, handling GPS drift, out-of-order late-arriving points. |
-| **Leaderboards** | Queries a table ordered by time. | Redis sorted sets per (segment, scope), `ZADD` on effort, O(log n) reads. | Scope combinatorics (all-time / year / gender / age / following), follower-scoped on-read merging, privacy filtering on hydration, cold-segment lazy materialization. |
-| **Heatmaps** | Not expected. | Offline batch producing map tiles; CDN serves them. | Pixel aggregation pipeline, log colormap, privacy obfuscation zones, incremental vs full rebuild, vector (MVT) vs raster tradeoffs. |
-| **Feed** | Pull from friends' activity table. | Fan-out-on-write per follower, Redis per-user feed list. | Celebrity fan-out exception, merge-on-read fallback, realtime WebSocket push with pull reconcile. |
-| **Storage tiering** | One database holds everything. | Separates GPS blob (S3) from metadata (Postgres). | Hot time-series DB + cold S3 + Glacier for ancient; reasoning about per-tier $ / query patterns. |
+| **Leaderboards** | Queries a table ordered by time. | Redis sorted sets per (segment, scope), `ZADD` on effort, O(log n) reads. | Scope combinatorics (all-time / year / gender / age / following), follower-scoped fan-out-on-write vs merge-on-read for celebrity followers, privacy filtering on hydration, cold-segment lazy materialization. |
+| **Heatmaps** | Not expected. | Offline batch producing map tiles; CDN serves them. | Pixel aggregation pipeline, log colormap, privacy obfuscation zones applied at aggregation time (not query time), incremental vs full rebuild, vector (MVT) vs raster tradeoffs. |
+| **Feed** | Pull from friends' activity table. | Fan-out-on-write per follower, Redis per-user feed list. | Celebrity fan-out exception, merge-on-read fallback, realtime WebSocket push with pull reconcile; KOM notifications as a separate service. |
+| **Storage tiering** | One database holds everything. | Separates GPS blob (S3) from metadata (Postgres). | Hot time-series DB + cold S3 + Glacier for ancient; reasoning about per-tier $ / query patterns; why mixing time-series in Postgres degrades relational query performance. |
 | **Failure modes** | "Server goes down." | Phone retry, Kafka consumer restart from offset, Redis failover. | Cross-region Kafka lag, segment-matcher backpressure on Saturday peak, heatmap pipeline cost blowout, follower fanout storms on celebrity posts. |
 | **Geo / regional** | Not expected. | Single region + CDN for static and tiles. | Active-active ingest, regional Kafka with MirrorMaker, segment-home-region routing for leaderboards, Glacier tier for cold blobs. |

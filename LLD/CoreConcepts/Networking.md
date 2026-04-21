@@ -1001,6 +1001,275 @@ graph LR
 
 ---
 
+## 🏭 Production Networking Tricks
+
+### HTTP/2 — Multiplexing and Header Compression
+
+HTTP/1.1 opens a new TCP connection per request (or reuses via keep-alive but still serializes). HTTP/2 multiplexes multiple requests over one connection:
+
+```mermaid
+graph TB
+    subgraph "HTTP/1.1"
+        C1[Connection 1: Request A]
+        C2[Connection 2: Request B]
+        C3[Connection 3: Request C]
+        NOTE1[3 separate TCP connections<br/>3x TLS handshakes<br/>3x slow-start overhead]
+    end
+
+    subgraph "HTTP/2"
+        CONN[One TCP Connection]
+        CONN --> S1[Stream 1: Request A]
+        CONN --> S2[Stream 2: Request B]
+        CONN --> S3[Stream 3: Request C]
+        NOTE2[1 connection, 3 parallel streams<br/>1 TLS handshake<br/>Header compression (HPACK)]
+    end
+
+    style NOTE1 fill:#FFB6C1
+    style NOTE2 fill:#90EE90
+```
+
+**gRPC is built on HTTP/2** — this is why gRPC can stream bidirectionally without WebSockets.
+
+**Enable HTTP/2 in Nginx**:
+```nginx
+server {
+    listen 443 ssl http2;    # Enable HTTP/2
+    ssl_certificate /etc/ssl/cert.pem;
+    # ...
+}
+```
+
+---
+
+### HTTP/3 / QUIC — The Future of Web Transport
+
+HTTP/3 replaces TCP with **QUIC (Quick UDP Internet Connections)** — a UDP-based protocol with built-in reliability:
+
+```mermaid
+graph LR
+    subgraph "TCP-based (HTTP/1.1 & HTTP/2)"
+        LOSS[Packet Loss]
+        LOSS -->|Head-of-line blocking| STALL[All streams stall<br/>until lost packet retransmitted]
+    end
+
+    subgraph "QUIC-based (HTTP/3)"
+        LOSS2[Packet Loss]
+        LOSS2 -->|Only affected stream stalls| CONT[Other streams continue<br/>independently]
+    end
+
+    style STALL fill:#FFB6C1
+    style CONT fill:#90EE90
+```
+
+**Key benefits of HTTP/3**:
+- 0-RTT connection resumption (no handshake on reconnect)
+- No head-of-line blocking per stream
+- Connection migration (switch from WiFi → 4G without reconnecting)
+
+**Who uses it**: Cloudflare serves ~25% of traffic over HTTP/3. Google (QUIC since 2013). YouTube, Google Search, Gmail all use HTTP/3.
+
+**In interviews**: Mention HTTP/3 when discussing mobile clients or lossy networks (gaming, video streaming, global users on variable connectivity).
+
+---
+
+### Connection Pooling — Never Open Raw Connections
+
+Opening a database connection takes 50-100ms (TCP handshake + auth + session setup). At 10,000 req/sec, this is catastrophic:
+
+```mermaid
+graph TB
+    subgraph "Without Connection Pool"
+        APP1[App Server: 100 req/sec]
+        APP1 -->|Open new connection each request| DB[(PostgreSQL<br/>Max 100 connections)]
+        NOTE1[❌ 100ms overhead per request<br/>❌ DB connection limit reached quickly]
+    end
+
+    subgraph "With Connection Pool (PgBouncer)"
+        APP2[App Server: 1000 req/sec]
+        POOL[PgBouncer<br/>Pool: 20 connections]
+        DB2[(PostgreSQL<br/>20 actual connections)]
+
+        APP2 --> POOL
+        POOL --> DB2
+        NOTE2[✅ 20 connections serve 1000 req/sec<br/>✅ Sub-ms connection checkout]
+    end
+
+    style NOTE1 fill:#FFB6C1
+    style NOTE2 fill:#90EE90
+```
+
+**PgBouncer configuration** (used at Heroku, Render, Supabase):
+```ini
+[databases]
+mydb = host=localhost port=5432 dbname=production
+
+[pgbouncer]
+pool_mode = transaction    # Pool per transaction (most efficient)
+max_client_conn = 1000     # App can open 1000 connections to PgBouncer
+default_pool_size = 20     # Only 20 actual PostgreSQL connections
+```
+
+**Pool modes**:
+- `session` — one real connection per client session (least efficient)
+- `transaction` — connection returned to pool after each transaction (most common)
+- `statement` — connection returned after each statement (only for simple queries)
+
+**Real numbers**: Shopify runs 50,000+ app connections through PgBouncer pools of ~500 PostgreSQL connections.
+
+---
+
+### TCP Tuning for High-Throughput Servers
+
+Defaults are designed for 1990s internet. Production servers need tuning:
+
+```bash
+# /etc/sysctl.conf on Linux
+
+# Increase backlog — number of connections waiting in accept queue
+net.core.somaxconn = 65535
+net.ipv4.tcp_max_syn_backlog = 65535
+
+# TIME_WAIT: release ports faster (default 60s → affects high-connection-rate servers)
+net.ipv4.tcp_tw_reuse = 1
+net.ipv4.tcp_fin_timeout = 15
+
+# Increase port range for outbound connections (default 32768-60999)
+net.ipv4.ip_local_port_range = 1024 65535
+
+# TCP keepalive — detect dead connections sooner
+net.ipv4.tcp_keepalive_time = 60       # Start probing after 60s idle
+net.ipv4.tcp_keepalive_intvl = 10      # Probe every 10s
+net.ipv4.tcp_keepalive_probes = 6      # Drop after 6 failures (60s total)
+
+# Increase receive/send buffer for high-bandwidth connections
+net.core.rmem_max = 134217728
+net.core.wmem_max = 134217728
+```
+
+**TCP_NODELAY** — Disable Nagle's algorithm for latency-sensitive apps:
+```python
+import socket
+
+sock = socket.socket()
+sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+# Sends small packets immediately instead of batching
+# Critical for: gaming, trading systems, real-time collaboration
+```
+
+---
+
+### Circuit Breakers — Fail Fast, Recover Gracefully
+
+Without circuit breakers, a slow downstream service causes thread pool exhaustion:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Closed: System starts healthy
+    Closed --> Open: Error rate > 50% in 10s window
+    Open --> HalfOpen: Wait 30s (recovery period)
+    HalfOpen --> Closed: Test request succeeds
+    HalfOpen --> Open: Test request fails
+
+    Closed: CLOSED\nAll requests pass through
+    Open: OPEN\nAll requests fail fast (no network call)
+    HalfOpen: HALF-OPEN\nOne test request allowed
+```
+
+```python
+from pybreaker import CircuitBreaker
+
+payment_breaker = CircuitBreaker(
+    fail_max=5,        # Open after 5 failures
+    reset_timeout=30,  # Try again after 30s
+)
+
+@payment_breaker
+def charge_customer(amount):
+    return payment_service.charge(amount)
+
+# When payment service is down:
+# - First 5 calls: try and fail (normal)
+# - After 5th failure: circuit opens
+# - Next 30s: all calls fail instantly (no network wait)
+# - After 30s: one test call tries → circuit closes if success
+```
+
+**Libraries**: Hystrix (Netflix, Java), Resilience4j (Java), pybreaker (Python), go-breaker (Go).
+
+**Netflix** invented Hystrix to handle cascading failures across 700+ microservices. Their rule: every external call has a circuit breaker + timeout.
+
+---
+
+### Service Mesh — Networking as Infrastructure
+
+In microservices, each service needs: retries, timeouts, circuit breakers, mTLS, tracing. A service mesh handles all of this at the infrastructure level (not in application code):
+
+```mermaid
+graph TB
+    subgraph "Service A Pod"
+        SA[Service A]
+        PROXY_A[Envoy Sidecar Proxy]
+        SA --> PROXY_A
+    end
+
+    subgraph "Service B Pod"
+        PROXY_B[Envoy Sidecar Proxy]
+        SB[Service B]
+        PROXY_B --> SB
+    end
+
+    PROXY_A -->|mTLS + retries + tracing| PROXY_B
+
+    CTRL[Control Plane<br/>Istio / Linkerd]
+    CTRL -.->|Configure| PROXY_A
+    CTRL -.->|Configure| PROXY_B
+
+    NOTE[Application code: zero networking code<br/>Sidecar handles: mTLS, retries, circuit breakers, metrics]
+
+    style NOTE fill:#90EE90
+    style CTRL fill:#e1f5ff
+```
+
+**Tools**: Istio (Google), Linkerd (CNCF), AWS App Mesh, Consul Connect.
+
+**Use in interviews**: Mention service mesh when designing microservices that need consistent security (mTLS), observability (distributed tracing), and reliability (retries) without polluting application code.
+
+---
+
+### Real-World Protocol Choices
+
+| Company | Protocol | Why |
+|---------|----------|-----|
+| **Discord** | WebSockets | Real-time messages, voice presence. Maintains 7M+ concurrent WS connections |
+| **Slack** | WebSockets with HTTP fallback | Chat; falls back to HTTP long polling for restrictive firewalls |
+| **Uber** | gRPC for internal, REST for mobile | gRPC for high-throughput dispatch; REST for broad mobile compatibility |
+| **Netflix** | HTTP/2 + gRPC internally | Streaming metadata over gRPC between microservices |
+| **Cloudflare** | QUIC/HTTP3 | Edge servers; 25%+ of traffic is HTTP/3 |
+| **WhatsApp** | XMPP over TCP | Persistent connection; custom protocol on top of XMPP |
+
+---
+
+### Anycast — How Cloudflare / Google DNS Work
+
+Traditional unicast: one IP maps to one server. Anycast: same IP advertised from many locations, BGP routes you to nearest:
+
+```mermaid
+graph TB
+    NYC[User in NYC] -->|DNS lookup 1.1.1.1| NYC_CF[Cloudflare NYC PoP<br/>IP: 1.1.1.1]
+    LON[User in London] -->|DNS lookup 1.1.1.1| LON_CF[Cloudflare London PoP<br/>IP: 1.1.1.1]
+    TOK[User in Tokyo] -->|DNS lookup 1.1.1.1| TOK_CF[Cloudflare Tokyo PoP<br/>IP: 1.1.1.1]
+
+    NOTE[Same IP 1.1.1.1<br/>BGP routes to nearest PoP<br/>~5ms from anywhere on Earth]
+
+    style NOTE fill:#90EE90
+```
+
+**Why it matters**: Anycast makes Cloudflare DDoS-resistant. A 1 Tbps attack hits one PoP, which has spare capacity. The other 299 PoPs are unaffected.
+
+**In interviews**: When discussing global low-latency DNS or DDoS mitigation, anycast is the answer.
+
+---
+
 ## Best Practices
 
 ### Decision Framework

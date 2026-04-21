@@ -11,7 +11,8 @@
 4. [High-Level Design](#high-level-design)
 5. [Deep Dives](#deep-dives)
 6. [Scaling Journey: 0 to Infinity](#scaling-journey-0--)
-7. [Expected Depth by Level](#expected-depth-by-level)
+7. [Insider Tips and Tricks](#insider-tips-and-tricks)
+8. [Expected Depth by Level](#expected-depth-by-level)
 
 ---
 
@@ -60,16 +61,16 @@ GET /click?impression=<signed_impression_id>
   -> 302 Redirect to advertiser destination
 ```
 
-The request is intentionally a `GET` so the browser can follow the redirect without custom client code. The payload is the signed impression ID, verified server-side with an HMAC secret. The click processor never blocks the redirect on a durable write; it pushes to the stream, caches the impression ID, and returns the 302.
+The request is intentionally a `GET` so the browser can follow the redirect without custom client code. The payload is the signed impression ID, verified server-side with an HMAC secret. The click processor never blocks the redirect on a durable write; it pushes to the stream, caches the impression ID, and returns the 302. Critically, the HTTP 200 (or 302) is only returned after the event is durably written to Kafka — if Kafka is unavailable, the click service writes to a local WAL and retries rather than acknowledging an event it has not persisted.
 
 ### Metrics query
 
 ```
 GET /ads/{ad_id}/metrics?from=<ts>&to=<ts>&granularity=minute|hour|day
-  -> { buckets: [ { ts, clicks, unique_users } ... ] }
+  -> { buckets: [ { ts, clicks, unique_users } ] }
 ```
 
-Optional variants roll up by `campaign_id` or `advertiser_id`. All reads hit the pre-aggregated OLAP store, never the raw event stream.
+Optional variants roll up by `campaign_id` or `advertiser_id`. All reads hit the pre-aggregated OLAP store, never the raw event stream. Dashboard responses carry an `"estimated": true` flag until the nightly batch reconciliation has run and finalized the numbers for the queried period.
 
 ---
 
@@ -79,57 +80,89 @@ Optional variants roll up by `campaign_id` or `advertiser_id`. All reads hit the
 Browser click
    |
    v
-[Click Processor]  -- verify HMAC, dedup in Redis -->
+[Click Processor]  -- verify HMAC, dedup in Redis (SET NX, 24h TTL) -->
    |
-   v
-[Kafka / Kinesis]  (partitioned by ad_id, N-day retention)
+   v (durable write before 302)
+[Kafka / Kinesis]  (partitioned by adId+windowBucket, N-day retention)
    |
-   v
-[Stream Processor: Flink]  (tumbling 1-min windows, idempotent sink)
+   +--> [Stream Processor: Flink]  (tumbling 1-min windows, watermarks,
+   |        idempotent upsert sink)
+   |         |
+   |         +--> [OLAP store: Druid / ClickHouse]   (fast approximate tier)
    |
-   +--> [OLAP store: Druid / ClickHouse / BigQuery]
+   +--> [Fraud Detection Job]  (separate Flink job, same topic,
+   |        pattern rules + ML, emits fraud labels)
    |
-   +--> [Data lake: S3]   -- nightly Spark reconciliation
+   +--> [Data lake: S3]   -- nightly Spark reconciliation (exact tier)
                           -- batch results overwrite OLAP rollups
+                          -- discrepancy alert if drift > 0.01%
 ```
 
-The ingest side is tuned for never losing a click: the stream is the source of truth, Redis only exists to drop near-duplicates, and the OLAP store is a materialized view that can always be rebuilt from the lake. The query side is deliberately boring: serve pre-aggregated minute rows out of an OLAP engine that already handles time-series scans efficiently.
+The ingest side is tuned for never losing a click: the stream is the source of truth, Redis only exists to drop near-duplicates, and the OLAP store is a materialized view that can always be rebuilt from the lake. The query side is deliberately boring: serve pre-aggregated minute rows out of an OLAP engine that already handles time-series scans efficiently. Billing always uses the batch-reconciled exact tier, never the streaming approximate tier.
 
 ---
 
 ## Deep Dives
 
-### 1. Exactly-Once vs At-Least-Once
+### 1. Exactly-Once vs At-Least-Once and Why "Exactly-Once" Is a Misnomer
 
-True end-to-end exactly-once does not exist in most distributed pipelines; what we actually want is effectively-once: at-least-once delivery combined with idempotent processing, so duplicates get absorbed. Kafka provides at-least-once by default; Flink's checkpointing plus a sink that can deduplicate (via impression ID or a compound key) gives us the effective guarantee. For ad billing, this is stronger than the "exactly-once" label suggests, because even if Flink replays a window from a checkpoint, the sink will reject the duplicate write.
+True end-to-end exactly-once across a message broker and a downstream store requires two-phase commit between those two systems — prohibitively expensive at scale. What production systems actually implement is effectively-once: at-least-once delivery combined with idempotent processing, so any duplicate that slips through is absorbed without affecting the final count.
+
+Kafka provides at-least-once by default: consumer offsets are committed after processing, but a crash between processing and committing causes re-delivery of the same message on restart. The idempotency key on the consumer side is `(clickId, windowStart)`. Processing the same click twice yields the same result as processing it once, because the OLAP sink performs an upsert keyed on `(ad_id, minute_bucket)` rather than an append. Flink's checkpointing advances the offset only after the sink confirms the upsert, giving a clear recovery point. For ad billing, this is stronger than the "exactly-once" label implies: even if Flink replays a window from a checkpoint, the sink rejects the duplicate write.
+
+The dedup window at the Redis layer is intentionally bounded to 24 hours. Storing impression IDs indefinitely is impractical (unbounded storage growth). A 24-hour window covers the vast majority of retries — network timeouts retry within seconds, not days. The risk is a message that arrives exactly 24 hours late being double-counted; this is accepted as an explicit SLA: "deduplication guaranteed within 24 hours." At 100M impressions/day with a 24-hour TTL and roughly 20 bytes per key, Redis footprint is on the order of 2 GB — well within a single shard.
 
 ### 2. Idempotency via Signed Impression IDs
 
-The dedup key is generated upstream of the click, at render time. The ad placement service issues a fresh `impression_id` per render, signs it with an HMAC secret, and embeds the signed token in the click URL. The click processor verifies the signature (blocking fake click injection), then checks a distributed Redis set for the impression ID. First write wins: if new, publish to the stream and cache the ID; if already present, drop. This stays correct across retries at any layer, including browser reload, CDN replays, or ingest-side retries. At 100M impressions/day and a 24-hour dedup window, the Redis footprint is on the order of a couple of gigabytes.
+The dedup key is generated upstream of the click, at render time. The ad placement service issues a fresh `impression_id` per render, signs it with an HMAC secret, and embeds the signed token in the click URL. The click processor verifies the signature (blocking fake click injection), then checks a distributed Redis set for the impression ID with `SET NX` and a 24-hour TTL. First write wins: if new, publish to the stream and cache the ID; if already present, drop.
 
-### 3. Stream Processing and Windowing
+This stays correct across retries at any layer, including browser reload, CDN replays, or ingest-side retries. The HMAC verification gates entry to the pipeline, so a flood of fabricated click URLs is rejected before touching Redis or Kafka. The combination — HMAC at the edge, `SET NX` in Redis, upsert in the OLAP sink — provides three independent layers of deduplication, each addressing a different failure mode.
 
-Flink reads the Kafka topic partitioned by `ad_id`, applies a tumbling 1-minute window, and emits `(ad_id, minute, count, unique_users)` rows into the OLAP store. Watermarks control when a window is considered closed. Unique-user counting uses HyperLogLog sketches inside each window to keep state bounded; sketches can be merged across windows for longer granularities. The sink uses an upsert keyed on `(ad_id, minute_bucket)` so window replays overwrite rather than duplicate.
+### 3. Stream Processing, Windowing, and Time Bucketing
 
-### 4. Late-Arriving Data
+Flink reads the Kafka topic and applies a tumbling 1-minute window, emitting `(ad_id, minute, count, unique_users)` rows into the OLAP store. Bucketing events into fixed tumbling windows is not just a convenience: it means all aggregation state for a given bucket can be flushed simultaneously when the window closes. Without bucketing, maintaining a sliding count over arbitrary time ranges requires O(events) state per query. With fixed-width buckets: O(window_count) state, which is O(1) for a fixed retention period. The aggregation key is `(adId, windowStartMinute)`.
 
-Clients on poor networks, mobile app wakeups, and retry queues all produce clicks that arrive with timestamps minutes or hours in the past. The system needs two complementary mechanisms:
+Unique-user counting uses HyperLogLog sketches inside each window to keep state bounded (~12 KB per window per ad regardless of distinct user count). Sketches can be merged across windows for longer granularities without reprocessing raw events. The sink uses an upsert keyed on `(ad_id, minute_bucket)` so window replays overwrite rather than duplicate.
 
-- A bounded allowed-lateness on the Flink windows (for example, keep windows open for 10 minutes past their end). Late events within that lag update the live row.
-- An authoritative batch layer. Every raw event is also written to S3. A nightly Spark job recomputes every minute bucket for the prior day from the lake and overwrites the OLAP rows. This is the Lambda-style reconciliation that makes billing data exact, even though the real-time numbers on the dashboard are slightly approximate.
+Watermarks control when a window is considered closed and drive the late-data tolerance mechanism described in Deep Dive 4.
+
+### 4. Late-Arriving Events and Watermarks
+
+A mobile client clicks an ad, goes offline, comes back 10 minutes later, and sends the click event. Without late event handling, this event arrives after the 1-minute window it belongs to has been finalized and flushed — the click is silently dropped and the advertiser is undercharged.
+
+The system uses two complementary mechanisms:
+
+- **Bounded allowed-lateness on Flink windows.** Watermarks advance event time based on observed event timestamps. A configurable tolerance (e.g., 30 minutes) keeps windows open past their nominal close time. Events within the tolerance are assigned to their correct window and trigger a window update to the OLAP sink. This handles the majority of mobile retries and flaky-network cases.
+- **Late-arrival side output.** Events arriving beyond the allowed-lateness tolerance are not dropped — they are routed to a "late events" side output topic. The nightly Spark batch job reads this topic alongside the main S3 event lake and includes late events in its recomputation. The nightly job's output overwrites the OLAP rows, so even clicks that were weeks late end up in the correct billing period once the batch runs.
+
+The key insight: the streaming layer handles the common case cheaply; the batch layer handles the tail case correctly. Neither layer needs to handle both.
 
 ### 5. Hot Advertisers and Hot Partitions
 
-Partitioning by `ad_id` is simple but catastrophic when a single ad goes viral. Two defenses:
+Partitioning Kafka by `ad_id` alone is simple but catastrophic when a single ad goes viral — a Super Bowl campaign can produce millions of clicks in 60 seconds, all routing to one partition and one Flink task. Two defenses:
 
-- Randomized key salting at ingest: rewrite the Kafka key as `ad_id:<0..N>` so the hot ad spreads across N partitions. The stream processor strips the suffix before aggregation.
-- Two-stage aggregation: pre-aggregate within each salted partition, then merge the partial counts in a second Flink operator keyed by plain `ad_id`. This keeps per-task state small on hot keys.
+- **Composite partition key.** Partition by `(advertiserId, windowBucket)` or by `adId` (individual ad ID, which is more granular than advertiser ID) to distribute load. For ultra-high-volume ads, add random salting: rewrite the Kafka key as `ad_id:<0..N>` where N is chosen per ad based on recent traffic volume. The stream processor strips the suffix before aggregation.
+- **Two-stage aggregation.** Pre-aggregate within each salted partition (stage 1), then merge partial counts in a second Flink operator keyed by plain `ad_id` (stage 2). This keeps per-task state small on hot keys and prevents a single partition from stalling the entire job's watermark progress.
 
-OLAP-side hotspots are handled by sharding on `advertiser_id` rather than `ad_id`, which naturally spreads load since a single advertiser usually runs many ads with different popularity profiles.
+OLAP-side hotspots are handled by sharding on `advertiser_id` rather than `ad_id`, which naturally distributes load since a single advertiser runs many ads with different popularity profiles. The metrics API layer fans out queries across shards and merges results.
 
-### 6. Accuracy and Reconciliation
+For the top N advertisers by traffic, dedicated Flink job graphs and dedicated OLAP shards provide hard tenant isolation — a Super Bowl campaign cannot starve smaller clients.
 
-Billing cannot be "close enough." The design treats the OLAP store as a fast approximate cache and the data lake + batch job as the authoritative ledger. Daily, the batch job overwrites the real-time numbers; advertisers see rapidly updating estimates during the day that stabilize to exact numbers overnight. Discrepancies between the two layers also serve as a monitoring signal: a sudden large gap means the stream pipeline has regressed (bad deploy, skew, clock drift).
+### 6. Two Pipelines: Fast-Approximate for Dashboards, Exact for Billing
+
+This is one of the most important architectural decisions in the design, and one that is frequently collapsed into a single pipeline by candidates who then cannot explain how billing can be "exact."
+
+The streaming pipeline (Kafka + Flink) is optimized for freshness, not exactness. It can have bugs, consumer lag, duplicate processing from checkpoint replay, or missed events during a bad deploy. Its output is labelled "estimated" and is appropriate for real-time dashboards where a 1-2% error is invisible and acceptable.
+
+The batch reconciliation pipeline (Spark on raw event logs in S3, running nightly) reads the complete, immutable event history, recomputes all aggregates from scratch, and overwrites the streaming pipeline's outputs in the OLAP store. This pipeline's output is exact, auditable, and legally defensible for billing. Never bill from the streaming pipeline.
+
+Discrepancies between the two layers are a monitoring signal. A continuous diff job compares streaming counts to batch counts for each `(ad_id, minute_bucket)`. Discrepancies above 0.01% trigger alerts and can pause billing exports before incorrect invoices go out. This is not redundant work — it is the audit trail that catches silent streaming bugs before they compound.
+
+### 7. Click Fraud Detection as a Separate Pipeline
+
+Fraud signals — same IP clicking the same ad 100 times in 1 minute, impossible geographic velocity, bot user-agent patterns — must be detected and labeled before fraudulent clicks reach billing counts. This cannot be merged into the aggregation pipeline without coupling two very different computational concerns: aggregation is stateless per window, while fraud detection requires cross-window state and ML model inference.
+
+The fraud detection pipeline is a separate Flink job reading from the same Kafka topic. It applies pattern rules (velocity checks, IP reputation lookups) and optionally ML model scoring, and emits fraud labels to a separate `fraud_labels` topic. The nightly Spark reconciliation job joins raw events against fraud labels, excluding fraudulent clicks from billing counts. This means fraudulent clicks may appear in the real-time dashboard briefly but are excluded from the final billing figures — an acceptable tradeoff.
 
 ---
 
@@ -201,6 +234,50 @@ Billing cannot be "close enough." The design treats the OLAP store as a fast app
 - Observability: continuous diffing between the stream tier and the batch tier emits a drift metric; above a threshold it pages on-call and pauses billing exports.
 
 **What you skip at this point.** Nothing essential; any further scaling is about cost optimization (spot capacity for batch, tiered storage for old minutes, smarter compaction) and product features (sub-second granularity, custom attribution windows).
+
+---
+
+## Insider Tips and Tricks
+
+### "Exactly-Once" Delivery Is a Lie — At-Least-Once + Idempotency Is the Standard
+
+True exactly-once processing across distributed systems requires two-phase commit between the message broker and the downstream store — prohibitively expensive at scale. The production pattern: at-least-once delivery (Kafka consumer commits offsets after processing, but crashes can cause reprocessing) combined with idempotency keys on the consumer side. The idempotency key is `(clickId, windowStart)` — processing the same click twice yields the same result as processing it once.
+
+### Deduplication Windows Cannot Be Infinite
+
+Storing idempotency keys indefinitely is impractical (unbounded storage growth). A 24-hour dedup window covers the vast majority of retries (network timeouts retry within seconds, not days). Keys older than 24 hours are expired from the dedup store (a Redis set with TTL). The risk: a message that's exactly 24 hours late would be double-counted. Accept this as an SLA: "deduplication guaranteed within 24 hours."
+
+### Two Separate Pipelines: Fast-Approximate for UI, Exact for Billing
+
+Dashboard UIs showing "10,234 clicks in the last hour" can tolerate 1-2% error. Billing-critical counts (advertiser charged per click) must be exact, auditable, and legally defensible. Build two pipelines: (1) a streaming pipeline (Kafka + Flink) for real-time approximate counts, used by dashboards; (2) a batch reconciliation pipeline (Spark on raw event logs nightly) for exact counts, used for billing. Never bill from the streaming pipeline.
+
+### Click Fraud Detection Runs on a Separate Real-Time Pipeline
+
+Fraud signals (same IP clicking same ad 100 times in 1 minute, impossible geographic velocity) must be detected before counts reach billing. This is a separate stream processing job reading from the same Kafka topic, applying pattern rules and ML models, and emitting fraud labels. Fraudulent clicks are excluded from billing counts during the nightly reconciliation. Merging fraud detection into the aggregation pipeline couples two very different computational concerns.
+
+### Time Window Bucketing Aligns Flush Times and Reduces State
+
+Bucketing events into fixed tumbling windows (e.g., 1-minute buckets) means all aggregation state for a given bucket can be flushed simultaneously when the window closes. Without bucketing, you'd need to maintain a sliding count over arbitrary time ranges — O(events) state per query. With bucketing: O(window_count) state, which is O(1) for a fixed retention period. Bucket by `(adId, windowStartMinute)` as the aggregation key.
+
+### Late-Arriving Events Use Watermarks to Avoid Losing Data
+
+A mobile client clicks an ad, goes offline, comes back 10 minutes later, and sends the click event. Without late event handling, this event arrives after the 1-minute window it belongs to has been finalized and flushed. Flink/Spark Streaming watermarks allow a configurable late data tolerance (e.g., 30 minutes). Events within the tolerance are assigned to their correct window and trigger a window update. Events beyond the tolerance are routed to a "late data" side output for separate reconciliation.
+
+### Partition Kafka by (advertiserId + windowMinute) to Prevent Hot Partitions
+
+A popular advertiser runs a Super Bowl ad — millions of clicks in 60 seconds, all with the same `advertiserId`. If you partition Kafka by `advertiserId` alone, all these clicks hit one partition and one consumer. Partition by a composite key `(advertiserId, windowBucket)` or by `adId` (individual ad, not advertiser) to distribute load. For ultra-popular ads, consider random partition assignment with cross-partition merge in the consumer.
+
+### The Impression-Click Join Problem
+
+CTR (click-through rate) = clicks / impressions. Both impression events (ad shown to user) and click events (user clicked ad) must be joined by `(adId, userId, sessionId)`. Impressions arrive first; clicks may arrive minutes later. This is a stream-stream join with a time bound. Flink's interval join or a stateful join with a TTL (keep impressions in state for 30 minutes waiting for a matching click) handles this. Implement it as a separate pipeline from pure click counting.
+
+### Nightly Reconciliation Is Non-Negotiable
+
+The streaming pipeline can have bugs, Kafka consumer lag, duplicate processing, or missed events. The nightly batch reconciliation reads the raw event log (Kafka long-term retention or S3 data lake), recomputes all aggregates from scratch, and compares to the streaming pipeline's outputs. Discrepancies above 0.01% trigger alerts. This is not redundant work — it's the audit trail that makes your billing legally defensible and catches silent streaming bugs before they compound.
+
+### A Dropped Click Event Is a Revenue Loss Event
+
+Unlike most systems where a dropped message is an acceptable tradeoff for throughput, dropped click events mean advertisers aren't charged for real clicks (or users aren't credited for referral clicks). Every event must be durably written to Kafka before the HTTP 200 is returned to the client. If Kafka is unavailable, write to a local WAL and retry — never acknowledge a click without durable persistence. Use dead-letter queues for messages that fail processing after N retries.
 
 ---
 

@@ -700,6 +700,130 @@ sequenceDiagram
 
 ---
 
+## 🏭 Production Implementation Details
+
+### Cassandra: 256 Virtual Nodes
+
+Cassandra uses Murmur3 hash and by default assigns **256 virtual nodes (vnodes)** per physical node. This number is configurable in `cassandra.yaml`:
+
+```yaml
+# cassandra.yaml
+num_tokens: 256   # Virtual nodes per physical node
+partitioner: org.apache.cassandra.dht.Murmur3Partitioner
+```
+
+**Why 256?** At 256 vnodes, adding or removing a node redistributes ~1/N of data across ~N neighbors, rather than dumping everything onto one neighbor.
+
+```mermaid
+graph TB
+    subgraph "3-Node Cassandra Cluster"
+        N1[Node 1<br/>256 tokens spread<br/>around the ring]
+        N2[Node 2<br/>256 tokens spread<br/>around the ring]
+        N3[Node 3<br/>256 tokens spread<br/>around the ring]
+    end
+
+    subgraph "Adding Node 4"
+        N4[Node 4<br/>New 256 tokens<br/>steal ~1/4 from each existing node]
+    end
+
+    NOTE[Each of N1, N2, N3 gives<br/>~64 tokens to N4<br/>Total moved: ~25% of data]
+
+    style N4 fill:#90EE90
+    style NOTE fill:#e1f5ff
+```
+
+### DynamoDB: Automatic Partition Splits
+
+DynamoDB uses consistent hashing internally but abstracts it away. Partitions split automatically when:
+- **Size exceeds 10GB** per partition
+- **Throughput exceeds ~3,000 RCU or 1,000 WCU** per partition
+
+```mermaid
+sequenceDiagram
+    participant App
+    participant DDB as DynamoDB
+    participant P1 as Partition 1 (0-50)
+    participant P1A as Partition 1A (0-25)
+    participant P1B as Partition 1B (25-50)
+
+    App->>DDB: Heavy writes to partition 1
+    Note over P1: Approaches 10GB / 3000 RCU
+    DDB->>DDB: Trigger partition split
+    P1->>P1A: Keys 0-25 → Partition 1A
+    P1->>P1B: Keys 25-50 → Partition 1B
+    App->>DDB: Traffic now spread across 1A and 1B
+    Note over App,P1B: ✅ Transparent to application
+```
+
+**Hot partition problem**: If your partition key has low cardinality (e.g., `status = 'pending'`), all writes go to one partition regardless of consistent hashing. This is the DynamoDB hot key anti-pattern.
+
+### Nginx Consistent Hashing for Upstream Proxies
+
+Nginx and HAProxy use consistent hashing to route requests to the same backend (sticky routing without sessions):
+
+```nginx
+upstream backend {
+    consistent_hash $request_uri;   # Route based on URL path
+    server backend1:8080;
+    server backend2:8080;
+    server backend3:8080;
+}
+```
+
+**Use case**: CDN origin routing — same content URL always goes to the same origin server, improving cache efficiency.
+
+### Ketama Algorithm (Memcached Standard)
+
+Libmemcached and most Memcached clients use the Ketama algorithm, which is consistent hashing with a specific MD5-based implementation:
+
+```python
+import hashlib
+import bisect
+
+class KetamaRing:
+    def __init__(self, nodes, replicas=150):
+        self.ring = {}
+        self.sorted_keys = []
+
+        for node in nodes:
+            for i in range(replicas):
+                key = self._hash(f"{node}-{i}")
+                self.ring[key] = node
+                self.sorted_keys.append(key)
+
+        self.sorted_keys.sort()
+
+    def _hash(self, key):
+        return int(hashlib.md5(key.encode()).hexdigest()[:8], 16)
+
+    def get_node(self, key):
+        if not self.ring:
+            return None
+        hash_val = self._hash(key)
+        idx = bisect.bisect(self.sorted_keys, hash_val) % len(self.sorted_keys)
+        return self.ring[self.sorted_keys[idx]]
+```
+
+**150 replicas** is the Ketama default — balances distribution quality vs memory overhead.
+
+### Load Balancer Consistent Hashing (Session Affinity)
+
+AWS ALB, GCP Load Balancer, and Nginx all support consistent hashing for session affinity:
+
+```
+Without consistent hashing:
+- User's requests go to random backend
+- Each backend has its own in-memory session
+- Session data lost on next request
+
+With consistent hashing:
+- hash(user_ip or session_cookie) → always same backend
+- Session stays consistent
+- Backend crash → only that backend's users affected
+```
+
+---
+
 ## 🎤 Interview Strategy
 
 ### When to Discuss Consistent Hashing
