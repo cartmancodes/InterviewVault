@@ -53,6 +53,26 @@ Instagram is a photo- and video-sharing social network. A user uploads rich medi
 
 ---
 
+## 🧒 Layman's Explanation
+
+Imagine a **yearbook of your friends' photos that updates every minute** as everyone keeps adding new pictures. Instead of waiting until June for the printed copy, every time you flip it open, the latest snapshots from the people you care about have already been pasted in. That is what your Instagram feed is — a living yearbook, assembled fresh each time you pull down to refresh.
+
+Or picture a **magic refrigerator door** that auto-organizes photos by who took them and when. You stick a photo on it, and tiny invisible hands sort it onto the right shelves for everyone you've shared it with, newest at the top. You never have to file anything yourself.
+
+Or think of a **photo album shop with infinite albums on infinite shelves**. There is a conveyor belt running through the shop, arranged in chronological order, that grabs only the albums belonging to people you follow and shows them to you in the order they were posted.
+
+Behind the scenes, four little machines do the work. The first is the **photo upload pipeline** — when you tap "share," your photo flies straight into a giant warehouse called S3, then a workshop resizes it into thumbnail, medium, and large copies and stamps them onto a worldwide delivery network (the CDN) so anyone, anywhere, gets the right size fast. The second is the **feed assembler**, which gathers recent posts from everyone you follow.
+
+There are two ways the assembler can work. For most people, the system uses **push** — the moment you post, it stuffs a copy of your post into each follower's mailbox so opening the app is just "read my mailbox." But pushing to a celebrity's 100 million followers would melt the mailroom, so for famous accounts the system uses **pull** — your feed grabs their posts on the fly when you open the app, mixing them with your already-stuffed mailbox. Normal users get push, celebrities get pull.
+
+A third machine handles **stories**, the 24-hour ephemeral posts whose readers all show up in the first few hours like a flash mob, then vanish. And the fourth trick is **cursor pagination** — instead of saying "give me page 2," your phone holds a bookmark pointing to the exact post you last saw, so even as new posts pile up at the top, your scroll position stays glued in place and you never see duplicates or skips.
+
+### When the analogy breaks down
+
+The yearbook metaphor falls apart fast at real scale. Instagram has roughly **500 million daily active users** posting around 100M times a day — no actual yearbook, magic fridge, or album shop comes close. The feed isn't really chronological anymore: an **ML ranking model** reorders posts by predicted engagement, so the "conveyor belt" is actually a smart recommender that demotes posts you'll skip and promotes ones you'll linger on. The platform isn't just photos either — **Reels** (short-form video competing with TikTok), **live streaming**, in-app **shopping** with checkout, and **end-to-end encrypted DMs** all share the same app but have radically different storage, latency, and trust models. And the "delivery network" is a globe-spanning system of regional data centers, edge POPs, ML inference clusters, and integrity systems for spam, copyright, and safety — none of which fit on a fridge door.
+
+---
+
 ## Core Entities
 
 | Entity | Description |

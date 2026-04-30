@@ -65,6 +65,20 @@ Robinhood is a retail brokerage app: users watch prices tick in real time and su
 
 ---
 
+## 🧒 Layman's Explanation
+
+Imagine a really fast lemonade stand connected to the wholesale lemonade market. Kids walk up and place orders ("I want a glass!"), and the stand checks the wholesaler's price — that's the exchange — confirms the price hasn't moved too much, takes the kid's money, and hands over the lemonade. The stand isn't squeezing the lemons; it's a middleman. That's exactly what Robinhood is: a broker sitting between you and the actual stock exchange (NYSE, Nasdaq). Or think of an old 1980s stockbroker phone-in service: customers called in orders, the broker dialed the exchange, got a fill price, and called back to confirm. Robinhood is the same thing — except the call is now an app tap and the round trip is 30 milliseconds.
+
+There are two completely different jobs the system has to do at once. First, the **price feed**: like a giant betting parlor scoreboard with prices flickering as trades land, the system must broadcast the new price for TSLA to every phone watching it within ~200ms. This is read-heavy — millions of phones, one ticker — and it's pushed over WebSocket so phones don't have to ask. Second, **order placement**: write-heavy and strongly consistent, because money is real. There are two flavors of orders: a **market order** ("I'll pay whatever for that lemonade right now") and a **limit order** ("I'll only pay $1 max"). When you place a buy, the system puts a **cash hold** on your buying power so you can't accidentally double-spend it across two orders — the money is reserved until the order fills or cancels.
+
+The hardest moment of the day is **9:30 AM ET market open**: every overnight order from millions of users releases at once, and traffic spikes to 10–50x normal. The system has to absorb that flood without dropping a single order or quoting a stale price.
+
+### When the analogy breaks down
+
+Real Robinhood has to comply with FINRA and SEC rules, reconcile its books against clearing firms (DTCC) every single night, and route orders through market makers via **payment for order flow (PFOF)** — which is how it claims "best execution" while making "free" trading actually pay the bills. And then there's the political fallout: when GameStop went viral in 2021, Robinhood had to halt buying, faced congressional hearings, and learned that being a broker in a meme-stock era is as much a public-relations problem as a systems problem.
+
+---
+
 ## Core Entities
 
 - **User / Account** - identity, KYC status, buying power (cash available), total equity. One user typically has one brokerage account.

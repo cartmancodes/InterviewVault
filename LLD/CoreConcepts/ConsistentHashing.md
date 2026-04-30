@@ -4,6 +4,7 @@
 
 ## 📋 Table of Contents
 - [Overview](#overview)
+- [Layman's Explanation](#-laymans-explanation)
 - [The Problem with Simple Hashing](#the-problem-with-simple-hashing)
 - [How Consistent Hashing Works](#how-consistent-hashing-works)
 - [Virtual Nodes](#virtual-nodes)
@@ -50,6 +51,22 @@ graph LR
     style MODULO fill:#FFB6C1
     style CONSISTENT fill:#90EE90
 ```
+
+---
+
+## 🧒 Layman's Explanation
+
+Forget hash functions and rings for a moment. Imagine you're hosting a **round dinner table** with several waiters stationed evenly around it. Every guest who walks in is seated somewhere along the edge of the table, and the rule is simple: **each guest is served by the next waiter clockwise from their seat.** If a waiter clocks out and goes home, only the guests in *their* slice of the table need to be reassigned to the next waiter — the rest of the room never notices. If you hire a new waiter and squeeze them in between two existing ones, only the guests in that small new wedge get a new server. Everyone else keeps eating in peace.
+
+Another way to picture it: think of a **clock face**. The 12 hour positions are your servers, and every user lands somewhere on the minute hand. Each user is assigned to the *next clockwise hour*. If you add a new tick mark at, say, 7:30, it only steals the users between 7:00 and 7:30 from the 8 o'clock server. No one else's assignment changes.
+
+Or imagine **pizza delivery zones drawn by proximity** — each pizzeria owns the houses closest to it. When a new pizzeria opens up downtown, it only takes the orders from the few blocks immediately around it. Every other pizzeria's existing customers stay loyal to their old shop. No mass re-mapping of the entire city.
+
+Now, the **bad alternative** — modulo hashing — works very differently: imagine if the moment one waiter quit, every single guest in the restaurant had to stand up, leave their seat, and be re-seated from scratch. That's modulo hashing. It works fine until something changes, and then it forces a chaotic reshuffle of the entire room. **That's why we don't do that.**
+
+### When the analogy breaks down
+
+Real consistent hashing adds a twist the dinner-table picture hides: each waiter doesn't actually own one continuous slice — instead, **each waiter has many small seats scattered all around the table** (these are called *virtual nodes*, typically 100–256 per server). This keeps the workload fair, because if one waiter leaves, their many small slices get absorbed by *many* different neighbors instead of dumping everything onto one unlucky coworker. Also, the analogy makes migration look free — in reality, when guests do change waiters, there's a real **cost** to physically moving their plates (data) across the kitchen, which takes network bandwidth and time during rebalancing.
 
 ---
 

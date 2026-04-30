@@ -11,6 +11,7 @@
 - [Understanding the Problem](#understanding-the-problem)
   - [Functional Requirements](#functional-requirements)
   - [Non-Functional Requirements](#non-functional-requirements)
+- [Layman's Explanation](#-laymans-explanation)
 - [Core Entities / Algorithms](#core-entities--algorithms)
 - [API Design](#api-design)
 - [High-Level Design](#high-level-design)
@@ -52,6 +53,28 @@ A distributed rate limiter caps how often a client (user, IP, or API key) can ca
 3. **Scale**: target 1M+ requests per second across 100M+ DAU
 4. **Graceful degradation**: the limiter must not itself cause outages
 5. **Cheap**: per-request cost must be tiny — limiter runs on every call
+
+---
+
+## 🧒 Layman's Explanation
+
+Picture **the bouncer at a nightclub**: only 100 people are allowed inside at a time. Twenty more show up at once? They wait outside in line until someone leaves. The bouncer keeps a clicker counter — that clicker is the rate limit. Every time someone enters, click up; every time someone leaves, click down. Simple, local, effective.
+
+Now picture **a water faucet with a flow regulator**. The handle is fully open, but the regulator only lets 1 gallon per minute through. Try to fill a swimming pool, you'll be waiting all day. That's the **token-bucket algorithm**: tokens drip into a bucket at a fixed rate, and you spend one token per request. If the bucket is empty, you wait for a drip.
+
+A third image: **the single ticket booth at a small museum**. Only one person can buy a ticket at a time. If 50 people show up, queueing is automatic — that's a concurrency limit, a close cousin of rate limiting.
+
+**Why "distributed" makes this hard.** Imagine the nightclub now has 5 doors with 5 bouncers, each holding their own clicker. If they don't talk to each other, you might end up with 5 × 100 = 500 people inside — way over capacity. The bouncers need a **shared count**, like a walkie-talkie or a central whiteboard. That shared whiteboard is **Redis**.
+
+**Per-user vs global limits.** You might allow each user 10 requests/sec, but only 10,000/sec total across everyone. That's two different bouncers checking two different rules — one stamps your hand, one watches the building's overall capacity.
+
+**Token bucket vs sliding window.** Token bucket = the water regulator: smooth, refills slowly, tolerates short bursts. Sliding window = "no more than 100 hits in any rolling 1-minute window" — stricter, harder to game, but more bookkeeping.
+
+**Burst tolerance.** A faucet with a small reservoir can handle short bursts of demand without dropping a single request. That's why bucket-shaped algorithms feel friendly to legitimate users.
+
+### When the analogy breaks down
+
+Real rate limiters serve **billions of requests across global regions**. They have to handle **clock drift between machines** (no two server clocks agree exactly), survive Redis outages without taking down the whole API, and remain precise enough to **bill customers** while still loose enough not to break legitimate traffic spikes. A nightclub bouncer never has to coordinate with bouncers in Tokyo while their clickers tick at slightly different speeds — but a global rate limiter does, every millisecond.
 
 ---
 

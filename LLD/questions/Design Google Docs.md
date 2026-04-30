@@ -71,6 +71,28 @@ For an interview, scope should be pulled down to a plain-text editor. The collab
 
 ---
 
+## 🧒 Layman's Explanation
+
+Imagine a giant chalkboard in a classroom and twenty people are scribbling on it at the same time. Alice is writing a sentence at the left edge. Bob is erasing a word in the middle. Carol is drawing a diagram at the bottom. For everyone to walk away seeing the same chalkboard, somebody has to figure out the order of these scribbles and how each scribble shifts the meaning of the next one. That somebody is the Google Docs server.
+
+Or picture a band jamming together. The drummer doesn't ask permission before hitting a beat — everyone plays simultaneously. The reason it doesn't sound like noise is that they share a rhythm. In Google Docs, the "rhythm" is the document's revision number: every edit is stamped with one, and that's how everybody stays on the same beat.
+
+Or think of a shared notebook where every keystroke is recorded by an arbiter sitting in the middle of the room. If two people cross out the same word at the same instant, the arbiter looks at who got there first and decides which crossing-out actually happened.
+
+The clever trick the arbiter uses is called **Operational Transformation (OT)**. If Alice inserts two characters at position 5, and Bob's edit was meant for position 5 too, the arbiter says "Bob, your edit actually happens at position 7 now, because Alice's insert pushed everything to the right." That rewriting is what keeps the chalkboard consistent.
+
+A few other things the system handles:
+
+- **Single-writer coordinator**: every document has one server in charge of its edit history, so there's never any confusion about what order things happened in.
+- **Cursors and presence**: you can see the colored cursors of everyone else editing, but those cursor blips aren't saved forever — they're ephemeral, like the band's hand gestures during a jam, not the recorded song.
+- **Offline editing**: if your wifi drops, you keep typing into a local buffer. When you reconnect, the server "rebases" your edits on top of whatever changes happened while you were gone — same idea as `git pull --rebase`.
+
+### When the analogy breaks down
+
+Real Google Docs is far more than a chalkboard. It handles rich text formatting (bold, headings, fonts), embedded comments and suggestions, full version history (so you can roll back to last Tuesday), exports to PDF and Word, granular sharing permissions, and tens of millions of concurrent documents across the planet. The chalkboard analogy gets the *concurrency* right, but it hides the mountain of features built on top.
+
+---
+
 ## Core Entities
 
 - **Document**: The logical unit being edited. Has a `doc_id`, an owner, a monotonically increasing `revision` number, and a current text blob (materialized from operations).

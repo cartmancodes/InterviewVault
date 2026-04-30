@@ -64,6 +64,27 @@ The problem sits at the intersection of two system-design patterns. The first is
 
 ---
 
+## 🧒 Layman's Explanation
+
+Imagine a **pizza shop's old-school dispatch board**. The manager has a magnetic whiteboard tracking every in-flight order. When a new ticket comes in, they pin it to the board, glance at which delivery driver is closest and free, and assign it. That magnetic board is exactly what an order dispatcher does — except instead of one pizza shop, DoorDash is running thousands of these boards simultaneously across every city.
+
+Now picture a **taxi cab dispatcher with a CB radio**. A rider yells "I need a ride from 5th and Main." The dispatcher looks at the map of cabs roaming the city, picks the closest one, and radios them. The cab driver gets a few seconds to accept — if they don't, the dispatcher tries the next driver. Local delivery works the same way: when an order pops, the system pings the nearest driver, waits for an acceptance, and falls through to the next candidate if they ignore it.
+
+Finally, think of a **relay race**. Each leg has a different runner — the restaurant prepares the food, the driver picks it up, the customer receives it. If any leg drops the baton — say, the food isn't ready when the driver arrives — the whole relay slows down and everyone waits.
+
+The hard parts:
+
+- **Three sides of the marketplace**: customers, restaurants, and drivers all need different real-time updates. The customer sees "your driver is 5 min away." The driver sees "drive to McDonald's, 2.3 mi." The restaurant sees "order #4521 incoming." One event, three different views.
+- **Geospatial matching**: you don't want to dispatch a driver across town when there's one across the street. That's why systems use geo-indexes like H3 hex grids — a city map carved into chess squares so the dispatcher can ask "who's in this square?" instantly.
+- **Surge pricing**: when 1,000 people in one neighborhood all order at once (rainstorm, sports game ending), drivers are scarce. Prices rise to attract more drivers onto the road. Like the pizza shop charging double on Super Bowl night.
+- **ETAs**: predicting when food arrives is a math puzzle — cooking time + driver pickup + driving time + parking time + walking up the stairs. Each step has its own variance.
+
+### When the analogy breaks down
+
+A real pizza dispatcher couldn't optimize routes for batched deliveries (one driver carrying three orders that all happen to point in the same direction), nor could they run ML models that predict which driver is most likely to accept a given offer based on their recent behavior. Real DoorDash ingests live weather and traffic feeds, rebalances three-sided incentives (driver pay, restaurant fees, customer prices) to keep the marketplace liquid, and does this across millions of orders per day at latencies no human dispatcher could match. The whiteboard works for one shop on one night — it doesn't survive contact with a city-scale, multi-tenant marketplace under unpredictable demand shocks.
+
+---
+
 ## Core Entities
 
 | Entity | Description | Notes |

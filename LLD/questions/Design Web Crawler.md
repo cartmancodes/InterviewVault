@@ -50,6 +50,25 @@ A web crawler starts from a set of seed URLs, fetches each page, stores the HTML
 
 ---
 
+## 🧒 Layman's Explanation
+
+Imagine a librarian whose job is to read every book ever written. They start with a few books, and at the back of each one is a list of footnotes pointing to other books. They read those, follow their footnotes, and keep going — forever. Every few weeks they re-read everything to see what changed. That's a search engine crawler like Googlebot. Now imagine they have to politely knock on each library's door, only enter if welcomed (that's `robots.txt`), and never linger long enough to disturb the other patrons (that's rate limiting).
+
+Another way to picture it: a traveling salesman who visits every shop in every town, takes a photo of the storefront and the menu, and comes back next month to see what's changed. They keep a running list of next-towns based on the road signs they see at each shop. Or — and this is literally where the name comes from — a spider walking a web: each strand connects to another, and the spider follows each one but never the same strand twice in the same trip.
+
+The hard parts:
+
+- **The frontier (URLs to visit next)**: the crawler keeps a giant queue of URLs. Every page it reads adds new URLs (its outbound links) to that queue. Without dedup, you'd visit the same page billions of times.
+- **Politeness**: hitting one website 1000 times per second will get you blocked. Crawlers throttle per-domain — like a librarian who's allowed only one borrower per branch per minute.
+- **Re-crawling for freshness**: news sites change hourly, Wikipedia changes daily, archived government docs change yearly. Smart crawlers prioritize what's likely to be stale.
+- **Detecting near-duplicates**: many sites mirror each other (a CNN article syndicated to 100 newspapers). You don't want 100 copies in your index. Perceptual hashing (SimHash) recognizes "this is essentially the same article."
+
+### When the analogy breaks down
+
+A real Googlebot crawls trillions of pages, deals with JavaScript-heavy sites that don't render until executed, handles spam farms and adversarial cloaking (sites serving different content to crawlers vs users), and prioritizes pages by PageRank — all far beyond what a polite traveling librarian could ever manage.
+
+---
+
 ## Core Entities
 
 | Entity | Purpose | Typical Store |

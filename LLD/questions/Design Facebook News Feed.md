@@ -52,6 +52,28 @@ A news feed delivers a personalized, reverse-chronological (or ranked) stream of
 
 ---
 
+## 🧒 Layman's Explanation
+
+Strip away the jargon and the news feed is basically a **gossipy friend** — the one in your social circle who somehow knows what everyone's been up to and gives you the highlights every time you bump into them. They don't tell you everything (you'd be there for hours); they cherry-pick the 30 things you're actually likely to care about, sorted roughly by what they think will interest you most.
+
+Another way to picture it: you're an **editor of a personal newspaper** that comes out fresh every time you open the app. You have 500 friends, all of whom file stories every day. The front page only fits 30 articles. Your job — well, the system's job — is to decide which 30 deserve the front page and in what order.
+
+A simpler framing: a **bulletin board with limited space**. Hundreds of friends pinning notes. The board can't show them all, so it picks which to display first, demotes the boring ones, and refreshes constantly.
+
+### The hard parts in plain language
+
+- **Push (fan-out on write)**: when your friend posts a photo, the system *immediately copies that post into your pre-built feed list*. Your reads are then trivially fast — just read your own list. The downside: your friend with 100M followers triggers 100M writes per post. That's why we don't push for celebrities.
+- **Pull (fan-out on read)**: for celebrities, we *don't* pre-copy. Instead, when you open the app, the system fetches the few celebrities you follow, queries their recent posts live, and merges them in. Reads are slower but writes stay sane.
+- **Hybrid is the real answer**: push for normal accounts, pull for celebrities, merge at read time. Nearly every social network at scale does this.
+- **Ranking**: pure newest-first feels nice but loses to ML-ranked feeds where each candidate post is scored on "how likely will this person engage?" Higher scores float up.
+- **Cursor pagination**: as you scroll, new posts keep arriving at the top. If pagination used "skip 20, give me the next 20" you'd see duplicates and skips. Cursors freeze your reading position.
+
+### When the analogy breaks down
+
+The real Facebook News Feed is one of the most sophisticated production ML systems on Earth. It's retrained constantly on billions of engagement signals, weaves in ads from a real-time auction, balances political content under regulatory scrutiny, suppresses misinformation, and personalizes per user across multiple surfaces (feed, Reels, Stories, Marketplace). The friendly gossip analogy hides all of that — and the operational machinery (Kafka pipelines, sharded fan-out workers, hot-key mitigation, multi-region replication) needed just to keep the lights on at 2 billion DAU.
+
+---
+
 ## Core Entities
 
 | Entity | Description |

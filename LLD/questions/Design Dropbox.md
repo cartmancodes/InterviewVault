@@ -64,6 +64,26 @@ The availability-over-consistency choice is load-bearing: it is what lets us lea
 
 ---
 
+## 🧒 Layman's Explanation
+
+Imagine a magic shared closet. You have a closet in your house that's somehow connected to identical closets in your friends' houses. Hang a coat in yours, and within seconds the same coat appears in all of theirs. Take it down, and it disappears from all of them too. That's file sync — the closet (folder) feels local and personal, but it's actually mirrored across every device that's invited in. Dropbox is that closet, scaled to billions of items and millions of people.
+
+Or picture a photocopier with autopilot. Every time you put a paper in your tray, an invisible elf instantly photocopies it to your office, your coworker's office, and your home office. Now here's the clever part: if you update one page in a 1000-page book, the elf doesn't re-photocopy the entire book — it only photocopies the page that changed. That's chunking. Files are split into small pieces, and only the pieces that actually changed are sent over the wire. It's the difference between mailing a single revised page versus shipping the whole encyclopedia every time.
+
+Or think of a shared family fridge magnet board. Anyone can add a note, anyone can remove one, and everyone sees the latest state without having to ask "what's on the board right now?"
+
+**Sync conflicts.** What if you and your friend both grab the same coat at the same instant? Someone has to resolve who keeps it. Dropbox doesn't pick a winner and silently throw the other coat away — it keeps both, and renames the loser's copy to something like "coat (conflicted copy from your friend)." Nothing gets lost; you just have to decide which one to actually wear.
+
+**Large files.** You don't re-photocopy a 1000-page book every time someone underlines one sentence. Only the changed page gets sent. This is why a 5 GB video edit doesn't take all night to sync.
+
+**Bandwidth.** If you and your kid are both syncing photos at the same time, the home WiFi is trying to push everything to "the cloud" at once and slows to a crawl. Smart sync clients prioritize — small metadata changes go first, big bulk uploads happen in the background, and important folders get queue priority.
+
+### When the analogy breaks down
+
+Real Dropbox is far stranger than a magic closet. It encrypts every chunk so even Dropbox employees can't read your files, manages literally trillions of file chunks across global data centers, and uses *content-defined chunking* — a clever rolling-hash trick that catches edits anywhere inside a file (not just at fixed boundaries), so inserting one byte at the start of a 10 GB file still only re-uploads one chunk. And conflict resolution at scale isn't just "name the loser's copy weirdly" — it's a careful dance of revision numbers, version vectors, and three-way merges, all running across millions of devices that drop offline and reappear constantly.
+
+---
+
 ## Core Entities
 
 Three entities are enough to reason about everything else:

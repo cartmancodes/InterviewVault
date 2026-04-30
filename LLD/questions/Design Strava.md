@@ -58,6 +58,20 @@ Strava records an athlete's run or ride as a time-ordered stream of GPS samples,
 
 ---
 
+## 🧒 Layman's Explanation
+
+Imagine a 1950s running club logbook. After each run, members scribble their route, distance, time, and elevation gain into a leather-bound book on the clubhouse desk. Every Sunday the club secretary flips through the week's entries and tallies leaderboards — fastest over the river loop, most climbing, longest run. Strava is that logbook, except every entry is GPS-tagged, the secretary is software, and leaderboards update in near real time for millions of athletes worldwide.
+
+Or picture a pedometer with a memory. Every step is recorded, but this pedometer also knows where you were and how fast you moved, and lets you compare your time over this stretch of road against everyone who ever ran it. Or think of geocaching, but for running: ordinary roads become competitive courses. "Fastest time over Hawk Hill" turns a Marin County climb into a global arena with its own leaderboard.
+
+Concretely the system must: (1) **ingest GPS data** — phones emit a stream of (lat, long, timestamp) tuples, sometimes glitchy (a point teleports 500 m and snaps back), sometimes interrupted (tunnels, dead batteries) — and smooth that mess into a usable trace. (2) **Match segments** — a "segment" is a famous bit of road like Hawk Hill; the system geometrically matches your GPS trace and times your effort against millions of others. (3) **Maintain KOM/QOM leaderboards** (King/Queen of the Mountain) per segment, sorted by fastest time, refreshed as new efforts arrive. (4) **Protect privacy** — hide home addresses from public maps (the infamous heatmap incident that revealed military base locations is the cautionary tale). (5) **Aggregate heatmaps** anonymously, showing where a city's runners go without exposing any individual.
+
+### When the analogy breaks down
+
+Real Strava handles billions of activities, runs ML to classify activity type (run vs hike vs ride from movement profile), overlays photos onto routes, and plans new routes. The logbook captures the shape — log activity, tally results — but misses scale, real-time enrichment, and the dual challenge of motivation and privacy that comes with broadcasting where millions of people physically are.
+
+---
+
 ## Core Entities
 
 | Entity | Fields | Notes |

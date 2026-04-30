@@ -57,6 +57,18 @@ Yelp is a local-business discovery platform. A user standing on a street corner 
 
 ---
 
+## 🧒 Layman's Explanation
+
+Picture the **community bulletin board at the corner coffee shop** — the one plastered with handwritten "best plumber in town" notes and curling flyers for the dumpling place two blocks over. Yelp is that bulletin board scaled to every street corner of every city on the planet. Or think of the **Michelin Guide**, except instead of a small army of anonymous inspectors handing down rankings once a year, anyone with an opinion and a phone can review anything, and the rankings reshuffle every single day. Better yet, imagine a friend who has eaten everywhere — the kind who, when you say "I'm at Union Square and I want Thai," instantly answers "walk three blocks to that little place on 16th, skip the one on the corner, the pad see ew is the move."
+
+Several pieces of machinery quietly make that fantasy work. **Geospatial search** is how the system answers "Italian within 1 mile" without scanning ten million businesses — it carves the world into grid tiles using geohashes, R-trees, or H3 cells so a radius query becomes a handful of indexed lookups. **Reviews aggregation** is trickier than it looks: a single 5-star review is suspicious in a way that 500 reviews averaging 4.6 are not, so we use Bayesian averaging that pulls thin samples toward the global mean until enough evidence accumulates. **Photos** are heavy, so users upload directly to S3 and we serve resized variants through a CDN — the API never sees the bytes. **Search ranking** is a weighted blend of distance, ratings, review count, business hours, and recency, because a 4.8-star place ten miles away usually loses to a 4.2-star place half a mile away. And because money attracts mischief, **spam and fake-review detection** has to handle businesses paying for 5-stars, competitors planting 1-stars, and coordinated review-bombing — fast heuristics at write time and ML classifiers running asynchronously catch most of it.
+
+### When the analogy breaks down
+
+The friend-who-knows-everywhere picture skips a lot. Real Yelp runs a serious **content moderation** operation with human reviewers and policy appeals. It runs **sponsored ad auctions** so businesses can pay to appear above organic results, which adds a whole bidding and pacing system. It supports **business owner responses**, public replies that turn reviews into two-sided conversations. It tracks **check-ins**, geofenced presence signals that feed ranking and fraud detection. And it fights an ongoing **fake-review arms race** against review brokers, bot farms, and reputation-laundering services that evolve faster than any single ML model — the real defense is a continuously retrained pipeline plus human investigators, not a clever algorithm shipped once.
+
+---
+
 ## Core Entities
 
 | Entity | Key Fields | Notes |

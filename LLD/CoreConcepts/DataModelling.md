@@ -49,6 +49,24 @@ graph TB
 
 ---
 
+## 🧒 Layman's Explanation
+
+Data modelling is the boring-but-load-bearing decision of *how to organize your stuff before you have any stuff*. A few ways to picture it:
+
+**The filing cabinet.** Imagine you're setting up a paper filing system for a small accounting firm. Do you organize folders by client, by date, or by project type? Each choice makes some questions trivial and others painful. Filing by client makes "show me all of Acme Corp's invoices" a five-second task — just walk to the Acme drawer. But "show me every invoice from March across all clients" now means opening every single drawer. Data modelling is choosing your filing system *before* the paperwork starts piling up, knowing that some questions you haven't thought of yet will be easy and others will require a Saturday.
+
+**IKEA furniture vs. a Tetris stack.** A relational schema is like furniture from a kit — clean, structured, every screw has a labelled hole, and the instructions assume you'll never want to add a drawer. It's beautiful when your needs match the manual. A NoSQL/document store is more like a Tetris stack — flexible, fits oddly-shaped things, you can shove almost anything in. The price is that nobody else can find anything without a map, and the stack wobbles when it gets tall.
+
+**Restaurant menu vs. supermarket.** A menu (relational) has rigid categories — appetizers, mains, desserts — and the kitchen knows exactly what to do with each. A supermarket (document store) lets you put cereal next to motor oil if that's how customers shop, but you'd better have great signage or your shoppers will get lost.
+
+**Normalization is the kitchen vs. the pantry.** Normalized: you keep one master spice list, and every recipe card just says "see spice #14." Saves space, and if you change "cumin" to "ground cumin," it updates everywhere. Denormalized: you write the full spice description on every recipe card. Faster to cook from a single card, but if you rename a spice, you're rewriting the entire cookbook.
+
+### When the analogy breaks down
+
+Real schemas evolve. The filing system that perfectly fits today's queries will buckle under tomorrow's product launch — a new feature asks a question your drawers don't answer, and suddenly every search is a Saturday. Migrations are the unglamorous fix: rearranging the entire filing cabinet at midnight, while customers are still trying to file things into it. The best modellers don't pick the "correct" schema; they pick one that's easy to *re-arrange* when reality changes the questions.
+
+---
+
 ## 🗄️ Database Model Options
 
 ```mermaid

@@ -67,6 +67,25 @@ The second pressure comes from the read side. A popular auction can have thousan
 
 ---
 
+## 🧒 Layman's Explanation
+
+Picture a live auction house: bidders raise paddles, an auctioneer calls out higher and higher numbers, and the gavel drops on whoever shouted the largest figure first. eBay is exactly that, just asynchronous and online — replace the room with a web page, the paddle with a "Place Bid" button, and the auctioneer with a server. It's also like the schoolyard "I'll trade you my baseball card for $10... no, $11... no, $12!" except a referee with a stopwatch enforces the rules. Or a charity silent auction with sealed envelopes, but every envelope is opened in real time and everyone sees the current high bid the instant it changes.
+
+The hard parts all come from the fact that money and time are real:
+
+- **Bid ordering**: two bids arriving at "the same instant" still need a winner. The server's clock decides — client clocks lie all the time (a phone three seconds fast would always win the last second). The first thing the server does is stamp the bid with its own timestamp.
+- **Concurrency on one auction**: in the final ten seconds of a hot auction, 500 people may be mashing the bid button. The system has to line them up single-file — usually with a Redis Lua script or a database row lock — so each one sees the previous bid before deciding whether theirs is high enough.
+- **Real-time updates**: every viewer's screen needs to update within roughly a second. Polling 100,000 viewers per second is wasteful, so the server pushes updates over WebSockets instead.
+- **The closing cliff**: a bid arriving 1 ms before the deadline wins; 1 ms after, it loses. The server's clock is the only one that counts.
+- **Soft close**: like real-world auctions, if a bid lands in the last 30 seconds, the deadline gets extended. This kills "sniping" — placing a bid in the final second so nobody has time to respond.
+- **Durability**: once the server says "your bid is in," it must never lose that bid. Money is real, and the winning bid pays the bill.
+
+### When the analogy breaks down
+
+A real auction house has one auctioneer and one room. eBay runs millions of concurrent auctions across the planet. It also handles proxy bidding (set your max, the system bids for you up to it), reserve prices (the seller can secretly require a minimum), multiple currencies, fraud detection on bidders and sellers, and cross-border shipping logistics after the gavel drops. None of those exist in the schoolyard.
+
+---
+
 ## Core Entities
 
 | Entity | Description | Notes |

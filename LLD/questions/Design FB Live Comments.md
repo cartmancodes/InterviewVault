@@ -54,6 +54,26 @@ Facebook Live Comments is the stream of chat that floats over a live video while
 
 ---
 
+## 🧒 Layman's Explanation
+
+Picture a **stadium crowd cheering during a touchdown**: 80,000 people are simultaneously yelling reactions. The whole stadium hears the rumble — but you can't transcribe every individual scream. The system has to figure out which voices to amplify and which to merge into background noise. FB Live Comments works the same way: you can't show every comment from a million viewers, so you sample, prioritize, and let the rest blur into the crowd.
+
+Or think of a **live concert with a digital wall behind the stage**: as fans tweet, their messages scroll on a giant LED wall behind the band. Latency matters — a comment from 5 seconds ago is stale because the band has already moved on to the next chorus. The chat needs to feel like it's *in the moment*, not a delayed transcript.
+
+Or a **radio talk show with a phone-in line**: only a handful of callers actually get on the air, but tens of thousands try. The producer (a combination of rate limiter and ranking algorithm) decides who speaks. That gatekeeping is not a bug — it's the only way the show stays watchable.
+
+The hard parts behind this:
+- **Massive write fan-out**: one celebrity Live stream might have a million viewers. If everyone comments, that's a million writes per second to one stream's comment list — the classic "hot key" problem. One row, one shard, all the heat.
+- **Real-time delivery to viewers**: WebSockets push comments to viewers instantly — but you can't show a million comments per second on a phone screen. The client samples, or shows only the most-liked, because human eyeballs cap out far below the firehose rate.
+- **Ordering**: if Alice comments at the same instant as Bob, who appears first? The server timestamp wins — there's no global truth, just a referee that picks one.
+- **Slow viewers**: if your phone is on 3G, you can't keep up with the comment firehose. The server coalesces — drops older comments and sends only the latest, so you see "now" instead of falling further and further behind.
+
+### When the analogy breaks down
+
+Real Facebook Live is messier than a stadium. It handles dozens of languages simultaneously, ranks comments by author popularity (verified users, friends, broadcasters surface above strangers), suppresses spam and abuse in real time with ML classifiers, and the "stadium" is actually a globally distributed pool of WebSocket gateways with cross-region replication — so the cheering in Tokyo, São Paulo, and Berlin is all stitched together into one feed without any single building being big enough to hold the crowd.
+
+---
+
 ## Core Entities
 
 | Entity | Fields | Notes |

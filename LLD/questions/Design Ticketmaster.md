@@ -63,6 +63,26 @@ Ticketmaster is an online ticketing platform where fans discover events (concert
 
 ---
 
+## 🧒 Layman's Explanation
+
+Picture the **concert box office during a Taylor Swift onsale**: there are 50,000 seats inside the stadium, but at 10:00 AM there are 2 million people online refreshing their browsers. Somebody — some piece of software — has to make sure no two fans get assigned the same seat, that nobody walks away with 100 seats while others get zero, and that the line behaves fairly. That's the entire job of Ticketmaster's backend.
+
+Now think about the **high-school dance with limited tickets**: when you finally get to the front of the line, the volunteer "holds" a ticket for you for 10 minutes while you run to the ATM for cash. If you don't come back in time, your hold is released and the next person in line gets it. That 10-minute hold is exactly the seat-hold pattern — a temporary reservation, not a final purchase.
+
+Or the **movie theater kiosk seating chart**: you tap a seat, it turns yellow (held just for you), then green (purchased) once you pay. If two people somehow tap the same seat at the same instant, only one wins — the system has to pick a winner deterministically and tell the loser "sorry, try another seat."
+
+**Key challenges:**
+
+- **The thundering herd**: at 10:00:00 AM exactly, 2 million browsers refresh in the same second. You need a **waiting room** — like a velvet rope at a club — to admit users in controlled waves rather than letting them all stampede the door at once.
+- **Holding a seat without paying yet**: the 10-minute purchase window is a real auction-house concept. You get a brief, exclusive option to buy. If it expires, the seat falls back into the pool for someone else.
+- **Bots vs humans**: bots are like scalpers who hire 100 friends to stand in line for them. Captchas, rate limits, and reCAPTCHA are your bouncers — they don't catch everyone, but they make the cost of cheating much higher.
+
+### When the analogy breaks down
+
+A real venue is far stranger than a high school dance. It has dozens of price tiers (floor vs nosebleed), dynamic pricing that changes by the minute, presales for credit-card holders and fan-club members, fan codes that gate access, geographic restrictions ("UK residents only"), and a parallel resale market where the same ticket can be sold a second time at a markup. Ticketmaster is less "one ticket booth" and more "an entire financial exchange for seats" — with all the regulatory, fraud, and arbitrage problems that implies.
+
+---
+
 ## Core Entities
 
 | Entity | Purpose | Key Attributes |

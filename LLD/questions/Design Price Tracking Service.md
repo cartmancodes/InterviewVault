@@ -57,6 +57,26 @@ A price tracking service (in the spirit of CamelCamelCamel) lets users look up t
 
 ---
 
+## 🧒 Layman's Explanation
+
+Imagine you have a friend who watches the grocery store flyer for you every single week. The moment your favorite cereal hits $2.99, they text you: "buy now!" You no longer have to manually walk past 50 different stores checking shelf prices. That friend, scaled up to the entire internet, is a **price tracking service**. CamelCamelCamel and Honey are the most famous examples — they watch product pages on Amazon (and other retailers) and tell you when something on your wishlist drops below the price you're willing to pay.
+
+Another way to think about it: there are services like Yahoo Finance that show you the historical chart of a stock's price. A price tracker is the same idea, but for consumer goods. You can pull up a chart and see whether Amazon's "Big Sale!" banner is genuine or whether the listed price is actually higher than it was last month — a notorious trick retailers play. It's also a bit like a weather alert system, except the storm front you're watching is "Sony headphones dropped below $250."
+
+Under the hood, several things have to work together:
+- **Web scraping:** the service visits Amazon and Walmart product pages on a schedule and pulls the price out of the HTML. It has to look like a real browser and respect rate limits so the retailer doesn't slam the door shut.
+- **Smart scheduling:** popular items get checked hourly; obscure items get checked once a day. Hot products earn more attention because that's where users are watching.
+- **Storage:** millions of products multiplied by years of history is a tidal wave of data points, so the service uses a time-series database optimized for that shape.
+- **Alerts:** when the price crosses your target, an email or push notification fires.
+- **Anti-bot detection:** Amazon does not love being scraped. CAPTCHAs, rate limits, and IP rotation become a daily battle.
+- **Browser extension:** install a plugin and the historical price chart appears inline on the product page itself, so you can decide right there whether to buy.
+
+### When the analogy breaks down
+
+A flyer-watching friend is purely passive — they read the prices, you decide. Real services like Honey do far more: they integrate directly with the checkout page to auto-apply coupon codes, recommend cashback offers, and even detect dynamic pricing where Amazon shows *you* a different price than it shows your neighbor. That kind of personalized-pricing detection requires comparing prices across many users in real time, which is a significantly harder problem than simply watching a single product page on a schedule.
+
+---
+
 ## Core Entities
 
 | Entity | Fields | Notes |

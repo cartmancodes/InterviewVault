@@ -76,6 +76,25 @@ Tinder is a location-aware dating application where users view a vertical stack 
 
 ---
 
+## 🧒 Layman's Explanation
+
+Picture a **speed-dating event with a giant deck of profile cards**. The matchmaker (the system) hands you cards one at a time, and you flip "yes" or "no" by swiping. You never see who flipped "yes" on you — it's a private decision. But if two people both flipped "yes" on each other, the matchmaker rings a bell and introduces you. That bell is a **match**.
+
+It's also like the old **dating game show**: contestants don't see who picked them until they pick someone back. The mutual-yes is the moment of revelation — anything before that stays hidden, which is what makes it feel safe to swipe right. Or imagine a **photo wall at a high school reunion**: you walk past, look at faces, and decide who you'd want to talk to. The reunion organizer quietly tracks the overlap and only tells you about the people who also wanted to talk to you.
+
+The interesting parts are all about how the matchmaker manages the deck:
+
+- **The geo-stack of cards.** The matchmaker hands you cards from people who are physically nearby first, because nobody wants a date 2,000 miles away. The deck is sorted by proximity before anything else.
+- **Don't show the same person twice.** Like a deck of cards — once you've swiped, that profile shouldn't reappear in your feed for a long time. The matchmaker keeps a list of every face you've seen and pulls those out of the next deal.
+- **Hot profiles get swarmed.** The most popular person at the speed-dating event would be approached by everyone. The matchmaker has to gently regulate this so the most-wanted person's inbox doesn't drown and the system doesn't buckle under everyone reaching for the same card at once.
+- **Match storage.** When two people both say yes, it's like signing a guest book together — that match is permanent until one person tears the page out (an unmatch).
+
+### When the analogy breaks down
+
+A real matchmaker is polite and one-at-a-time. Real Tinder uses ML ranking, Elo-like attractiveness scores that quietly tier users into pools, paid features (Boost, Super Like, Top Picks) that buy a card priority change, and fraud detection at scale to filter bots and romance scams — far beyond a polite matchmaker with a stack of cards.
+
+---
+
 ## Core Entities
 
 | Entity | Purpose | Key Fields |

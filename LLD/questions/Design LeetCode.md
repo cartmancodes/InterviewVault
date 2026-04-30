@@ -53,6 +53,25 @@ LeetCode is a platform where engineers practice algorithmic problems by writing 
 
 ---
 
+## 🧒 Layman's Explanation
+
+Imagine a **locked-down chemistry classroom**. Students bring in their own experiments — bottles of who-knows-what — but the teacher only lets them mix anything inside a sealed **fume hood** at the back of the room. If something explodes or melts or releases chlorine gas, it stays trapped inside the hood. After class, the hood is bleached spotless before the next student walks in. That hood is the **sandbox**: an isolated bubble where untrusted user code can run without ever touching the rest of the school. Critically, the chemistry classroom itself is in a separate building from the cafeteria — Firecracker microVMs and gVisor are how you achieve that physical separation, not just a curtain.
+
+Or think of a **test kitchen at a TV cooking show**. Chefs can attempt experimental soufflés in a kitchen wired off from the real restaurant. If the experiment burns down the test kitchen, dinner service in the actual restaurant is uninterrupted. That is exactly the relationship between a worker container and the host machine: a fire in the worker should never reach the API server.
+
+Or a **driving simulator versus a real highway**. The user can crash, drive backwards, run every red light, and the only consequence is a reset. The simulator just spins up a fresh world for the next driver.
+
+The other big challenges follow the same metaphors:
+- **Resource limits** are like preventing a malicious student from emptying the entire bottle of acid into one experiment to flood the room. CPU-second caps, memory ceilings, and process counts keep one bad actor from monopolising the lab.
+- **Test cases** are a recipe judging panel. You submit your soufflé, the judges taste it against the known standard, and they call out pass or fail per spoonful.
+- **Real-time leaderboards** are the cooking competition's "current standings" board, updated live as each contestant plates their dish.
+
+### When the analogy breaks down
+
+A real chemistry classroom handles maybe one experiment at a time, in one language: chemistry. Real LeetCode supports 20+ programming languages, processes millions of submissions a day, must actively detect submissions that are trying to *escape* the fume hood (kernel exploits, judge-cheating, code-similarity rings), and serves an interview-prep audience whose patience for slow execution is essentially zero. The fume hood, in other words, has to be planet-scale, multilingual, adversary-aware, and faster than the student writing the code.
+
+---
+
 ## Core Entities
 
 | Entity | Key Fields | Notes |
