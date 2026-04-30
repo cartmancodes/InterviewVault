@@ -411,10 +411,10 @@ Value: {
 
 ```mermaid
 graph LR
-    T0[t=0<br/>Set]
-    T1[t=60s<br/>FRESH expires]
-    T2[t=1830s<br/>STALE expires]
-    T3[t > 1830s<br/>Cache dead]
+    T0["t=0<br/>Set"]
+    T1["t=60s<br/>FRESH expires"]
+    T2["t=1830s<br/>STALE expires"]
+    T3["after 1830s<br/>Cache dead"]
 
     T0 -->|return cached| T1
     T1 -->|return stale + revalidate| T2
@@ -589,6 +589,7 @@ A common production pattern: use Pub/Sub for low-latency wake-up + a durable sto
 
 ```mermaid
 sequenceDiagram
+    participant Producer
     participant Worker
     participant R as Redis
     participant DB
@@ -596,10 +597,8 @@ sequenceDiagram
     Worker->>R: SUBSCRIBE work.ready
     Note over Worker: Idle, waiting
 
-    par Producer side
-        Producer->>DB: INSERT INTO jobs
-        Producer->>R: PUBLISH work.ready ""
-    end
+    Producer->>DB: INSERT INTO jobs
+    Producer->>R: PUBLISH work.ready ""
 
     R-->>Worker: message
     Worker->>DB: SELECT * FROM jobs WHERE status='pending' LIMIT 10
@@ -767,12 +766,12 @@ sequenceDiagram
 
     Writer->>DB: UPDATE product 123
     Writer->>R: INCR {product:123}:ver
-    Writer->>R: PUBLISH cache.bump "{product:123}"
+    Writer->>R: PUBLISH cache.bump {product:123}
     R->>App1: bump message
     R->>App2: bump message
     App1->>App1: drop L1 entry for product:123
     App2->>App2: drop L1 entry for product:123
-    Note over App1: Next read goes to L2,<br/>sees new ver, refetches
+    Note over App1: Next read goes to L2, sees new ver, refetches
 ```
 
 The pub/sub message tells L1 caches to drop their entry. The Redis version key is the durable source of truth — even if pub/sub drops the message, the next L1 miss will read the current version from Redis and behave correctly.
