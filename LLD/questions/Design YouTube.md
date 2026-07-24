@@ -1,30 +1,34 @@
-# Design YouTube
+# 📺 Design YouTube
 
 > **Pattern**: Video Storage / Streaming
 > **Difficulty**: Hard
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/youtube)
 
-## Table of Contents
+> **Summary**: YouTube is the canonical large-blob streaming system, defined by two hard flows: uploading videos that can reach tens of GB (which must survive network interruption) and watching them (which must start in under ~2 seconds and adapt smoothly to any bandwidth). The mature design keeps heavy bytes out of the app tier entirely — clients upload directly to S3 via presigned multipart URLs, an async DAG orchestrator (Temporal) eagerly transcodes every upload into a bitrate ladder, and a tiered CDN with origin shielding serves adaptive-bitrate (HLS/DASH) segments from the edge. Cassandra holds metadata behind a Redis cache, and storage is tiered hot/warm/cold with source masters kept forever for future re-encodes.
 
-1. [Understanding the Problem](#understanding-the-problem)
+## 📋 Table of Contents
+
+1. [Understanding the Problem](#-understanding-the-problem)
    - [Functional Requirements](#functional-requirements)
    - [Non-Functional Requirements](#non-functional-requirements)
-2. [Core Entities](#core-entities)
-3. [API Design](#api-design)
-4. [High-Level Design](#high-level-design)
-5. [Deep Dives](#deep-dives)
+2. [Layman's Explanation](#-laymans-explanation)
+3. [Core Entities](#-core-entities)
+4. [API Design](#-api-design)
+5. [High-Level Design](#-high-level-design)
+6. [Deep Dives](#-deep-dives)
    - [1. Resumable Chunked Upload](#1-resumable-chunked-upload)
    - [2. Transcoding DAG](#2-transcoding-dag)
    - [3. Adaptive Bitrate Streaming (HLS/DASH)](#3-adaptive-bitrate-streaming-hlsdash)
    - [4. CDN Distribution and Cache Hierarchy](#4-cdn-distribution-and-cache-hierarchy)
    - [5. Storage Tiering (Hot / Warm / Cold)](#5-storage-tiering-hot--warm--cold)
-6. [Scaling Journey: 0 to Infinity](#scaling-journey-0-to-infinity)
-7. [Insider Tips and Tricks](#insider-tips-and-tricks)
-8. [Expected Depth by Level](#expected-depth-by-level)
+7. [Scaling Journey: 0 to Infinity](#-scaling-journey-0-to-infinity)
+8. [Insider Tips and Tricks](#-insider-tips-and-tricks)
+9. [Expected Depth by Level](#-expected-depth-by-level)
+10. [Related Concepts](#-related-concepts)
 
 ---
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 YouTube is the canonical large-blob streaming system. The design exercise focuses on two core user flows: uploading a video (which can be tens of GBs) and watching one (which must start fast and play smoothly across devices with varying bandwidth).
 
@@ -73,7 +77,7 @@ Real YouTube serves billions of hours per day, handles live streaming, runs copy
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 | Entity | Purpose | Notes |
 |---|---|---|
@@ -86,7 +90,7 @@ Real YouTube serves billions of hours per day, handles live streaming, runs copy
 
 ---
 
-## API Design
+## 🔌 API Design
 
 Keep the surface small. The heavy bytes never flow through the application servers.
 
@@ -115,33 +119,52 @@ Authentication rides on a bearer token in the `Authorization` header. The presig
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
-```
-  Client                                              
-    |                                                 
-    |-- upload-init -------------------->  Video API  -->  Metadata DB (Cassandra)
-    |                                          |           partitioned by videoId
-    |-- PUT chunks (presigned) ----->  Object Storage (S3)
-    |                                          |
-    |                                          v
-    |                                 S3 ObjectCreated event
-    |                                          |
-    |                                          v
-    |                                 Transcoding Orchestrator (Temporal)
-    |                                          |
-    |                             +------------+------------+
-    |                             v            v            v
-    |                         Segmenter   Transcoder    Packager
-    |                         (workers on GPU/CPU fleet, exchanging blobs via S3)
-    |                                          |
-    |                                          v
-    |                                 S3: variants + manifests
-    |
-    |-- GET /videos/{id} -------------->  Video API  -->  Metadata DB + Cache
-    |                                          |
-    |-- GET manifest --------------------->  CDN edge  -->  S3 origin
-    |-- GET segments --------------------->  CDN edge  -->  S3 origin
+```mermaid
+graph TB
+    CLIENT[Client]
+
+    subgraph "Application Tier"
+        API[Video API<br/>stateless HTTP<br/>presigned URLs + metadata]
+    end
+
+    subgraph "Transcoding Pipeline"
+        ORCH[Transcoding Orchestrator<br/>Temporal DAG]
+        SEG[Segmenter]
+        TRANS[Transcoder]
+        PKG[Packager]
+    end
+
+    subgraph "Storage"
+        META[(Metadata DB<br/>Cassandra<br/>partitioned by videoId)]
+        CACHE[(Redis<br/>metadata cache)]
+        S3[(Object Storage S3<br/>source + variants<br/>+ manifests)]
+    end
+
+    CDN[CDN Edge POPs]
+
+    CLIENT -->|upload-init| API
+    API --> META
+    API --> CACHE
+    CLIENT -->|PUT chunks presigned| S3
+    S3 -->|ObjectCreated event| ORCH
+    ORCH --> SEG
+    ORCH --> TRANS
+    ORCH --> PKG
+    SEG <-->|blobs| S3
+    TRANS <-->|blobs| S3
+    PKG -->|variants + manifests| S3
+    CLIENT -->|GET /videos/id| API
+    CLIENT -->|GET manifest + segments| CDN
+    CDN -->|origin fetch| S3
+
+    style META fill:#e1f5ff
+    style CACHE fill:#e1f5ff
+    style S3 fill:#e1f5ff
+    style ORCH fill:#f3e5f5
+    style CDN fill:#FFE4B5
+    style API fill:#90EE90
 ```
 
 - **Video API**: stateless HTTP service. Issues presigned URLs, writes metadata rows, reads them back for playback. Horizontally scaled behind a load balancer.
@@ -153,11 +176,34 @@ Authentication rides on a bearer token in the `Authorization` header. The presig
 
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. Resumable Chunked Upload
 
 A 20 GB upload over a flaky hotel Wi-Fi will fail. The design must assume that.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant API as Video API
+    participant S3 as Object Storage (S3)
+    participant ORCH as Transcoding Orchestrator
+
+    C->>C: split file into 5-10 MB chunks, SHA-256 each
+    C->>API: POST upload-init (chunk list)
+    API->>API: create VideoMetadata (UPLOADING) + UploadSession
+    API-->>C: videoId + presigned PUT URLs
+    loop each chunk
+        C->>S3: PUT chunk (presigned)
+        S3-->>C: ETag
+        C->>API: PATCH upload-status (chunkIndex, etag)
+    end
+    Note over C,API: on disconnect, re-fetch UploadSession<br/>and re-upload only chunks missing an ETag
+    C->>API: POST complete
+    API->>S3: CompleteMultipartUpload
+    S3->>ORCH: ObjectCreated event
+    ORCH->>ORCH: begin transcoding DAG
+```
 
 **Why presigned URLs, not API-proxied uploads**
 
@@ -194,6 +240,36 @@ On-demand transcoding — transcode when a viewer requests a specific quality �
 4. **Audio**: a separate track processed once and muxed into every video variant, avoiding redundant audio encoding.
 5. **Package**: emit per-variant media manifests and a master manifest listing all variants with codec, resolution, and bitrate metadata.
 6. **Auxiliary**: generate thumbnails at fixed offsets, run speech-to-text for captions, extract the first few segments for CDN pre-warming.
+
+```mermaid
+graph LR
+    SRC[Source Upload<br/>in S3]
+    PROBE[Probe<br/>duration · codec · streams]
+    SEGMENT[Segment<br/>GOP-aligned chunks]
+
+    subgraph "Fan-out: independent per-segment tasks"
+        T1[Transcode 240p-2160p<br/>H.264 / VP9 / AV1]
+        AUD[Audio track<br/>encoded once]
+    end
+
+    PKG[Package<br/>media + master manifests]
+    AUX[Auxiliary<br/>thumbnails · captions · pre-warm]
+    OUT[(S3: variants<br/>+ manifests)]
+
+    SRC --> PROBE --> SEGMENT
+    SEGMENT --> T1
+    SEGMENT --> AUD
+    T1 --> PKG
+    AUD --> PKG
+    PKG --> OUT
+    SEGMENT --> AUX
+    AUX --> OUT
+
+    style SRC fill:#e1f5ff
+    style OUT fill:#e1f5ff
+    style T1 fill:#FFE4B5
+    style PKG fill:#90EE90
+```
 
 **Why a DAG helps**
 
@@ -233,6 +309,23 @@ The ABR quality-selection logic runs entirely in the client player, not on the s
 4. If the buffer drops below a low-watermark threshold (e.g., 5 seconds), step down aggressively, skipping rungs if necessary.
 5. Never let the buffer drain to zero — a stall is always worse than a quality drop.
 
+```mermaid
+stateDiagram-v2
+    [*] --> Startup
+    Startup --> Steady: start at 480p for fast first frame
+    Steady --> StepUp: throughput beats next rung x1.2-1.5
+    StepUp --> Steady: higher variant
+    Steady --> StepDown: buffer under 5s low-watermark
+    StepDown --> Steady: lower variant, skip rungs
+    Steady --> Steady: measure each segment download
+    note right of StepDown
+        never let buffer reach zero —
+        a stall is worse than a quality drop
+    end note
+```
+
+> ⚠️ **The ABR brain lives in the client, not the server.** The origin and CDN are dumb file servers — all quality-selection intelligence (measuring per-segment throughput, stepping the ladder up or down) runs in the player at the edge. This is what lets a single immutable set of segments serve every device and network condition.
+
 **Segment length tradeoff**
 
 Smaller segments (2 seconds) allow faster quality switching when bandwidth drops, at the cost of more HTTP requests and higher CDN cache-pressure. Larger segments (10 seconds) reduce request overhead but react slowly to sudden bandwidth changes. YouTube uses ~5-second segments as a balance. The manifest file lists all segment URLs; the player downloads and parses it once to bootstrap playback.
@@ -254,6 +347,40 @@ S3 is designed for durability and moderate throughput, not for serving millions 
 - **L1 — Edge POPs**: terminate TLS close to the viewer; cache segments keyed by URL. Segment URLs include variant and segment index, making them content-addressed. Cache miss rates of 5-15% for the long tail, effectively 0% for popular content.
 - **L2 — Origin shield**: a mid-tier cache node per geographic region sitting between all edge POPs in that region and S3. Without shielding, a cold cache event for a popular video at 100 POPs triggers 100 simultaneous origin fetches. With shielding, all 20 POPs in a region funnel through one regional shield, which fetches from S3 once. The shield absorbs the thundering herd; S3 sees one request per region per cache miss, not one per POP. This reduces origin traffic by 90%+ for popular content.
 - **L3 — Origin (S3)**: the immutable source. Only the shield tier ever fetches from here for a given video.
+
+```mermaid
+graph TB
+    V1[Viewers] --> E1[Edge POP]
+    V2[Viewers] --> E2[Edge POP]
+    V3[Viewers] --> E3[Edge POP]
+
+    subgraph "L1 — Edge (5-15% miss on long tail, ~0% on popular)"
+        E1
+        E2
+        E3
+    end
+
+    subgraph "L2 — Regional Origin Shield"
+        SHIELD[One shield node per region<br/>absorbs thundering herd<br/>90%+ origin traffic reduction]
+    end
+
+    subgraph "L3 — Origin"
+        ORIGIN[(S3<br/>immutable source<br/>1 fetch per region per miss)]
+    end
+
+    E1 -->|miss| SHIELD
+    E2 -->|miss| SHIELD
+    E3 -->|miss| SHIELD
+    SHIELD -->|single fetch| ORIGIN
+
+    style E1 fill:#90EE90
+    style E2 fill:#90EE90
+    style E3 fill:#90EE90
+    style SHIELD fill:#FFE4B5
+    style ORIGIN fill:#e1f5ff
+```
+
+> 💡 **Origin shielding turns a stampede into a trickle.** Without it, a cold-cache event for a popular video at 100 edge POPs triggers 100 simultaneous S3 fetches. Funnel all POPs in a region through one shield and S3 sees exactly one request per region per cache miss — cutting origin traffic by 90%+ on popular content.
 
 **Cache keys, TTLs, and invalidation**
 
@@ -282,15 +409,54 @@ After transcoding to H.264/VP9/AV1 at multiple resolutions, the source might see
 
 Lifecycle policies keyed on last-access time automate demotion. Promotion back to hot happens when the view rate for a video crosses a threshold — for example, when a creator's video is featured in a trending playlist, its variants are eagerly promoted before the traffic spike arrives.
 
+```mermaid
+stateDiagram-v2
+    [*] --> Hot: new upload
+    Hot --> Warm: after 30 days, modest traffic
+    Warm --> Cold: infrequent views
+    Cold --> Archive: no traffic 180+ days
+    Warm --> Hot: view rate crosses threshold
+    Cold --> Hot: promote before trending spike
+    Archive --> Cold: re-encode job or legal hold
+
+    note right of Hot
+        CDN edge + S3 Standard
+        sub-50ms, highest $/GB
+    end note
+    note right of Archive
+        Glacier Deep Archive / tape
+        source masters kept forever
+        for future re-encodes
+    end note
+```
+
 **Cost model intuition**
 
 S3 Standard runs ~$0.023/GB/month; Glacier Deep Archive runs ~$0.00099/GB/month — a 23× difference. For a 10-minute video at five resolutions totaling 800 MB, the annual cold-storage cost is under $0.01. The CDN egress cost to serve that video once at 1080p (~800 MB transfer) is orders of magnitude larger than its storage cost, which is why codec efficiency and tiered egress pricing matter more than storage pricing at scale.
 
 ---
 
-## Scaling Journey: 0 to Infinity
+## 📈 Scaling Journey: 0 to Infinity
 
 This section is original analysis, not a rehash of the source. It walks the design through five regimes, each defined by the failure that kicks it into the next.
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0–100 users<br/>Single app + S3<br/>720p mp4, no transcode"]
+    S2["Stage 2<br/>100–1K<br/>Presigned multipart<br/>1 ffmpeg worker + CDN"]
+    S3["Stage 3<br/>1K–100K<br/>Temporal DAG + HLS ABR<br/>Cassandra + Redis"]
+    S4["Stage 4<br/>100K–10M<br/>Origin shield + VP9/AV1<br/>storage tiering"]
+    S5["Stage 5<br/>10M+<br/>Custom POPs + P2P<br/>per-video encode + ASIC"]
+
+    S1 -->|"4GB upload fails, app mem balloons"| S2
+    S2 -->|"single worker backs up, cold regions"| S3
+    S3 -->|"viral miss stampedes origin"| S4
+    S4 -->|"live premiere saturates transit"| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0-100 Users (MVP)
 
@@ -384,7 +550,7 @@ This section is original analysis, not a rehash of the source. It walks the desi
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 ### Transcode at Upload Time, Not on Demand
 
@@ -424,10 +590,27 @@ Video serving is read-heavy and latency-critical (sub-100ms). Comments are write
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Level | Breadth vs Depth | What the interviewer wants to see |
 |---|---|---|
 | Mid-Level | ~80% breadth, ~20% depth | Clean API, reasonable data model, recognizes presigned S3 uploads and segment-based playback. Can go deep on one topic when pushed. Interviewer drives the stage transitions. |
 | Senior | ~60% breadth, ~40% depth | Drives the design without hand-holding. Confidently explains multipart + resumable uploads and a real transcoding pipeline. Articulates tradeoffs (e.g., segment length, codec choice, consistency vs availability). Proactively names bottlenecks and proposes mitigations. |
 | Staff+ | ~40% breadth, ~60% depth | Speaks from operational experience. Picks the deep dives that matter and redirects away from ones that do not. Discusses origin shielding, codec ladders, tiered storage, and egress economics. Peer-level conversation about tradeoffs with real numbers. Minimal prompting needed. |
+
+---
+
+## 📚 Related Concepts
+
+- [Caching](../CoreConcepts/Caching.md) — the Redis metadata cache and the CDN edge/shield tiers that front S3.
+- [Sharding](../CoreConcepts/Sharding.md) — partitioning the Cassandra metadata store by `videoId` for uniform load.
+- [Data Modelling](../CoreConcepts/DataModelling.md) — `VideoMetadata`, `VideoSegment`, and `UploadSession` schema design.
+- [Networking](../CoreConcepts/Networking.md) — HTTP range requests, presigned PUTs, and long-haul streaming over lossy links.
+- [Redis](../CoreConcepts/Redis.md) — the metadata cache in front of Cassandra for the popular long tail.
+- [Handling Large Blobs](../SystemDesign/Patterns/HandlingLargeBlobs.md) — presigned multipart uploads that keep bytes out of the app tier.
+- [Managing Long-Running Tasks](../SystemDesign/Patterns/ManagingLongRunningTasks.md) — the async transcoding pipeline kicked off by an S3 event.
+- [Multi-Step Processes](../SystemDesign/Patterns/Multi-StepProcesses.md) — the DAG orchestration (Temporal) behind segmentation and transcoding.
+- [Scaling Reads](../SystemDesign/Patterns/ScalingReads.md) — CDN tiering and caching for the 100M-plays/day watch path.
+- [Cassandra](../SystemDesign/DeepDives/Cassandra.md) — the availability-first, leaderless metadata store.
+- [Kafka](../SystemDesign/DeepDives/Kafka.md) — an alternative work queue for fanning out transcoding jobs.
+- [YouTube (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/Youtube.md) — the source breakdown this doc expands on.

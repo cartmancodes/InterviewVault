@@ -1,10 +1,31 @@
-# Dealing with Contention
+# 🔒 Dealing with Contention
 
 Learn about how to deal with high contention in your system design interview.
 
-> 🔒 Contention occurs when multiple processes compete for the same resource at the same time, like booking the last concert ticket or bidding on an auction item. Without proper handling, you get race conditions, double-bookings, and inconsistent state.
+> **Overview**: Contention occurs when multiple processes compete for the same resource at the same time, like booking the last concert ticket or bidding on an auction item. Without proper handling, you get race conditions, double-bookings, and inconsistent state. The fix is a ladder of coordination tools — conditional writes, pessimistic locks, optimistic concurrency, serializable isolation, and distributed locks — each closing the gap between reading a value and acting on it, escalating only as far as the problem demands.
 
-## The Race Condition
+## 📋 Table of Contents
+- [Layman's Explanation](#laymans-explanation)
+- [The Race Condition](#the-race-condition)
+- [The Solution](#the-solution)
+- [Choosing the Right Approach](#choosing-the-right-approach)
+- [When to Use in Interviews](#when-to-use-in-interviews)
+- [Common Deep Dives](#common-deep-dives)
+- [Conclusion](#conclusion)
+- [Key Takeaways](#key-takeaways)
+- [Related Concepts](#related-concepts)
+
+---
+
+## 🧒 Layman's Explanation
+
+Imagine one last cookie on a plate and two kids in the kitchen. Each kid glances at the plate, sees a cookie, and reaches for it. If they both looked *before* either grabbed, they both think they've won — and now two hands are on one cookie. That gap between *looking* and *grabbing* is where every contention bug lives.
+
+There are a few ways parents fix this. The simplest is a rule the plate itself enforces: "take the cookie only if it's still there" — whoever's hand lands first wins, the other closes on empty air (a **conditional write**). If the choice is trickier — "find three cookies that are next to each other" — you make one kid hold the plate still while they pick, and the other has to wait (a **pessimistic lock**). Or you let both kids grab freely but check at the last second whether anyone touched the plate since they looked, and make the loser try again (**optimistic concurrency**). Some rules are sneakier — "at least one cookie must stay on the plate" — where each kid removes a *different* cookie and neither breaks the rule alone, yet together they empty it (**write skew**, which needs the strictest referee, **serializable isolation**). And when a kid wants to *reserve* a cookie while they run to get a napkin, you write their name on a sticky note with a timer instead of standing there holding it (a **distributed lock**).
+
+The whole art of dealing with contention is picking the cheapest referee that still catches the specific way two people can collide.
+
+## ⚠️ The Race Condition
 
 Consider buying concert tickets online. There's one seat left for The Weeknd, and Alice and Bob both want it. They each hit "Buy Now" in the same instant. The obvious way to handle a purchase is the one most of us would reach for first. Read the current seat count, check that it's above zero, and if it is, decrement it and sell the ticket.
 
@@ -38,11 +59,25 @@ To get this right, we need some form of synchronization.
 
 [Online Chess](https://www.hellointerview.com/learn/system-design/problem-breakdowns/online-chess#dealing-with-contention)
 
-## The Solution
+## 🛠️ The Solution
 
 The race condition from earlier has a name. It's a **lost update**, the classic failure of a **read-modify-write** cycle. Two requests read the same value, both act on it, and both write back, so one silently overwrites the other.
 
 Every fix below is a way to close the gap between reading a value and acting on it. Underneath all of them is the same move, compare-and-set, where you read a value and make your write conditional on it not having changed in the meantime. We'll write the examples in SQL, but the same moves live in any serious datastore. We'll start with the simplest and add coordination only as each approach hits its limit.
+
+```mermaid
+graph LR
+    CW["Conditional Write<br/>WHERE predicate<br/>on the write"] -->|"decision needs<br/>app logic"| PL["Pessimistic Lock<br/>SELECT ... FOR UPDATE<br/>hold rows while deciding"]
+    PL -->|"collisions rare,<br/>skip the blocking"| OCC["Optimistic Concurrency<br/>version check,<br/>retry on conflict"]
+    OCC -->|"conflict spans<br/>rows that never collide"| SI["Serializable Isolation<br/>DB tracks read-write<br/>dependencies"]
+    SI -->|"hold must outlive<br/>a transaction"| DL["Distributed Lock<br/>lease with TTL<br/>across steps / services"]
+
+    style CW fill:#90EE90
+    style PL fill:#e8f5e9
+    style OCC fill:#FFE4B5
+    style SI fill:#FFE4B5
+    style DL fill:#f3e5f5
+```
 
 ### Conditional Writes
 
@@ -264,11 +299,30 @@ Each rung shows up the same way in other stores.
 
 > Notice every technique here aims at one authoritative home for the contended resource. That's the whole game, so fight to keep it that way. If you need strong consistency under high contention, do everything you can to keep the relevant data in a single database first. Nine times out of ten that's possible. Two situations genuinely break the single-home assumption, and both live outside this pattern. If one operation must atomically span multiple services or shards (like a transfer between two sharded accounts), that's a distributed transaction, covered in Multi-step Processes . And if the same record is writable in multiple places at once (multi-leader or leaderless replication ), there's no single home to defend, and you're into conflict resolution like last-write-wins, vector clocks, or CRDTs , which is a replication topic beyond our scope here.
 
-## Choosing the Right Approach
+## 🧭 Choosing the Right Approach
 
 > Like with much of system design, there isn't always a clear-cut answer. You'll need to consider the tradeoffs of each approach based on your specific use case and make the appropriate justification for your choice.
 
 The right tool comes down to the shape of the write you're protecting. Walk down the list and take the first one that fits.
+
+```mermaid
+graph TB
+    Start["What are you<br/>protecting?"] --> Q1{"Is the check a<br/>predicate on the<br/>row you write?"}
+    Q1 -->|Yes| CW["Conditional UPDATE<br/>gate follow-up on<br/>affected row count"]
+    Q1 -->|No| Q2{"Read, decide in<br/>app code, then write?"}
+    Q2 -->|"Yes, high contention"| PL["Pessimistic Locking<br/>FOR UPDATE holds<br/>rows across the gap"]
+    Q2 -->|"Yes, collisions rare"| OCC["Optimistic Concurrency<br/>version tag + retry"]
+    Q2 -->|No| Q3{"Invariant spans<br/>rows that never<br/>collide?"}
+    Q3 -->|Yes| SI["SERIALIZABLE<br/>or materialize onto<br/>one lockable row"]
+    Q3 -->|"No, hold outlives<br/>the transaction"| DL["Distributed Lock<br/>lease across a wait,<br/>call, or steps"]
+
+    style Start fill:#e1f5ff
+    style CW fill:#90EE90
+    style PL fill:#90EE90
+    style OCC fill:#FFE4B5
+    style SI fill:#FFE4B5
+    style DL fill:#f3e5f5
+```
 
 **Your check is a predicate on the row you're writing:** Use a conditional `UPDATE` and gate any follow-up work on the affected row count, whether that's a counter decrement, a status flip, or claiming a row. No explicit lock needed since the write is atomic on its own. It's the simplest thing that works, so reach for it first.
 
@@ -290,7 +344,7 @@ The right tool comes down to the shape of the write you're protecting. Walk down
 
 > When in doubt, keep it in a single database and reach for the simplest tool that fits. A conditional UPDATE if your check is a predicate, pessimistic locking once you've got real read-decide-write logic. You can always tighten it later.
 
-## When to Use in Interviews
+## 🎤 When to Use in Interviews
 
 Don't wait for the interviewer to ask about contention. When you see scenarios where multiple processes compete for the same resource, call it out and suggest coordination mechanisms. This is typically when you determine during your non-functional requirements that your system requires strong consistency.
 
@@ -340,7 +394,7 @@ Don't reach for complex coordination mechanisms when simpler solutions work.
 
 **Read-heavy workloads** where most operations are reads with occasional writes can use simple optimistic concurrency to handle the rare write conflicts without impacting read performance.
 
-## Common Deep Dives
+## 🔬 Common Deep Dives
 
 Interviewers love to dig into edge cases and failure scenarios.
 
@@ -390,7 +444,7 @@ For cases where you truly need strong consistency on a hot resource, implement q
 
 The tradeoff is throughput, not just latency. One worker can only process so fast, and it's a single point of failure you'd back with a standby. You've turned a contention problem into a serial one, which is often the better deal when the alternative is the whole system grinding to a halt, but you've capped how fast that resource can ever go.
 
-## Conclusion
+## 📝 Conclusion
 
 Contention handling matters for reliable systems, but the core idea is simpler than most engineers expect. Every contended resource has a single source of truth, the one place that owns the real value, and that's where correctness gets enforced. Conditional writes, pessimistic locking, isolation levels, and optimistic concurrency are just different ways of coordinating access at that source of truth, escalating as the gap you have to protect grows. And when that gap finally outgrows a single transaction, stretching across a wait or a call to another system, a distributed lock holds the exclusivity. They protect access to the source of truth rather than replacing it.
 
@@ -401,6 +455,27 @@ Keep the boundary clear too. The moment an operation has to span multiple source
 Answer the question below to find your gaps.
 
 Get a quick-reference sheet for this topic, perfect for last-minute review.
+
+## 🎓 Key Takeaways
+
+- **The bug is always the same gap.** A race condition is a *lost update* in a read-modify-write cycle. Every tool here — conditional writes, locks, versions, isolation, distributed locks — is one way to close the gap between reading a value and acting on it.
+- **Guard the thing actually being contended.** A counter can answer "is there a ticket left"; only the ticket row can answer "is *this* ticket left." Make the contended resource a single addressable cell (a row, key, or item) the store can check as it writes.
+- **Escalate only as far as the problem forces you.** Prefer a conditional `UPDATE` when the check is a `WHERE` predicate; reach for pessimistic locking when a decision runs in app code between read and write; use optimistic concurrency when collisions are rare; and save `SERIALIZABLE` for write skew that spans rows nothing else can catch.
+- **Optimistic concurrency needs a value that always changes.** A dedicated incrementing version column is the safe default; reusing a business value risks the ABA problem unless it only ever moves one way.
+- **Locks come with a bill.** Lock as few rows for as little time as possible, keep slow I/O (like payment calls) outside the lock, and acquire locks in a consistent order to prevent deadlocks — then still treat deadlocks as retryable.
+- **Distributed locks are for holds that outlive a transaction.** Reservations that span a wait or an external call live as a lease with a TTL (Redis `SET NX EX`, a database expiry column, or ZooKeeper/etcd) — reach for them for user-facing flows, not by default.
+
+## 📚 Related Concepts
+
+- [Distributed Locking](../../CoreConcepts/DistributedLocking.md) — lease-based exclusivity, TTLs, and coordination-service tradeoffs in depth.
+- [Redis](../DeepDives/Redis.md) — the `SET NX` + TTL reservation lock and why a plain TTL isn't airtight exclusivity.
+- [Zookeeper](../DeepDives/Zookeeper.md) — ephemeral nodes and consensus for robust distributed coordination.
+- [PostgreSQL](../DeepDives/Postgresql.md) — `FOR UPDATE`, isolation levels, and the `xmin` system version column.
+- [DynamoDB](../DeepDives/Dynamodb.md) — `ConditionExpression` and version attributes as the same compare-and-set move.
+- [Ticketmaster](../ProblemBreakdowns/Ticketmaster.md) — seat reservations with a 10-minute TTL, the canonical distributed-lock case.
+- [Online Auction](../ProblemBreakdowns/OnlineAuction.md) — optimistic concurrency using the ever-increasing high bid as the version.
+- [Multi-Step Processes](Multi-StepProcesses.md) — where contention ends and distributed transactions begin.
+- [Scaling Reads](ScalingReads.md) — uses distributed locks to serialize hot-key cache rebuilds.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/patterns/dealing-with-contention](https://www.hellointerview.com/learn/system-design/patterns/dealing-with-contention)*

@@ -290,6 +290,23 @@ A contest leaderboard needs to update within a few seconds of a submission being
 - Read path: `ZREVRANGE` for the top N entries, `ZREVRANK` for the caller's own rank. Both are O(log N) operations. For a 10K-participant contest, rank lookup takes microseconds rather than the seconds a database scan would require.
 - The sorted set is hydrated at contest start from a cold snapshot and torn down (persisted to cold storage) at contest end so Redis memory does not grow unbounded across historical contests.
 
+Both the write path (on every accepted submission) and the read path (top-N plus the caller's own rank) stay O(log N) against the sorted set — the primary database never enters the live loop:
+
+```mermaid
+sequenceDiagram
+    participant W as Worker
+    participant LB as Redis Sorted Set<br/>contest:{id}:leaderboard
+    participant V as Leaderboard Viewer
+
+    Note over W,LB: Write path — on ACCEPTED
+    W->>LB: ZADD score userId  (O(log N))
+    Note over V,LB: Read path — ~1 Hz poll
+    V->>LB: ZREVRANGE 0 99  (top N)
+    LB-->>V: top-N entries
+    V->>LB: ZREVRANK userId  (caller's rank)
+    LB-->>V: own rank (microseconds)
+```
+
 This design keeps the primary database entirely out of the live read path, gives near-real-time ranks, and scales horizontally by dedicating a separate Redis cluster to each large contest.
 
 ### 4. Cheating Detection
@@ -306,7 +323,25 @@ The cheating detection pipeline reads from the submission store and the event bu
 
 ---
 
-## Scaling Journey: 0 to Infinity
+## 📈 Scaling Journey: 0 to Infinity
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0–100 users<br/>Monolith + Postgres<br/>inline Docker exec"]
+    S2["Stage 2<br/>100–1K<br/>Queue + worker pool<br/>async submit-then-poll"]
+    S3["Stage 3<br/>1K–100K<br/>Autoscale + Redis ZSET<br/>result cache"]
+    S4["Stage 4<br/>100K–10M<br/>Firecracker microVMs<br/>warm pool + cheating pipeline"]
+    S5["Stage 5<br/>10M+<br/>Multi-region active-active<br/>per-contest sharded LB"]
+
+    S1 -->|inline exec starves web server| S2
+    S2 -->|contest burst drains fixed pool| S3
+    S3 -->|container escape + cold starts| S4
+    S4 -->|single-region blast radius| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0 to 100 Users (MVP)
 
@@ -384,7 +419,7 @@ The cheating detection pipeline reads from the submission store and the event bu
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 These are the specific, non-obvious points that separate candidates who have thought deeply about sandboxed execution from those who have only sketched the surface.
 
@@ -476,7 +511,7 @@ Two engineering benefits beyond UX:
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Level | Breadth vs Depth | What a strong signal looks like |
 |---|---|---|
@@ -493,3 +528,18 @@ Two engineering benefits beyond UX:
 - Reaching for WebSockets for the leaderboard when 1 Hz polling of a Redis sorted set is simpler and sufficient.
 - Treating cheating detection as an in-band check on the submit path; it belongs in an offline pipeline.
 - Claiming Docker is sufficient isolation without mentioning seccomp-bpf or a microVM layer.
+
+---
+
+## 📚 Related Concepts
+
+- [Redis](../CoreConcepts/Redis.md) — the leaderboard sorted set (`ZADD`/`ZREVRANGE`/`ZREVRANK`) and the `SHA256(code)`-keyed result cache.
+- [Caching](../CoreConcepts/Caching.md) — identical-submission result caching and heavily-cached, mostly-immutable problem reads.
+- [Sharding](../CoreConcepts/Sharding.md) — partitioning the submission store by `userId` with a `contestId` GSI, and per-contest leaderboard shards.
+- [Networking](../CoreConcepts/Networking.md) — submit-then-poll vs an SSE/WebSocket push layer for verdict delivery.
+- [Managing Long-Running Tasks](../SystemDesign/Patterns/ManagingLongRunningTasks.md) — the queue + worker-pool pattern that decouples bursty submits from slow execution.
+- [Scaling Writes](../SystemDesign/Patterns/ScalingWrites.md) — absorbing tens of thousands of contest submissions in a 60-second window.
+- [Real-Time Updates](../SystemDesign/Patterns/Real-TimeUpdates.md) — polling cadence and optional push for live verdicts and leaderboards.
+- [Kafka](../SystemDesign/DeepDives/Kafka.md) — durable submission queue with dead-letter handling and queue-depth autoscaling.
+- [DynamoDB](../SystemDesign/DeepDives/Dynamodb.md) — the read-heavy problem store and the wide-column submission store.
+- [LeetCode (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/Leetcode.md) — the source breakdown this doc expands on.

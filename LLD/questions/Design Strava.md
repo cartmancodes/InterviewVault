@@ -1,33 +1,35 @@
-# Design Strava
+# 🏃 Design Strava
 
 > **Pattern**: Time-series / Geospatial
 > **Difficulty**: Medium
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/strava)
 
+> **Summary**: Strava records an athlete's run or ride as a time-ordered stream of GPS samples, stitches them into an activity with aggregate metrics, and layers social features (friend feeds, segment leaderboards, global heatmaps) on top. The hard parts are ingesting bursty, occasionally-offline, multi-million-concurrent GPS streams without dropping points (10M points/sec, ~500 MB/sec at peak), matching each new track against millions of community segments to compute effort times, and keeping per-segment leaderboards and heatmaps fresh over an ever-growing time-series corpus. The mature design treats the phone as the source of truth during recording, uses Kafka as a durable ingest buffer feeding async enrichment, tiers hot time-series storage against cold S3 blobs, and serves every read from a purpose-built store (Postgres, Redis sorted sets, tile CDN) so the raw GPS stream is never rescanned on the read path.
+
+## 📋 Table of Contents
+
+- [Understanding the Problem](#-understanding-the-problem)
+  - [Functional Requirements](#functional-requirements)
+  - [Non-Functional Requirements](#non-functional-requirements)
+- [Layman's Explanation](#-laymans-explanation)
+- [Core Entities](#-core-entities)
+- [API Design](#-api-design)
+- [High-Level Design](#-high-level-design)
+- [Deep Dives](#-deep-dives)
+  - [1. GPS Ingest Pipeline](#1-gps-ingest-pipeline)
+  - [2. Offline-First Recording on the Phone](#2-offline-first-recording-on-the-phone)
+  - [3. Segment Matching](#3-segment-matching)
+  - [4. Leaderboards](#4-leaderboards)
+  - [5. Global Heatmaps](#5-global-heatmaps)
+  - [6. Friend Activity Feed and Realtime Sharing](#6-friend-activity-feed-and-realtime-sharing)
+- [Scaling Journey: 0 to infinity](#-scaling-journey-0-to-infinity)
+- [Insider Tips and Tricks](#-insider-tips-and-tricks)
+- [Expected Depth by Level](#-expected-depth-by-level)
+- [Related Concepts](#-related-concepts)
+
 ---
 
-## Table of Contents
-
-1. [Understanding the Problem](#understanding-the-problem)
-   - [Functional Requirements](#functional-requirements)
-   - [Non-Functional Requirements](#non-functional-requirements)
-2. [Core Entities](#core-entities)
-3. [API Design](#api-design)
-4. [High-Level Design](#high-level-design)
-5. [Deep Dives](#deep-dives)
-   - [1. GPS Ingest Pipeline](#1-gps-ingest-pipeline)
-   - [2. Offline-First Recording on the Phone](#2-offline-first-recording-on-the-phone)
-   - [3. Segment Matching](#3-segment-matching)
-   - [4. Leaderboards](#4-leaderboards)
-   - [5. Global Heatmaps](#5-global-heatmaps)
-   - [6. Friend Activity Feed and Realtime Sharing](#6-friend-activity-feed-and-realtime-sharing)
-6. [Scaling Journey: 0 to infinity](#scaling-journey-0--)
-7. [Insider Tips and Tricks](#insider-tips-and-tricks)
-8. [Expected Depth by Level](#expected-depth-by-level)
-
----
-
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 Strava records an athlete's run or ride as a time-ordered stream of GPS samples, stitches them into an activity with aggregate metrics (distance, pace, elevation gain), and exposes both personal history and social features (friend feeds, segment leaderboards, global heatmaps) on top of that corpus. The hard parts are not CRUD; they are (1) ingesting bursty, occasionally offline, multi-million-concurrent GPS streams without dropping points, (2) matching each new track against millions of community-defined road/trail segments to compute effort times, and (3) keeping per-segment leaderboards and global heatmaps fresh on top of an ever-growing time-series corpus.
 
@@ -72,7 +74,7 @@ Real Strava handles billions of activities, runs ML to classify activity type (r
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 | Entity | Fields | Notes |
 |---|---|---|
@@ -87,7 +89,7 @@ Real Strava handles billions of activities, runs ML to classify activity type (r
 
 ---
 
-## API Design
+## 🔌 API Design
 
 ```http
 # Start a new activity (client mostly records locally; this reserves an ID)
@@ -147,38 +149,69 @@ GET /heatmap/{type}/{z}/{x}/{y}.png
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
-```
-                     RECORD-TIME (live, 10M concurrent)
- Phone (local store + UI) --batched POST /points--> API Gateway
-                                                       |
-                                                       v
-                                              Ingest Service (stateless)
-                                                       |
-                                                       v
-                                               Kafka (topic: gps.raw)
-                                                       |
-                         +-----------------------------+------------------------------+
-                         v                             v                              v
-                Time-Series Store (hot)       Object Storage (cold blob        Stream Processor
-                e.g., Timescale / Influx      GPX/FIT per activity, S3)        (e.g., Flink)
-                         |                                                             |
-                         |                                                             v
-                         |                                                 Segment Matcher (async)
-                         |                                                             |
-                         |                                                             v
-                         |                                                 Leaderboard Updater
-                         |                                                 (Redis sorted sets)
-                         |                                                             |
-                         v                                                             v
-                  Activity Service <------- reads ------- Feed Service    Leaderboard Service
+```mermaid
+graph TB
+    subgraph Client
+        PH[Phone<br/>local store + UI<br/>authoritative during record]
+    end
 
-                     READ-TIME
- Client --GET /activities/{id}--> Activity Service --> Postgres (metadata) + S3 (trace blob via CDN)
- Client --GET /feed--------------> Feed Service -----> Redis (feed timeline) + Activity Service
- Client --GET /leaderboard-------> Leaderboard Service -> Redis sorted sets
- Client --GET /heatmap tile-----> CDN ----------------> Object storage (precomputed PNG/MVT tiles)
+    GW[API Gateway]
+
+    subgraph Ingest["Hot Ingest (10M concurrent)"]
+        IS[Ingest Service<br/>stateless]
+        KAFKA[[Kafka<br/>topic: gps.raw<br/>partitioned by activity_id]]
+    end
+
+    subgraph Enrichment["Async Enrichment"]
+        SP[Stream Processor<br/>Flink / Kafka Streams<br/>rolling aggregates]
+        SM[Segment Matcher<br/>async]
+        LU[Leaderboard Updater]
+    end
+
+    subgraph Stores
+        TS[(Time-Series Store<br/>Timescale / Influx<br/>hot)]
+        S3[(Object Storage<br/>GPX/FIT blob per activity<br/>cold, canonical)]
+        PG[(Postgres<br/>activity metadata)]
+        RS[(Redis<br/>sorted sets + feeds)]
+        CDN[CDN<br/>precomputed heatmap tiles]
+    end
+
+    subgraph ReadServices["Read Services"]
+        AS[Activity Service]
+        FS[Feed Service]
+        LS[Leaderboard Service]
+    end
+
+    PH -->|batched POST /points| GW
+    GW --> IS
+    IS --> KAFKA
+    KAFKA --> TS
+    KAFKA --> S3
+    KAFKA --> SP
+    SP --> SM
+    SM --> LU
+    LU --> RS
+
+    AS --> PG
+    AS --> S3
+    FS --> RS
+    FS --> AS
+    LS --> RS
+
+    PH -.GET /activities.-> AS
+    PH -.GET /feed.-> FS
+    PH -.GET /leaderboard.-> LS
+    PH -.GET /heatmap tile.-> CDN
+
+    style KAFKA fill:#FFE4B5
+    style TS fill:#e1f5ff
+    style S3 fill:#e1f5ff
+    style PG fill:#e1f5ff
+    style RS fill:#e1f5ff
+    style CDN fill:#f3e5f5
+    style IS fill:#90EE90
 ```
 
 Three distinct paths with different SLAs:
@@ -191,7 +224,7 @@ The time-series store and the object store hold the same data at different tiers
 
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. GPS Ingest Pipeline
 
@@ -213,15 +246,58 @@ The time-series store and the object store hold the same data at different tiers
    - **Stream processor (Flink / Kafka Streams)** maintains rolling aggregates per activity (distance, elevation gain) so the activity detail page has summary fields populated even before the blob is fully written.
 6. **Elevation correction.** GPS altitude is unreliable (±20-30 m errors). A separate enrichment step queries a Digital Elevation Model (DEM) — a globally gridded dataset (SRTM or ASTER, several TB total) — to replace each point's GPS altitude with the ground elevation at that coordinate. The DEM is queried per activity bounding box, fetching the relevant elevation patches in a single batch lookup rather than one query per point.
 
+The pipeline, from noisy phone sample to purpose-built stores:
+
+```mermaid
+graph LR
+    PH[Phone<br/>1 Hz local sampling<br/>batched flush] -->|POST /points| IS[Ingest Service<br/>validate + tag<br/>stateless]
+    IS -->|produce| K[[Kafka<br/>gps.raw<br/>by activity_id]]
+    K --> PRE[Smoothing Consumer<br/>outlier removal<br/>Kalman / Douglas-Peucker<br/>gap filling]
+    PRE --> TSW[Time-Series Writer<br/>Timescale / Influx]
+    PRE --> BA[Blob Assembler<br/>GPX/FIT to S3<br/>on complete]
+    PRE --> SPX[Stream Processor<br/>rolling aggregates]
+    PRE --> DEM[DEM Enrichment<br/>replace GPS altitude<br/>per bounding box]
+
+    style PH fill:#FFB6C1
+    style K fill:#FFE4B5
+    style PRE fill:#FFE4B5
+    style TSW fill:#e1f5ff
+    style BA fill:#e1f5ff
+    style SPX fill:#90EE90
+    style DEM fill:#90EE90
+```
+
 **Tradeoff:** end-to-end latency from phone sample to "queryable on server" is seconds-to-tens-of-seconds, not milliseconds. That's acceptable because the live UX is served by on-device computation — the server doesn't need to be fresh to keep the athlete's phone displaying correct pace.
 
-**Why not write each point to Postgres directly?** The per-point write amplification (WAL, index maintenance, replication) would cost orders of magnitude more than the information content is worth. Time-series stores are column-oriented with compression tuned for this shape and get 10-50x better per-byte and per-IOP economics. Additionally, mixing GPS time-series rows with relational metadata in Postgres forces every segment query and leaderboard lookup to wade through millions of time-series rows it has no interest in.
+> ⚠️ **Why not write each point to Postgres directly?** The per-point write amplification (WAL, index maintenance, replication) would cost orders of magnitude more than the information content is worth. Time-series stores are column-oriented with compression tuned for this shape and get 10-50x better per-byte and per-IOP economics. Additionally, mixing GPS time-series rows with relational metadata in Postgres forces every segment query and leaderboard lookup to wade through millions of time-series rows it has no interest in.
 
 ### 2. Offline-First Recording on the Phone
 
 **Problem:** The hardest requirement — "must work in remote areas without network" — means the server is not the source of truth during a recording. Any design that requires round-trips to the server per sample, or even per minute, breaks as soon as the athlete enters a canyon.
 
 **Solution:** Treat the phone as the authoritative store for in-progress activities.
+
+The activity's lifecycle spans the phone (authoritative during recording) and the server (authoritative after upload):
+
+```mermaid
+stateDiagram-v2
+    [*] --> Recording: start (POST /activities)
+    Recording --> Paused: pause
+    Paused --> Recording: resume
+    Recording --> Uploading: stop + complete
+    Paused --> Uploading: stop + complete
+    Uploading --> Processing: server reconciles batches<br/>requests missing ranges
+    Processing --> Processed: aggregates + segment match done
+    Processing --> Failed: processing error
+    Failed --> Processing: retry from Kafka offset
+    Processed --> [*]
+
+    note right of Recording
+        Phone is source of truth.
+        Live stats computed on-device.
+        Batches drained when network returns.
+    end note
+```
 
 - GPS samples are written to a local append-only log (SQLite WAL, flat file, or similar) as they arrive from the OS location provider.
 - Live stats (pace, distance, elevation gain) are computed entirely on-device from the local log. No server dependency.
@@ -246,6 +322,34 @@ The time-series store and the object store hold the same data at different tiers
 5. **Tolerance tuning per activity type.** Bikes follow roads closely — a 5-meter tolerance is sufficient and tight enough to reject a parallel path. Runners on trails deviate more and GPS is noisier in tree cover — a 15-20 meter tolerance is appropriate. Too tight misses real efforts due to GPS drift; too loose credits efforts on adjacent paths.
 6. **Results written downstream.** Segment efforts are written to the `SegmentEfforts` table and forwarded to the Leaderboard Updater. A notification service checks if any effort is a new KOM/PR and, if so, enqueues a push notification to the athlete.
 
+The full async matching flow, from blob write to leaderboard update:
+
+```mermaid
+sequenceDiagram
+    participant BA as Blob Assembler
+    participant K as Kafka
+    participant SM as Segment Matcher
+    participant SI as Spatial Index<br/>(PostGIS / H3)
+    participant DB as SegmentEfforts (Postgres)
+    participant LU as Leaderboard Updater
+    participant NS as Notification Service
+
+    BA->>K: segment_match_requested (trace in S3)
+    Note over SM: Athlete sees "Analyzing segments..."
+    K->>SM: consume event
+    SM->>SM: compute geohash/H3 cells of trace
+    SM->>SI: fetch segments sharing a cell
+    SI-->>SM: candidate segments (millions → hundreds)
+    loop each candidate
+        SM->>SM: geometric match start→end within tolerance
+    end
+    SM->>DB: write SegmentEffort (elapsed_s)
+    SM->>LU: forward effort
+    LU->>LU: ZADD to relevant sorted sets
+    SM->>NS: check new KOM/PR
+    NS-->>NS: enqueue push if achievement
+```
+
 **Why not match live during the activity?** It's wasteful — the athlete may abandon, pause, or go off-route. It also requires streaming segment data to the phone, which bloats the install. Post-hoc matching on the server is simpler, runs once against the final smoothed polyline, and benefits from DEM-corrected elevation for climbing segments.
 
 **Technology:** PostGIS with GiST index on segment bounding boxes, or Uber's H3 / Google's S2 hex-cell indexes for more uniform cell sizes than geohash. H3 is especially nice here because cell neighbors are well-defined, resolution is explicit, and the hierarchy (coarser cells for pre-filtering, finer cells for match) maps directly onto the two-phase approach.
@@ -258,6 +362,35 @@ The time-series store and the object store hold the same data at different tiers
 
 1. **Redis Sorted Set per (segment, scope).** Key like `lb:{segment_id}:alltime:M:30-34`, member = `user_id`, score = `elapsed_s`. `ZADD` on new effort is O(log n); `ZRANGE 0 99` for top-100 is O(log n + k). For a popular segment with 500K efforts, the sorted set holds 500K members but `ZRANGE` for the top 10 is still O(log N + K) — effectively constant compared to a table scan.
 2. **Write path.** When the Segment Matcher produces a `SegmentEffort`, the Leaderboard Updater publishes to all relevant sorted sets: the all-time board, the this-year board, the this-month board, the gender-partitioned boards, and the age-group boards. Each update is a single `ZADD`, so the fanout cost is bounded (constant number of scope sets per effort).
+
+A single effort fans out to a bounded set of scope-partitioned sorted sets — the sort happens once at write time, so every read is O(log n + k):
+
+```mermaid
+graph TB
+    E[New SegmentEffort<br/>elapsed_s, user_id]
+    E -->|ZADD| A[lb:seg:alltime]
+    E -->|ZADD| Y[lb:seg:2026]
+    E -->|ZADD| M[lb:seg:2026-04]
+    E -->|ZADD| G[lb:seg:alltime:M]
+    E -->|ZADD| AG[lb:seg:alltime:30-34]
+    E -->|ZADD per follower| F[lb:seg:following:follower_id]
+
+    A --> R[ZRANGE 0 99<br/>top-K read O log n + k]
+    Y --> R
+    M --> R
+    G --> R
+    AG --> R
+    F --> R
+
+    style E fill:#FFE4B5
+    style A fill:#e1f5ff
+    style Y fill:#e1f5ff
+    style M fill:#e1f5ff
+    style G fill:#e1f5ff
+    style AG fill:#e1f5ff
+    style F fill:#e1f5ff
+    style R fill:#90EE90
+```
 3. **"People you follow" leaderboards** require a different approach. Precomputing a sorted set per `(segment_id, user_id)` is a combinatorial explosion. Instead: at write time, when a user completes a segment, fan out a `ZADD` to sorted sets for each of their followers (`lb:{segment_id}:following:{follower_id}`). This mirrors the social feed fan-out pattern — writes are amplified but reads are O(1). For users with massive follower counts, fall back to merge-on-read: fetch the viewing user's follow list and `ZINTERSTORE` their efforts on this segment at query time.
 4. **Yearly / monthly boards** live on per-period keys (`lb:{segment_id}:2026`) so they naturally expire via TTL or get swept at period rollover.
 5. **Cheater / private effort filtering.** Leaderboard entries are "logical" — on read, the service hydrates entries with current privacy/flagging state from Postgres and filters. A user who goes private disappears from the visible top-K without needing to re-sort the set.
@@ -300,7 +433,27 @@ The time-series store and the object store hold the same data at different tiers
 
 ---
 
-## Scaling Journey: 0 to infinity
+## 📈 Scaling Journey: 0 to infinity
+
+This section is my own framing for how a Strava-style backend concretely evolves. Each stage shows what you build, what you deliberately skip, and the failure mode that forces the next step.
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0–100 users<br/>Single server + Postgres<br/>upload GPX at end"]
+    S2["Stage 2<br/>100–1K<br/>Postgres meta + S3 blobs<br/>async aggregate job"]
+    S3["Stage 3<br/>1K–100K<br/>Ingest Svc + Kafka<br/>PostGIS match + Redis"]
+    S4["Stage 4<br/>100K–10M<br/>Timescale hot / S3 cold<br/>Flink + heatmap batch"]
+    S5["Stage 5<br/>10M+<br/>Multi-region active-active<br/>edge tiles + sub-min lag"]
+
+    S1 -->|"gps_points table dominates storage"| S2
+    S2 -->|"cron segment match won't scale"| S3
+    S3 -->|"consumers CPU-bound on Saturday peak"| S4
+    S4 -->|"single-region ingest, cross-Pacific WAN"| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0-100 Users (MVP)
 
@@ -379,7 +532,7 @@ Beyond this, scaling is mostly cost and operational engineering — renegotiate 
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 ### GPS Traces Are Noisy — Smoothing Is Required Before Storage
 
@@ -415,7 +568,7 @@ When an athlete completes an activity, their followers should see it in their fe
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Area | Mid | Senior | Staff+ |
 |---|---|---|---|
@@ -430,3 +583,21 @@ When an athlete completes an activity, their followers should see it in their fe
 | **Storage tiering** | One database holds everything. | Separates GPS blob (S3) from metadata (Postgres). | Hot time-series DB + cold S3 + Glacier for ancient; reasoning about per-tier $ / query patterns; why mixing time-series in Postgres degrades relational query performance. |
 | **Failure modes** | "Server goes down." | Phone retry, Kafka consumer restart from offset, Redis failover. | Cross-region Kafka lag, segment-matcher backpressure on Saturday peak, heatmap pipeline cost blowout, follower fanout storms on celebrity posts. |
 | **Geo / regional** | Not expected. | Single region + CDN for static and tiles. | Active-active ingest, regional Kafka with MirrorMaker, segment-home-region routing for leaderboards, Glacier tier for cold blobs. |
+
+---
+
+## 📚 Related Concepts
+
+- [Redis](../CoreConcepts/Redis.md) — sorted sets (`ZADD`/`ZRANGE`) for per-(segment, scope) leaderboards and per-user feed lists.
+- [Sharding](../CoreConcepts/Sharding.md) — regional ingest, Redis Cluster sharded by `segment_id` / `user_id`, Postgres split by concern.
+- [Consistent Hashing](../CoreConcepts/ConsistentHashing.md) — spreading leaderboard and feed keys across Redis nodes so no single key is hot.
+- [Data Modelling](../CoreConcepts/DataModelling.md) — separating GPS time-series from relational activity metadata to avoid scanning millions of rows.
+- [Data Indexing](../CoreConcepts/DataIndexing.md) — spatial indexing (bounding boxes, geohash/H3 cells) that turns segment matching from O(all-segments) into O(relevant-area).
+- [Kafka](../SystemDesign/DeepDives/Kafka.md) — durable ingest buffer for `gps.raw`, partitioned by `activity_id`, feeding async enrichment.
+- [Proximity Search](../SystemDesign/DeepDives/ProximitySearch.md) — geohash / H3 / S2 spatial pre-filter behind segment matching.
+- [Time-Series Databases](../SystemDesign/DeepDives/TimeSeriesDatabases.md) — Timescale / Influx as the hot analytical tier for recent GPS streams.
+- [Flink](../SystemDesign/DeepDives/Flink.md) — stream processor for rolling per-activity aggregates and horizontally scaled segment matching.
+- [Handling Large Blobs](../SystemDesign/Patterns/HandlingLargeBlobs.md) — assembling and storing the canonical GPX/FIT blob per activity in S3.
+- [Managing Long-Running Tasks](../SystemDesign/Patterns/ManagingLongRunningTasks.md) — async segment matching off the upload request path ("Analyzing segments...").
+- [Real-Time Updates](../SystemDesign/Patterns/Real-TimeUpdates.md) — WebSocket push of new feed entries as they are fanned out.
+- [Strava (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/Strava.md) — the source breakdown this doc expands on.

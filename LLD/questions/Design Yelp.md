@@ -1,32 +1,26 @@
-# Design Yelp
+# 📍 Design Yelp
 
 > **Pattern**: Geospatial Search / Reviews
 > **Difficulty**: Medium
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/yelp)
 
-## Table of Contents
+> **Summary**: Yelp is a local-business discovery platform where the dominant read pattern is a spatial-and-filtered search ("good ramen within half a mile that's open now") and the dominant write pattern is a trickle of reviews. The hard parts are answering radius queries over 10M businesses without a full scan (a two-stage geohash coarse filter plus Haversine exact filter), keeping `avg_rating` honest at scale (incremental `sum_stars`/`review_count` with a Bayesian average against review bombing), and serving hot metros under 500 ms p99 through layered caching and tile precomputation. The mature design pairs Postgres + PostGIS as the source of truth with Elasticsearch for combined geo+text search, a Redis cache/tile layer, S3 presigned photo uploads, and a CDC → Kafka pipeline that keeps aggregates, the search index, and async spam detection eventually consistent.
 
-1. [Understanding the Problem](#understanding-the-problem)
-   - [Functional Requirements](#functional-requirements)
-   - [Non-Functional Requirements](#non-functional-requirements)
-2. [Core Entities](#core-entities)
-3. [API Design](#api-design)
-4. [High-Level Design](#high-level-design)
-5. [Deep Dives](#deep-dives)
-   - [1. Geospatial Search by Radius](#1-geospatial-search-by-radius)
-   - [2. Review Aggregation](#2-review-aggregation)
-   - [3. Caching Popular Locations](#3-caching-popular-locations)
-   - [4. Photo Uploads](#4-photo-uploads)
-   - [5. Search Ranking](#5-search-ranking)
-   - [6. Consistency for Review Writes](#6-consistency-for-review-writes)
-   - [7. Spam and Abuse Detection](#7-spam-and-abuse-detection)
-6. [Scaling Journey: 0 to Infinity](#scaling-journey-0--)
-7. [Insider Tips and Tricks](#insider-tips-and-tricks)
-8. [Expected Depth by Level](#expected-depth-by-level)
+## 📋 Table of Contents
+- [Understanding the Problem](#understanding-the-problem)
+- [Layman's Explanation](#laymans-explanation)
+- [Core Entities](#core-entities)
+- [API Design](#api-design)
+- [High-Level Design](#high-level-design)
+- [Deep Dives](#deep-dives)
+- [Scaling Journey: 0 to Infinity](#scaling-journey-0-to-infinity)
+- [Insider Tips and Tricks](#insider-tips-and-tricks)
+- [Expected Depth by Level](#expected-depth-by-level)
+- [Related Concepts](#related-concepts)
 
 ---
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 Yelp is a local-business discovery platform. A user standing on a street corner in San Francisco wants to answer "what good ramen is within half a mile of me that's open right now?" Under the hood this is a geospatial query joined with reviews, categories, and operating hours, sorted by a relevance signal. The primary read pattern is spatial-and-filtered search; the primary write pattern is a trickle of reviews and a slow cadence of business edits.
 
@@ -69,7 +63,7 @@ The friend-who-knows-everywhere picture skips a lot. Real Yelp runs a serious **
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 | Entity | Key Fields | Notes |
 | --- | --- | --- |
@@ -81,7 +75,7 @@ The friend-who-knows-everywhere picture skips a lot. Real Yelp runs a serious **
 
 ---
 
-## API Design
+## 🔌 API Design
 
 A small, REST-style surface is enough. The search endpoint is the hot path.
 
@@ -136,48 +130,86 @@ Notes:
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
-```
-           +----------+         +--------------+
- Client -->|  CDN /   |-------->|  API Gateway |
-           |  Edge    |         |  + AuthN/Z   |
-           +----------+         +------+-------+
-                                       |
-                    +------------------+------------------+
-                    |                  |                  |
-              +-----v-----+      +-----v-----+      +-----v-----+
-              |  Search   |      | Business  |      |  Review   |
-              |  Service  |      |  Service  |      |  Service  |
-              +-----+-----+      +-----+-----+      +-----+-----+
-                    |                  |                  |
-              +-----v------------+     |                  |
-              | Elasticsearch    |     |                  |
-              | (geo+filters)    |     |                  |
-              +-----+------------+     |                  |
-                    |                  v                  v
-                    |           +------------------------------+
-                    +---------->|  Postgres + PostGIS (source  |
-                                |  of truth: business, review) |
-                                +--------------+---------------+
-                                               |
-                                    +----------v----------+
-                                    |  Redis (hot results,|
-                                    |  rating cache,      |
-                                    |  tile precompute)   |
-                                    +---------------------+
+```mermaid
+graph TB
+    Client[Client]
 
-   Photos upload directly to S3 via presigned URLs.
-   CDC from Postgres -> Kafka -> indexers update Elasticsearch and Redis.
-   Spam detection runs synchronously (lightweight) and asynchronously (ML) before
-   a review becomes publicly visible.
+    subgraph Edge
+        CDN[CDN / Edge<br/>generic logged-out queries]
+        GW[API Gateway<br/>+ AuthN/Z]
+    end
+
+    subgraph Services
+        SS[Search Service]
+        BS[Business Service]
+        RVS[Review Service<br/>sync spam heuristics]
+    end
+
+    subgraph Stores
+        ES[(Elasticsearch<br/>geo + text + filters)]
+        PG[(Postgres + PostGIS<br/>source of truth:<br/>business · review)]
+        REDIS[(Redis<br/>hot results · rating cache<br/>tile precompute)]
+        S3[(S3<br/>photo bytes)]
+    end
+
+    subgraph Pipeline
+        KAFKA[[Kafka<br/>CDC events]]
+        IDX[Indexers<br/>aggregate + re-index]
+        ML[Async ML<br/>spam classifier]
+    end
+
+    Client --> CDN --> GW
+    GW --> SS
+    GW --> BS
+    GW --> RVS
+    SS --> REDIS
+    SS --> ES
+    BS --> PG
+    RVS --> PG
+    Client -.presigned upload.-> S3
+    PG -->|Debezium CDC| KAFKA
+    KAFKA --> IDX
+    IDX --> ES
+    IDX --> REDIS
+    KAFKA --> ML
+    ML -->|flip status / decrement| PG
+
+    style REDIS fill:#e1f5ff
+    style ES fill:#e1f5ff
+    style PG fill:#e1f5ff
+    style S3 fill:#f3e5f5
+    style KAFKA fill:#FFE4B5
+    style SS fill:#90EE90
 ```
+
+Photos upload directly to S3 via presigned URLs, so the API servers never see the bytes. CDC from Postgres flows through Kafka to indexers that update Elasticsearch and Redis. Spam detection runs synchronously (lightweight heuristics) and asynchronously (ML) before a review becomes publicly trusted.
 
 **Request flow for search:**
 1. Client hits `/search` with lat, lng, radius, filters.
 2. Search service checks Redis for a cache key derived from (geohash_prefix, category, sort).
 3. On miss, it queries Elasticsearch using a `geo_distance` filter plus category and text match, then writes the result into Redis with a short TTL.
 4. Business and review data in results come pre-denormalized in the Elasticsearch document so we do not fan out to the DB per hit.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant SS as Search Service
+    participant RD as Redis
+    participant ES as Elasticsearch
+
+    C->>SS: GET /search (lat, lng, radius, filters)
+    SS->>RD: lookup key (geohash_prefix, category, sort)
+    alt Cache hit
+        RD-->>SS: cached result set
+    else Cache miss
+        SS->>ES: geo_distance + category + text match
+        ES-->>SS: denormalized business docs
+        SS->>RD: write result with short TTL
+    end
+    SS-->>C: results + next_page_token
+```
 
 **Request flow for review write:**
 1. Review service validates the user, runs lightweight spam heuristics synchronously (reject immediately on obvious spam).
@@ -187,9 +219,32 @@ Notes:
 5. A consumer updates the business's `sum_stars` and `review_count` incrementally, recomputes `avg_rating`, and re-indexes the Elasticsearch document.
 6. An async ML-based spam classifier consumes from the same Kafka topic and may flip the review to `REJECTED` and decrement aggregates.
 
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant RVS as Review Service
+    participant PG as Postgres
+    participant K as Kafka
+    participant IDX as Aggregation Consumer
+    participant ES as Elasticsearch
+    participant ML as Async ML Classifier
+
+    U->>RVS: POST /reviews { stars, body }
+    RVS->>RVS: sync spam heuristics
+    RVS->>PG: INSERT review (PENDING or APPROVED)<br/>unique (business_id, user_id)
+    RVS-->>U: 201 { review_id, status }
+    Note over U,PG: session tagged → next read hits primary (RYOW)
+    PG->>K: Debezium CDC event
+    K->>IDX: consume change
+    IDX->>PG: sum_stars += stars, review_count += 1
+    IDX->>ES: re-index business document
+    K->>ML: consume same event
+    ML->>PG: on spam → REJECTED + decrement aggregates
+```
+
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. Geospatial Search by Radius
 
@@ -198,6 +253,20 @@ The central question: given `(lat, lng, radius)`, return nearby businesses effic
 **The two-stage production pattern:**
 
 Naive approaches apply a single `geo_distance` filter directly over all businesses. This works at small scale but degrades as the dataset grows because every candidate must be scored. Production systems split the lookup into two stages:
+
+```mermaid
+graph LR
+    Q["Query<br/>(lat, lng, radius)"] --> GH["Coarse filter<br/>geohash cell + 8 neighbors<br/>O(1) indexed lookups"]
+    GH --> CAND["Candidate set<br/>over-fetched<br/>(rectangular cells)"]
+    CAND --> HAV["Exact filter<br/>Haversine / ST_DWithin<br/>drop false positives"]
+    HAV --> RES["Nearby businesses<br/>within radius"]
+
+    style Q fill:#FFE4B5
+    style GH fill:#e1f5ff
+    style CAND fill:#FFE4B5
+    style HAV fill:#e1f5ff
+    style RES fill:#90EE90
+```
 
 1. **Coarse filter via geohash cells.** Encode each business's lat/lng as a base-32 geohash string where a shared prefix implies spatial proximity. The geohash is indexed as a string column. To search within radius, compute the geohash cell of the center point at the appropriate precision, then query that cell plus the 8 neighboring cells. This is an O(1) indexed key lookup per cell — 9 total — and eliminates the full-scan portion of the query.
 
@@ -226,6 +295,8 @@ Geohash precision level 5 covers roughly 5 km × 5 km. Too coarse for dense city
 - Use the `geography` type in PostGIS (not `geometry`) to get accurate meter-level distances on a sphere.
 - At the 180th meridian and at the poles, geohash neighbor computation breaks. PostGIS handles these natively.
 - Radius searches in dense areas like Manhattan return thousands of candidates. Always paginate, cap radius, and impose a maximum result count.
+
+> ⚠️ **Always query the 8 neighboring cells, not just the center cell.** A user standing exactly on a cell boundary would otherwise miss a business 1 meter away in the adjacent cell. And near the 180th meridian and the poles, geohash neighbor computation breaks entirely — lean on PostGIS, which handles these natively.
 
 ### 2. Review Aggregation
 
@@ -318,6 +389,16 @@ Uploading photo bytes through your API servers is a waste of bandwidth and a sca
 5. A worker validates the object (size, content-type sniff, EXIF scrub for privacy). It then generates multiple resolution variants — thumbnail (100×100), preview (400×400), full (1200×900) — via an async image processing pipeline using ImageMagick or libvips. All variants are stored under separate S3 keys. The worker moves state to `READY` and writes CloudFront URLs for each variant onto the Photo row.
 6. Client either polls `GET /v1/photos/{id}` or receives a push notification before displaying the photo.
 
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING: initiate-upload<br/>(row created, presigned URL issued)
+    PENDING --> PROCESSING: S3 upload event<br/>(S3 → SQS/Lambda)
+    PROCESSING --> READY: validate + variants generated<br/>(thumb / preview / full)
+    PENDING --> REAPED: presigned URL expires<br/>client abandoned (sweeper)
+    READY --> [*]
+    REAPED --> [*]
+```
+
 **Why never serve raw uploads directly:**
 - Raw user photos are typically 5–10 MB each. Serving them directly from S3 at scale crushes CDN egress costs and slows page loads.
 - The async pipeline allows NSFW detection and moderation before variants become publicly accessible.
@@ -374,6 +455,20 @@ Naive designs either (a) always read from primary (unnecessary load) or (b) acce
 
 If a spam review reaches the public index, users see it during the moderation window (which can be hours or days for async-only pipelines). The correct pipeline is two-tiered:
 
+```mermaid
+stateDiagram-v2
+    [*] --> Rejected400: sync heuristic fires<br/>(too short / all-caps / dup / bad URL)
+    [*] --> PENDING: new / flagged account<br/>(visible only to author)
+    [*] --> APPROVED: passes sync checks<br/>(publicly visible)
+    PENDING --> APPROVED: human review approves
+    PENDING --> REJECTED: human review rejects
+    APPROVED --> REJECTED: async ML spam signal<br/>(decrement aggregates, re-index)
+    Rejected400 --> [*]: user revises + resubmits
+    APPROVED --> [*]
+    REJECTED --> [*]
+```
+
+
 **Synchronous layer (at write time):**
 - Apply fast heuristics: review body too short (< 10 chars), all-caps text, duplicate text already in the system, suspicious URLs, profanity.
 - If any heuristic fires, reject with a 400 response immediately. The user can revise and resubmit.
@@ -390,9 +485,27 @@ A separate consumer tracks a rolling window of review counts per business. If th
 
 ---
 
-## Scaling Journey: 0 to Infinity
+## 📈 Scaling Journey: 0 to Infinity
 
 This is the Yelp-specific scaling arc: where do you start, and what breaks next?
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0–100 users<br/>Monolith + Postgres<br/>Haversine in SQL"]
+    S2["Stage 2<br/>100–1K<br/>PostGIS + GiST<br/>read replica + Redis"]
+    S3["Stage 3<br/>1K–100K<br/>Split services<br/>Elasticsearch + CDC/Kafka"]
+    S4["Stage 4<br/>100K–10M<br/>Tile precompute<br/>async agg + ML spam"]
+    S5["Stage 5<br/>10M+<br/>Regional sharding<br/>cross-region federation"]
+
+    S1 -->|"bounding-box scan too slow"| S2
+    S2 -->|"geo+text mix, hot metros saturate"| S3
+    S3 -->|"hot-city spikes melt single ES"| S4
+    S4 -->|"cross-ocean latency + data residency"| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0 to 100 Users
 
@@ -479,7 +592,7 @@ This is the Yelp-specific scaling arc: where do you start, and what breaks next?
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 ### Geospatial Search Uses a Two-Stage Approach: Coarse Filter Then Rank
 
@@ -501,6 +614,8 @@ Business name, address, phone, hours, and categories change at most a few times 
 
 Filtering for businesses "open now" requires knowing the local time at the business location, not the user's timezone. A search for "open now" from New York for a San Francisco business at 8pm EST (5pm PST) must use PST business hours. Store business hours with the UTC offset of the business location, not the user's timezone. This is a common bug in naive implementations.
 
+> 💡 **Store `hours_utc_offset` on the business row, not the caller's timezone.** The `open_now` filter must resolve "now" in the business's local time — a New Yorker searching an 8pm EST for a San Francisco spot is really asking about 5pm PST. Anchoring on the caller's clock is a classic naive bug.
+
 ### Photo Storage Requires Multiple Resolution Variants
 
 Users upload raw photos (5–10 MB each). Serving these directly would crush bandwidth and slow page loads. On upload: generate multiple variants (thumbnail 100×100, preview 400×400, full 1200×900) via an async image processing pipeline (ImageMagick/libvips), store all variants in S3, serve via CDN. The original is kept for re-processing. Never serve raw user uploads directly.
@@ -519,7 +634,7 @@ If a spam review reaches the public index, users see it during the moderation wi
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Area | Mid-Level | Senior | Staff+ |
 | --- | --- | --- | --- |
@@ -534,3 +649,19 @@ If a spam review reaches the public index, users see it during the moderation wi
 | **Spam/abuse** | Out of scope or a brief mention. | Describes synchronous lightweight heuristics at write time + PENDING status for new accounts. | Full two-tier pipeline: sync heuristics + async ML classifier; velocity detection for bombing; reviewer quality weighting in Bayesian average; human review queue routing. |
 | **Scaling** | Read replicas and a cache. | Splits into services, introduces Elasticsearch and CDC, shards reviews by `business_id`. | Regional sharding by metro, cross-region federation for travel queries, global directory replication, degradation modes (Elasticsearch down -> PostGIS fallback), cost modeling. |
 | **Failure modes** | Mentions availability. | Identifies hot-key, cache stampede, DB write contention, and review bombing. | Articulates SLOs per path, designs graceful fallback, plans for chaos/load testing, defines acceptable lag bounds per pipeline stage. |
+
+---
+
+## 📚 Related Concepts
+
+- [Proximity Search](../SystemDesign/DeepDives/ProximitySearch.md) — geohash, quadtree, and R-tree index choices behind the two-stage radius query.
+- [Data Indexing](../CoreConcepts/DataIndexing.md) — geohash string index vs. PostGIS GiST (R-tree) and B-tree lat/lng tradeoffs.
+- [Caching](../CoreConcepts/Caching.md) — layered CDN + Redis + tile precompute, separate TTLs, and single-flight against thundering herds.
+- [Redis](../CoreConcepts/Redis.md) — hot-result cache, rating summary cache, and geohash-keyed tile precomputation.
+- [Elasticsearch](../SystemDesign/DeepDives/Elasticsearch.md) — combining `geo_point`, text (BM25), and category facets in one search query.
+- [Kafka](../SystemDesign/DeepDives/Kafka.md) — the CDC pipeline that fans review changes to aggregation, re-indexing, and async spam classification.
+- [Sharding](../CoreConcepts/Sharding.md) — sharding reviews by `business_id` and regional sharding by metro at global scale.
+- [Data Modelling](../CoreConcepts/DataModelling.md) — `sum_stars`/`review_count` denormalization and the review `status` state machine.
+- [Handling Large Blobs](../SystemDesign/Patterns/HandlingLargeBlobs.md) — presigned S3 uploads and variant generation for photos.
+- [Scaling Reads](../SystemDesign/Patterns/ScalingReads.md) — read replicas, caching, and denormalization for a read-heavy workload.
+- [Yelp (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/Yelp.md) — the source breakdown this doc expands on.

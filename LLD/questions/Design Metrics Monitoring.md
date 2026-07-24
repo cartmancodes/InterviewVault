@@ -1,23 +1,27 @@
-# Design Metrics Monitoring System
+# 📊 Design Metrics Monitoring System
 
 > **Pattern**: Time-series / Telemetry
 > **Difficulty**: Medium
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/metrics-monitoring)
 
-## Table of Contents
+> **Summary**: A metrics monitoring platform ingests append-heavy, timestamp-ordered telemetry from a fleet of hosts (~5M points/sec), stores it in a specialized time-series database, serves aggregation queries to dashboards, and evaluates alert rules that page on-call engineers. The hard parts are surviving the ingest firehose with a durable Kafka buffer and per-series sharding, squeezing petabytes into economically viable storage via delta-of-delta and Gorilla XOR compression plus tiered rollups, keeping alert latency under a minute off a hot-path head block, and taming cardinality explosions before they OOM the inverted index.
+
+## 📋 Table of Contents
 
 1. [Understanding the Problem](#understanding-the-problem)
-2. [Core Entities](#core-entities)
-3. [API Design](#api-design)
-4. [High-Level Design](#high-level-design)
-5. [Deep Dives](#deep-dives)
-6. [Scaling Journey: 0 to Infinity](#scaling-journey-0--)
-7. [Insider Tips and Tricks](#insider-tips-and-tricks)
-8. [Expected Depth by Level](#expected-depth-by-level)
+2. [Layman's Explanation](#laymans-explanation)
+3. [Core Entities](#core-entities)
+4. [API Design](#api-design)
+5. [High-Level Design](#high-level-design)
+6. [Deep Dives](#deep-dives)
+7. [Scaling Journey: 0 to Infinity](#scaling-journey-0-to-infinity)
+8. [Insider Tips and Tricks](#insider-tips-and-tricks)
+9. [Expected Depth by Level](#expected-depth-by-level)
+10. [Related Concepts](#related-concepts)
 
 ---
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 A metrics monitoring platform collects numeric telemetry (CPU, memory, request latency, error rates, custom business counters) from a fleet of services, stores it as time-series, exposes it through interactive dashboards, and evaluates alert rules so on-call engineers are paged when something breaks. Think Datadog, Prometheus + Grafana, or CloudWatch. The distinguishing property is that the workload is append-heavy, timestamp-ordered, and dominated by aggregation queries over ranges, which is very different from a typical OLTP service.
 
@@ -65,7 +69,7 @@ A hospital monitor watches one patient; a real metrics platform ingests from mil
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 | Entity | Purpose | Typical Store |
 |---|---|---|
@@ -80,7 +84,7 @@ The `(metric_name + label_set)` uniqueness is load-bearing. The count of distinc
 
 ---
 
-## API Design
+## 🔌 API Design
 
 The system has three surfaces: ingestion, query, and configuration.
 
@@ -103,7 +107,7 @@ Ingestion endpoints are authenticated by per-tenant API keys; query and config e
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
 The system splits cleanly into four pipelines, each independently scalable:
 
@@ -115,37 +119,60 @@ The system splits cleanly into four pipelines, each independently scalable:
 
 **4. Alerting path.** An alert evaluator periodically (every 10-30s) runs each rule as a query, tracks `pending` vs `firing` state per label set, applies the `for` duration, and hands firing alerts to an alert manager that handles grouping, deduplication, inhibition, silences, and delivery to Slack/PagerDuty/email.
 
-```
-         host agents (push or pull)
-                  |
-                  v
-        +---------------------+
-        |  Ingestion Service  |   validate, tag tenant, batch
-        +---------------------+
-                  |
-                  v
-              Kafka buffer  ---------> Stream aggregator (rollups)
-                  |                           |
-                  v                           v
-        +---------------------+        +--------------+
-        |   TSDB Writer       |        | Alert Eval   |
-        +---------------------+        +--------------+
-                  |                           |
-                  v                           v
-          TSDB shards (hot)            Alert Manager
-                  |                           |
-                  v                           v
-          Object store (cold)          Slack/PagerDuty
-                  ^
-                  |
-        +---------------------+
-        |   Query Service     | <--- Dashboards (Grafana)
-        +---------------------+
+```mermaid
+graph TB
+    AG[Host Agents<br/>push or pull]
+
+    subgraph Ingest["Ingestion Path"]
+        IS[Ingestion Service<br/>validate · tag tenant · batch]
+        KAFKA[[Kafka Buffer<br/>partitioned by series_id]]
+    end
+
+    subgraph Storage["Storage Path"]
+        TW[TSDB Writer<br/>chunk build + compress]
+        HOT[(TSDB Shards<br/>hot · in-memory head)]
+        COLD[(Object Store<br/>cold · S3 blocks)]
+    end
+
+    subgraph Rollup["Rollup Path"]
+        SA[Stream Aggregator<br/>1-min / 1-hr rollups]
+    end
+
+    subgraph Alerting["Alerting Path"]
+        AE[Alert Evaluator<br/>pending → firing]
+        AM[Alert Manager<br/>group · dedup · route]
+        OUT[Slack / PagerDuty / Email]
+    end
+
+    QS[Query Service]
+    DASH[Dashboards<br/>Grafana]
+
+    AG --> IS
+    IS --> KAFKA
+    KAFKA --> TW
+    KAFKA --> SA
+    KAFKA --> AE
+    TW --> HOT
+    HOT --> COLD
+    SA --> HOT
+    AE --> AM
+    AM --> OUT
+    DASH --> QS
+    QS --> HOT
+    QS --> COLD
+
+    style KAFKA fill:#FFE4B5
+    style HOT fill:#e1f5ff
+    style COLD fill:#e1f5ff
+    style SA fill:#FFE4B5
+    style QS fill:#90EE90
+    style AE fill:#90EE90
+    style OUT fill:#f3e5f5
 ```
 
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. Ingest pipeline at 5M points/sec
 
@@ -160,6 +187,30 @@ Naively pointing 500K agents at a single service blows up fast. Three mechanisms
 **Handling late-arriving and out-of-order data.** Agents can restart, network partitions can delay points, and NTP drift can cause small timestamp skew. The TSDB head block must accept points up to a configurable out-of-order window (e.g., 10 minutes behind wall clock) without crashing. Points older than the window are either rejected with a counter increment (for observability) or written to a separate "backfill" path that skips the hot head block and directly writes to the appropriate sealed chunk. Silently dropping late arrivals corrupts rate calculations and alert evaluation.
 
 The trade-off is latency: Kafka adds a few hundred milliseconds. For alerts with a 1-minute SLO that is fine. However, the Kafka consumer lag metric is itself a critical observable — if lag grows, alerts fire stale data.
+
+```mermaid
+sequenceDiagram
+    participant AG as Host Agent
+    participant IS as Ingestion Service
+    participant K as Kafka by series_id
+    participant TW as TSDB Writer
+    participant SA as Stream Aggregator
+    participant AE as Alert Evaluator
+
+    AG->>IS: batch of 100 points (Protobuf)
+    IS->>IS: validate + stamp tenant_id
+    IS->>K: append, partition by series_id
+    Note over K: retains 24h+ for replay
+    K->>TW: consume (owns series shard)
+    TW->>TW: build chunk, delta-of-delta + XOR
+    K->>SA: consume same topic
+    SA->>SA: fold into 1-min / 1-hr rollups
+    K->>AE: consume same topic
+    AE->>AE: evaluate rules on recent window
+    Note over TW,AE: three independent consumers,<br/>one durable stream
+```
+
+> ⚠️ **Never silently drop late arrivals.** The head block must accept out-of-order points up to a configurable window (e.g. 10 minutes behind wall clock). Points older than the window are rejected *with a counter increment* or routed to a backfill path that writes directly to the sealed chunk. Silently dropping late data corrupts rate calculations and alert evaluation.
 
 ### 2. Time-series database internals
 
@@ -186,6 +237,26 @@ A dashboard showing "last 30 days of p99 latency" cannot read 30 days of 10-seco
 
 Rollups are built by a stream aggregator (Flink, Spark Streaming, or a custom consumer) reading the Kafka topic and writing back to dedicated TSDB tenants with longer retention. At query time, the query engine picks the coarsest tier that still satisfies the step size. The query planner logic: if `(end - start) / step > threshold`, use a coarser tier. This is transparent to the dashboard user but requires the planner to track which tiers exist and their retention windows.
 
+```mermaid
+graph LR
+    RAW[(Raw<br/>10s resolution<br/>15-day retention)]
+    M1[(1-min rollups<br/>avg·min·max·count<br/>p50·p95·p99<br/>90-day retention)]
+    H1[(1-hour rollups<br/>same functions<br/>2-year retention)]
+
+    RAW -->|stream aggregator| M1
+    M1 -->|stream aggregator| H1
+
+    QP{Query Planner<br/>range / step}
+    QP -->|short range| RAW
+    QP -->|days| M1
+    QP -->|months| H1
+
+    style RAW fill:#e1f5ff
+    style M1 fill:#FFE4B5
+    style H1 fill:#f3e5f5
+    style QP fill:#90EE90
+```
+
 **The percentile trap.** You cannot average percentiles. If you want a p99 over a 1-hour window from 1-minute rollups, you cannot just take the average of 60 p99 values - it is mathematically wrong. The fix is to store **histograms** (t-digest or HDR) per window, not scalar percentiles, and merge histograms at query time. This is why Prometheus exposes `histogram_quantile()` over bucket counts rather than pre-aggregated percentiles. t-digest offers better accuracy at the tails with smaller memory footprint; HDR histogram offers exact accuracy within configurable precision. The choice depends on whether you need exact SLA compliance data (HDR) or operational approximations (t-digest).
 
 **Retention as tiered storage.** Raw data lives on local SSD on TSDB nodes. Older chunks are uploaded to S3 as compressed blocks and deleted from local disk. Query service transparently reads from S3 for cold ranges, caching recent reads. Thanos and Cortex are built around exactly this pattern. The upload process must be idempotent — a crash mid-upload should not corrupt the block. Blocks are uploaded atomically using a staging prefix and renamed on completion; partial uploads are cleaned up by a background GC job.
@@ -197,6 +268,20 @@ Rollups are built by a stream aggregator (Flink, Spark Streaming, or a custom co
 Alerting has harder reliability requirements than dashboards because a missed page means an outage goes undetected.
 
 **Evaluation.** A scheduler iterates over all alert rules every 10-30 seconds, executes each as a range query against the TSDB (or a dedicated recent-data cache), and compares the result to the threshold. The `for` duration means a rule transitions to `pending` on first breach and only fires after the condition holds for the full duration - this prevents flapping on transient spikes. Evaluation must read from the hot-path head block, not from a lagging replica or cold storage. A 10-second-old snapshot is fine for a 5-minute alert window; a 2-minute-old snapshot defeats the 1-minute alert latency SLO.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Inactive
+    Inactive --> Pending: threshold breached
+    Pending --> Firing: condition holds for<br/>the full duration
+    Pending --> Inactive: breach clears<br/>(transient spike)
+    Firing --> Resolved: condition clears
+    Resolved --> [*]
+    note right of Pending
+        one instance per firing label set:
+        (rule_id, label_set) → state
+    end note
+```
 
 **Alerting on derivatives, not absolutes.** Static threshold alerts (`CPU > 90%`) generate false positives during expected traffic spikes and miss gradual degradation. Rate-of-change alerting — "CPU increased by 30% in 5 minutes" or "error rate doubled in 2 minutes" — captures unexpected changes regardless of baseline. Prometheus `rate()` and `increase()` functions, combined with `predict_linear()` for forecasting, enable proactive alerting without manually tuning thresholds for every service. This is a meaningful architectural discussion: it changes how the alert evaluator stores and queries recent data (it needs a short history window, not just the latest point).
 
@@ -212,7 +297,27 @@ Alerting has harder reliability requirements than dashboards because a missed pa
 
 **HA.** Run two independent evaluators on two independent TSDB replicas. They both evaluate and both send to the alert manager, which dedups. This tolerates loss of either side without missing pages. The deduplication key is the fingerprint of `(rule_id, label_set, firing_start_time)` — two evaluators independently computing the same firing produce the same fingerprint, which the alert manager collapses to a single notification.
 
-**Why evaluation must not use stale data.** If alert evaluation reads from S3-tiered cold storage or hits a lagging replica, alerts fire late. Dedicated hot-path storage (the in-memory head block of the TSDB replica closest to the writer) is essential. A monitoring anti-pattern is routing alert evaluation queries through the same query service used by dashboards: a slow dashboard query can starve alert evaluation of CPU, delaying pages during incidents when dashboards are most heavily used.
+```mermaid
+sequenceDiagram
+    participant R1 as TSDB Replica A
+    participant E1 as Evaluator 1
+    participant AM as Alert Manager
+    participant E2 as Evaluator 2
+    participant R2 as TSDB Replica B
+
+    E1->>R1: evaluate rule (hot head block)
+    E2->>R2: evaluate rule (hot head block)
+    E1->>AM: fire fp(rule_id, label_set, firing_start)
+    E2->>AM: fire fp(rule_id, label_set, firing_start)
+    AM->>AM: dedup by fingerprint → one alert
+    AM->>AM: group · inhibit · check silences
+    AM->>AM: route by label match
+    AM-->>E1: single notification to Slack/PagerDuty
+```
+
+**Why evaluation must not use stale data.** If alert evaluation reads from S3-tiered cold storage or hits a lagging replica, alerts fire late. Dedicated hot-path storage (the in-memory head block of the TSDB replica closest to the writer) is essential.
+
+> ⚠️ **Anti-pattern: sharing the dashboard query path for alert evaluation.** Routing alert evaluation queries through the same query service used by dashboards means a slow dashboard query can starve alert evaluation of CPU — delaying pages during incidents, exactly when dashboards are most heavily used. Give alerting its own hot-path read path.
 
 ### 5. High cardinality
 
@@ -230,13 +335,31 @@ Cardinality is the number of distinct `(metric_name + label_set)` combinations. 
 - **Aggregation at the agent.** For extremely high-cardinality counters, agents can pre-aggregate locally (e.g., count requests per endpoint, not per request) before emitting.
 - **Adaptive cardinality detection.** At hyperscale, auto-detect metrics whose series count doubles in a rolling hour window, flag the offending label to the owning team, and either auto-drop or require explicit acknowledgment before ingestion resumes. Human review cannot keep up at millions of metrics.
 
-**The IDs-as-labels rule of thumb.** Anything that can take more than a few thousand distinct values should not be a label. It should be a log field (searchable) or a trace attribute (indexed differently), not a metric dimension. Exemplars are the bridge: attach a representative trace ID to a metric sample without making trace IDs a label dimension.
+> 💡 **The IDs-as-labels rule of thumb.** Anything that can take more than a few thousand distinct values should not be a label. It should be a log field (searchable) or a trace attribute (indexed differently), not a metric dimension. Exemplars are the bridge: attach a representative trace ID to a metric sample without making trace IDs a label dimension.
 
 ---
 
-## Scaling Journey: 0 to Infinity
+## 📈 Scaling Journey: 0 to Infinity
 
 This section is my own view of how a metrics platform evolves under load. The numbers are rough rules of thumb, not hard limits, but they capture the architectural transitions you should be able to narrate in an interview.
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0–10K DP/s<br/>Single Prometheus<br/>+ Grafana + Alertmanager"]
+    S2["Stage 2<br/>10K–100K DP/s<br/>HA Prometheus pair<br/>+ Thanos/Cortex + S3"]
+    S3["Stage 3<br/>100K–1M DP/s<br/>Kafka buffer + rollups<br/>+ multi-tenancy quotas"]
+    S4["Stage 4<br/>1M–10M DP/s<br/>Tiered storage<br/>+ cardinality engineering"]
+    S5["Stage 5<br/>10M+ DP/s<br/>Multi-region federation<br/>+ data residency"]
+
+    S1 -->|"single node OOMs"| S2
+    S2 -->|"shared path couples tenants"| S3
+    S3 -->|"single region = blind spot"| S4
+    S4 -->|"data residency + global users"| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0-10K Data Points/sec (MVP)
 
@@ -300,7 +423,7 @@ Every assumption from earlier stages gets audited: batching, compression, chunk 
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 ### Cardinality Is the Enemy of Time-Series Databases
 A metric like `http_requests_total{service="api", endpoint="/users", status="200", region="us-east", host="ip-10-0-1-42"}` has high cardinality if `host` takes millions of values (one per container instance). High cardinality explodes the number of unique time series: 1,000 services × 100 endpoints × 5 status codes × 10 regions × 1,000 hosts = 5 billion unique series. Most TSDBs (Prometheus, Thanos) struggle beyond 10M active series. Production rule: never use unbounded values (request IDs, user IDs, raw hostnames) as metric labels.
@@ -328,10 +451,25 @@ If your monitoring infrastructure runs on the same cluster as your application, 
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Level | Functional + NFRs | High-Level Design | Deep Dives | Scale |
 |---|---|---|---|---|
 | **Mid (L4)** | States requirements clearly, identifies ingest/query/alert as the three pipelines, catches the 1-minute alert SLO. | Draws ingestion -> storage -> query -> alert, names Prometheus or Datadog as reference, uses a TSDB without explaining why. | Discusses one deep dive (usually ingestion or storage) at a surface level. Mentions sharding without specifying the shard key. | Reasons about ~100K DP/sec; does not explicitly plan for multi-region or cardinality explosions. |
 | **Senior (L5)** | Calls out cardinality as a first-class NFR, quantifies storage (1 GB/s raw -> PB over retention), distinguishes raw vs rollup retention. | Introduces Kafka as a buffer and justifies it (spikes, replay, multi-consumer). Shards by series_id and explains why. Separates hot and cold storage tiers. | Explains TSDB internals (delta-of-delta, Gorilla XOR, inverted index on labels). Discusses the percentile-of-percentiles trap and pushes for histograms. Describes alert HA via two evaluators + dedup. | Reasons about 1M-10M DP/sec, discusses rollup tiers and their retention policies, proposes per-tenant cardinality quotas. |
 | **Staff (L6+)** | Treats monitoring as a tier-0 system whose availability must exceed the systems it monitors; calls out that local alerting must work during regional partitions. | Argues for or against pull vs push with real trade-offs; discusses exemplars for high-cardinality observability; separates hot-path (for alerts) from cold-path (for dashboards) storage. | Drives tiered storage with a query planner that picks the right tier per query step. Proposes adaptive cardinality detection and auto-dropping. Designs the federation layer and explains why global alerts are usually a bad idea. Debates t-digest vs HDR histograms for rollups. | Sketches multi-region federation, per-region data residency, global read-only replicas, and the failure semantics when regions partition. Discusses cost: compression ratios, storage tiering, and the unit economics of monitoring a fleet. |
+
+---
+
+## 📚 Related Concepts
+
+- [Sharding](../CoreConcepts/Sharding.md) — sharding TSDB writers by `series_id`, and tenant-first isolation so a noisy tenant degrades only its own shard.
+- [Consistent Hashing](../CoreConcepts/ConsistentHashing.md) — hashing `series_id` to a writer shard with virtual nodes so re-sharding moves only a fraction of series.
+- [Data Indexing](../CoreConcepts/DataIndexing.md) — the inverted index mapping label-value pairs to posting lists of series IDs, and why posting-list intersection is the query bottleneck.
+- [Redis](../CoreConcepts/Redis.md) — the chunk cache keyed by `(series_id, chunk_start)` and the durable key-value store (Redis AOF) for alert-instance state.
+- [Kafka](../SystemDesign/DeepDives/Kafka.md) — the durable buffer partitioned by `series_id` that absorbs spikes, enables replay, and fans out to TSDB writer, aggregator, and alert evaluator.
+- [Flink](../SystemDesign/DeepDives/Flink.md) — the stream aggregator building 1-minute and 1-hour rollups off the same topic.
+- [Time-Series Databases](../SystemDesign/DeepDives/TimeSeriesDatabases.md) — head blocks, delta-of-delta timestamps, Gorilla XOR value compression, and immutable on-disk chunks.
+- [Scaling Writes](../SystemDesign/Patterns/ScalingWrites.md) — surviving the 5M-points/sec ingest firehose with batching, buffering, and per-series sharding.
+- [Scaling Reads](../SystemDesign/Patterns/ScalingReads.md) — chunk caching and rollup routing that keep dashboard queries under a few seconds.
+- [Metrics Monitoring (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/MetricsMonitoring.md) — the source breakdown this doc expands on.

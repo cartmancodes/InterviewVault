@@ -1,10 +1,26 @@
-# Handling Large Blobs
+# 📁 Handling Large Blobs
 
-Learn about how to handle large blobs in your system design interview.
+> **Overview**: Large files like videos, images, and documents need special handling in distributed systems. Instead of shoving gigabytes through your servers, this pattern uses presigned URLs to let clients upload directly to blob storage and download from CDNs. You also get resumable uploads, parallel transfers, and progress tracking — the stuff that separates real systems from toy projects.
 
-> 📁 Large files like videos, images, and documents need special handling in distributed systems. Instead of shoving gigabytes through your servers, this pattern uses presigned URLs to let clients upload directly to blob storage and download from CDNs. You also get resumable uploads, parallel transfers, and progress tracking - the stuff that separates real systems from toy projects.
+## 📋 Table of Contents
+- [Layman's Explanation](#laymans-explanation)
+- [The Problem](#the-problem)
+- [The Solution](#the-solution)
+- [When to Use in Interviews](#when-to-use-in-interviews)
+- [Common Deep Dives](#common-deep-dives)
+- [Conclusion](#conclusion)
+- [Key Takeaways](#key-takeaways)
+- [Related Concepts](#related-concepts)
 
-## The Problem
+---
+
+## 🧒 Layman's Explanation
+
+Imagine you run a members-only warehouse. When a member wants to drop off a giant crate, you don't personally carry it in and stack it — that would jam your front desk while everyone else waits. Instead, you check their membership, hand them a one-time gate pass that works for the next 15 minutes at loading dock 7 *only*, and they back their own truck right up to the dock. Pickup works the same way: you hand out a pass and the nearest branch warehouse (a **CDN edge**) loads their car, so nobody drives across the country for a crate that could be stored down the street.
+
+If the crate is enormous, they bring it in on pallets (**chunks**) — that way a jam on pallet 60 doesn't mean re-hauling the first 59; they just resume from where they stopped. Your front desk never touches the freight itself. It only issues passes (**presigned URLs**) and keeps a logbook (**the metadata database**) of what's *supposed* to be on each dock. And because the trucks come and go without checking in, you run a nightly audit (**reconciliation**) to make sure the logbook matches what's actually sitting on the docks.
+
+## ⚠️ The Problem
 
 If you've been studying for system design interviews, you already know that large files belong in blob storage like S3, not in databases. This separation lets storage scale independently from compute and keeps database performance snappy.
 
@@ -30,7 +46,7 @@ You get the picture. Handling large files in distributed systems is hard. So wha
 
 [YouTube](https://www.hellointerview.com/learn/system-design/problem-breakdowns/youtube#large-blobs)
 
-## The Solution
+## 🛠️ The Solution
 
 Instead of proxying data through your servers, you give clients temporary, scoped credentials to interact directly with storage. Your application server's role shifts from data transfer to access control - it validates the request, generates credentials, and gets out of the way.
 
@@ -147,6 +163,20 @@ Now the storage service itself confirms what exists, removing the client from th
 
 With events as your primary update mechanism and reconciliation catching stragglers, you maintain consistency without sacrificing the performance benefits of direct uploads. The small delay in status updates is a reasonable trade-off for not proxying gigabytes through your servers.
 
+The `status` column effectively becomes a small state machine that both the storage event and the reconciliation job can advance:
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: presigned URL generated<br/>DB row created with storage_key
+    pending --> uploading: client PUTs parts<br/>directly to storage
+    uploading --> completed: storage event fires<br/>(SNS/SQS) confirms object
+    uploading --> failed: upload aborted<br/>or URL expired
+    pending --> completed: reconciliation job<br/>verifies object exists
+    pending --> failed: reconciliation finds<br/>stuck / orphaned upload
+    completed --> [*]
+    failed --> [*]
+```
+
 ### Cloud Provider Terminology
 
 Each provider has their own names for the same concepts.
@@ -161,7 +191,7 @@ Each provider has their own names for the same concepts.
 | **CDN with Signed URLs** | • CloudFront<br>• (signed URLs/cookies) | • Cloud CDN<br>• (signed URLs) | • Azure CDN<br>• (SAS tokens) |
 | **Cleanup Policies** | Lifecycle Rules | Lifecycle Management | Lifecycle Management Policies |
 
-## When to Use in Interviews
+## 🎤 When to Use in Interviews
 
 The rule is simple - no need to overthink it. If you're moving files larger than 10MB through your API, you should immediately think of this pattern. The exact threshold depends on your infrastructure, but 10MB is where the pain becomes real.
 
@@ -187,7 +217,7 @@ This pattern adds complexity that's only worth it when you're dealing with actua
 
 **When the experience demands immediate response.** If users expect instant feedback based on file contents - like a profile photo appearing immediately with face detection, or a document preview generated during upload - the async nature breaks the UX. The round trip of upload → process → notify takes too long for truly interactive features.
 
-## Common Deep Dives
+## 🔬 Common Deep Dives
 
 Here are some of the most common deep dives that come up when working with large blobs and how you can answer them.
 
@@ -246,7 +276,7 @@ For extreme cases like distributing massive datasets or game assets, some teams 
 
 The pragmatic approach: serve everything through CDN with appropriate cache headers. Ensure range requests work for large files. Let the CDN and browser handle the optimization. Only consider exotic approaches like parallel downloads if you're distributing multi-gigabyte files and users complain about speeds despite good connectivity.
 
-## Conclusion
+## 📝 Conclusion
 
 Large blob handling is a pattern that appears in almost every system design interview involving user-generated content. When you hear "video uploads," "file sharing," or "photo storage," immediately think about bypassing your servers for the actual data transfer. The key insight is shifting from moving bytes through your infrastructure to orchestrating access permissions and managing distributed state.
 
@@ -255,6 +285,24 @@ In interviews, demonstrate that you understand both the performance benefits and
 Answer the question below to find your gaps.
 
 Get a quick-reference sheet for this topic, perfect for last-minute review.
+
+## 🎓 Key Takeaways
+
+- **Get your servers out of the byte path.** For files over ~10MB, don't proxy uploads/downloads through application servers — issue **presigned URLs** so clients talk directly to blob storage, and serve downloads from a **CDN**. Your server's job shifts from moving data to granting scoped, time-limited access.
+- **Bake restrictions into the signature.** Presigned URLs should encode `content-length-range` and `content-type` conditions so a URL meant for a 5MB image can't be used to upload a 500MB video — this is also your first line of defense against storage-cost abuse.
+- **Chunk big files for resumability.** S3 multipart, GCS resumable uploads, and Azure block blobs let clients re-upload only the failed parts (querying with `ListParts` and friends), and completed-part counts give you a free progress bar. Set lifecycle rules to purge incomplete uploads after 1–2 days.
+- **Direct uploads create a distributed-state problem.** Metadata lives in your DB, bytes live in storage, and they update at different times. Don't trust the client's "done!" — let **storage event notifications** (SNS/SQS, Pub/Sub, Event Grid) confirm what exists, with a **reconciliation** job as a safety net for stuck `pending` rows.
+- **The storage key is the join point.** Use a server-generated pattern like `uploads/{user_id}/{timestamp}/{uuid}`, never client-supplied keys, so storage events map cleanly back to the exact database row.
+- **Know when NOT to use it.** Small files, synchronous validation (e.g. CSV header checks), compliance/data-inspection requirements, and instant-feedback UX all justify the traditional proxy approach.
+
+## 📚 Related Concepts
+
+- [Caching](../../CoreConcepts/Caching.md) — CDN and edge caching that make signed-URL downloads fast worldwide.
+- [Networking](../../CoreConcepts/Networking.md) — HTTP PUT/GET, range requests, and signed headers underpinning direct transfers.
+- [Kafka](../DeepDives/Kafka.md) — the messaging layer pattern behind storage event notifications and async processing pipelines.
+- [Managing Long-Running Tasks](ManagingLongRunningTasks.md) — post-upload workflows like transcoding, thumbnailing, and virus scanning.
+- [Real-Time Updates](Real-TimeUpdates.md) — pushing upload progress and completion status back to the client.
+- [YouTube](../ProblemBreakdowns/Youtube.md) · [Instagram](../ProblemBreakdowns/Instagram.md) · [Dropbox](../ProblemBreakdowns/Dropbox.md) — canonical breakdowns that apply this pattern end-to-end.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/patterns/large-blobs](https://www.hellointerview.com/learn/system-design/patterns/large-blobs)*

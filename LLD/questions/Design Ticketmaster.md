@@ -1,36 +1,40 @@
-# Design Ticketmaster
+# 🎟️ Design Ticketmaster
 
 > **Pattern**: Booking / Concurrency Control
 > **Difficulty**: Medium
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/ticketmaster)
 
+> **Summary**: Ticketmaster is an event-ticketing platform whose one hard problem is selling each seat exactly once while millions of fans stampede a hot on-sale. Browsing and search are read-heavy and want high availability; the booking write path wants strong consistency. The mature design holds seats as Redis TTL locks (`SETNX ... EX 600`), writes Postgres only on confirmed payment, throttles the thundering herd through a Redis sorted-set virtual waiting room, and serves search from Elasticsearch fed by CDC from Postgres. Seat maps ride a CDN; only the small availability JSON is dynamic.
+
 ---
 
-## Table of Contents
+## 📋 Table of Contents
 
-1. [Understanding the Problem](#understanding-the-problem)
+1. [Understanding the Problem](#-understanding-the-problem)
    - [Functional Requirements](#functional-requirements)
    - [Non-Functional Requirements](#non-functional-requirements)
-2. [Core Entities](#core-entities)
-3. [API Design](#api-design)
-4. [High-Level Design](#high-level-design)
-5. [Deep Dives](#deep-dives)
+2. [Layman's Explanation](#-laymans-explanation)
+3. [Core Entities](#-core-entities)
+4. [API Design](#-api-design)
+5. [High-Level Design](#-high-level-design)
+6. [Deep Dives](#-deep-dives)
    1. [Preventing Double-Booking](#1-preventing-double-booking)
    2. [Handling Popular Event Bursts](#2-handling-popular-event-bursts)
    3. [Search at Scale](#3-search-at-scale)
    4. [Query Result Caching](#4-query-result-caching)
-6. [Scaling Journey: 0 to Infinity](#scaling-journey-0--)
-   - [Stage 1: 0 to 100 Users (MVP)](#stage-1-0100-users-mvp)
-   - [Stage 2: 100 to 1,000 Users](#stage-2-1001000-users)
-   - [Stage 3: 1K to 100K Users](#stage-3-1k100k-users)
-   - [Stage 4: 100K to 10M Users](#stage-4-100k10m-users)
+7. [Scaling Journey: 0 to Infinity](#-scaling-journey-0-to-infinity)
+   - [Stage 1: 0 to 100 Users (MVP)](#stage-1-0-to-100-users-mvp)
+   - [Stage 2: 100 to 1,000 Users](#stage-2-100-to-1000-users)
+   - [Stage 3: 1K to 100K Users](#stage-3-1k-to-100k-users)
+   - [Stage 4: 100K to 10M Users](#stage-4-100k-to-10m-users)
    - [Stage 5: 10M+ Users](#stage-5-10m-users)
-7. [Insider Tips and Tricks](#insider-tips-and-tricks)
-8. [Expected Depth by Level](#expected-depth-by-level)
+8. [Insider Tips and Tricks](#-insider-tips-and-tricks)
+9. [Expected Depth by Level](#-expected-depth-by-level)
+10. [Related Concepts](#-related-concepts)
 
 ---
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 Ticketmaster is an online ticketing platform where fans discover events (concerts, sports, theater) and purchase seats for specific shows at specific venues. The hard part is not the browsing experience; it is guaranteeing that a given seat is sold exactly once while millions of fans hammer the refresh button on a popular on-sale.
 
@@ -83,7 +87,7 @@ A real venue is far stranger than a high school dance. It has dozens of price ti
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 | Entity | Purpose | Key Attributes |
 |--------|---------|----------------|
@@ -96,9 +100,56 @@ A real venue is far stranger than a high school dance. It has dozens of price ti
 
 Key relationships: a Venue has many Events; an Event has many Tickets (pre-generated from the venue's seat map); a Booking groups one or more Tickets for one User.
 
+```mermaid
+erDiagram
+    VENUE ||--o{ EVENT : hosts
+    PERFORMER ||--o{ EVENT : "performs at"
+    EVENT ||--o{ TICKET : "has (pre-generated)"
+    USER ||--o{ BOOKING : places
+    BOOKING ||--o{ TICKET : groups
+
+    VENUE {
+        string venue_id
+        string name
+        int capacity
+        json seat_map
+    }
+    EVENT {
+        string event_id
+        string name
+        datetime start_time
+        string performer_id
+        string venue_id
+        string category
+    }
+    TICKET {
+        string ticket_id
+        string event_id
+        string section
+        string row
+        string seat_number
+        decimal price
+        string status
+        datetime reserved_until
+        string booking_id
+    }
+    BOOKING {
+        string booking_id
+        string user_id
+        string status
+        decimal total_price
+        datetime created_at
+    }
+    USER {
+        string user_id
+        string email
+        string name
+    }
+```
+
 ---
 
-## API Design
+## 🔌 API Design
 
 ```
 # Browse
@@ -126,24 +177,57 @@ Notes:
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
-```
-                      +---------------------+
-  Clients (web/app) ->|   API Gateway / LB  |-> Auth, rate-limit, routing
-                      +----------+----------+
-                                 |
-        +----------------+-------+------+---------------+
-        |                |              |               |
-   Search Service   Event Service  Booking Service  Queue Service
-        |                |              |               |
-  Elasticsearch     PostgreSQL      PostgreSQL       Redis (sorted set)
-   (inverted idx)   (events,venue)  (tickets,bookings)
-                         |              |
-                       Redis         Redis (seat holds: SETNX NX EX)
-                      (read cache)
-                                        |
-                                    Stripe (payments)
+```mermaid
+graph TB
+    subgraph Clients
+        C[Web / Mobile Clients]
+    end
+
+    GW[API Gateway / LB<br/>TLS · Auth · Rate-limit · Routing]
+
+    subgraph Services
+        SS[Search Service]
+        ES_S[Event Service<br/>event detail pages]
+        BS[Booking Service<br/>only writer of<br/>ticket status]
+        QS[Queue Service<br/>virtual waiting room]
+    end
+
+    subgraph Stores
+        ELASTIC[(Elasticsearch<br/>inverted index)]
+        PG[(PostgreSQL<br/>events · venues<br/>tickets · bookings)]
+        REDIS_H[(Redis<br/>seat holds<br/>SETNX NX EX)]
+        REDIS_C[(Redis<br/>read cache)]
+        REDIS_Q[(Redis<br/>sorted set queue)]
+    end
+
+    STRIPE[Stripe<br/>payments]
+    CDN[CDN<br/>seat map SVG]
+
+    C --> GW
+    GW --> SS
+    GW --> ES_S
+    GW --> BS
+    GW --> QS
+    SS --> ELASTIC
+    ES_S --> PG
+    ES_S --> REDIS_C
+    ES_S -.seat map ref.-> CDN
+    BS --> PG
+    BS --> REDIS_H
+    BS --> STRIPE
+    QS --> REDIS_Q
+    PG -->|CDC: outbox → Debezium → Kafka| ELASTIC
+
+    style BS fill:#90EE90
+    style PG fill:#e1f5ff
+    style ELASTIC fill:#e1f5ff
+    style REDIS_H fill:#e1f5ff
+    style REDIS_C fill:#e1f5ff
+    style REDIS_Q fill:#e1f5ff
+    style STRIPE fill:#f3e5f5
+    style CDN fill:#f3e5f5
 ```
 
 - **API Gateway** terminates TLS, authenticates, rate-limits per user/IP, fans out to services.
@@ -156,11 +240,22 @@ Notes:
 
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. Preventing Double-Booking
 
 The core correctness problem: two users click "Buy" on seat A17 at the same millisecond. One must succeed, one must fail, nothing in between.
+
+A ticket moves through three states. In the recommended Redis-hold design (Option D below), Postgres only ever sees `AVAILABLE` and `BOOKED`; the `RESERVED` state lives as a TTL key in Redis that expires on its own.
+
+```mermaid
+stateDiagram-v2
+    [*] --> AVAILABLE: ticket pre-generated<br/>from seat map
+    AVAILABLE --> RESERVED: SETNX hold acquired<br/>(10-min TTL)
+    RESERVED --> BOOKED: payment confirmed
+    RESERVED --> AVAILABLE: TTL expires /<br/>checkout abandoned
+    BOOKED --> [*]
+```
 
 **Option A - SELECT FOR UPDATE (rejected at scale).** Grab a pessimistic row lock on the ticket rows at reservation time and hold it through payment. This is correct for small traffic but catastrophic under load. At 500K concurrent checkout attempts, every request acquires a row lock that is held for the entire 2-10 minute human payment window. Postgres connection pool exhausts within seconds, head-of-line blocking cascades across unrelated rows on the same page, and the entire booking service grinds to a halt. This approach works for 100 users; it fails violently at 500K. It should never appear in a production design for this problem.
 
@@ -189,6 +284,33 @@ SETNX seat:{event_id}:{ticket_id} {user_id} EX 600
 
 This decouples the hold from the DB transaction entirely. Postgres sees only confirmed writes, not speculative holds. The seat hold path is now sub-millisecond (Redis) rather than multi-millisecond (Postgres row lock). At 500K concurrent checkout attempts, Redis handles this comfortably; Postgres only sees the ~5-10% of attempts that complete payment.
 
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant BS as Booking Service
+    participant R as Redis (holds)
+    participant PG as PostgreSQL
+    participant S as Stripe
+
+    U->>BS: POST /bookings { ticket_ids, idempotency_key }
+    BS->>R: SETNX seat:{event}:{ticket} user EX 600
+    alt SETNX returns 1 (seat free)
+        R-->>BS: hold acquired (10-min TTL)
+        BS-->>U: { booking_id, reserved_until }
+        U->>BS: POST /bookings/{id}/confirm { payment_token }
+        BS->>S: charge (idempotency_key)
+        S-->>BS: payment succeeded
+        BS->>PG: BEGIN; status = BOOKED; COMMIT
+        BS->>R: DEL seat key
+        BS-->>U: { status: CONFIRMED, receipt_url }
+    else SETNX returns 0 (already held)
+        R-->>BS: seat taken
+        BS-->>U: 409 — some seats were just taken
+    end
+```
+
+> ⚠️ **`SELECT FOR UPDATE` is the trap answer.** A pessimistic row lock held across the multi-second human payment window exhausts the Postgres connection pool at 500K concurrent buyers and cascades head-of-line blocking to unrelated rows. It is correct for 100 users and catastrophic at scale. Hold in Redis; write Postgres only on confirmed payment.
+
 The one trade-off: the event page's read path must consult Redis to determine which seats are currently held. Solve this with a `MGET` over the seat keys when rendering availability, or by pushing hold events onto a pub/sub fanout channel.
 
 ### 2. Handling Popular Event Bursts
@@ -205,6 +327,34 @@ On a Taylor Swift drop, 10M users hit the booking page in the first 60 seconds. 
 4. The Booking Service rejects any reserve call whose `user_id` is not in the admitted set.
 5. Queue position is always server-side. The client receives a signed JWT encoding their position and a timestamp; the server validates this on every status poll. A client that modifies its reported position is rejected.
 
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant QS as Queue Service
+    participant Q as Redis sorted set<br/>queue:{event_id}
+    participant AW as Admission Worker
+    participant A as Redis set<br/>admitted:{event_id}
+    participant BS as Booking Service
+
+    U->>QS: join waiting room
+    QS->>Q: ZADD arrival_timestamp user
+    QS-->>U: SSE stream: position + ETA (signed JWT)
+    loop every second
+        AW->>Q: dequeue top N users
+        AW->>A: SADD admitted user (short TTL)
+        AW-->>U: SSE: "proceed to checkout"
+    end
+    U->>BS: POST /bookings
+    BS->>A: is user_id admitted?
+    alt admitted
+        A-->>BS: yes
+        BS-->>U: reserve seats
+    else not admitted
+        A-->>BS: no
+        BS-->>U: 403 — reject
+    end
+```
+
 This converts a thundering herd into a controlled trickle. Ops has a single knob — the admission rate — to throttle the on-sale in real time. Queue depth and admission rate become the primary operational metrics during a hot sale.
 
 ### 3. Search at Scale
@@ -214,6 +364,22 @@ Users search by partial names, misspellings, date ranges, and geography. `WHERE 
 **Indexed Postgres full-text search** (`tsvector` + GIN index) works up to a few million events and handles stemming and prefix matches well. Fine for MVP.
 
 **Elasticsearch** is the production answer. Project `Event` documents into ES and let its inverted index handle tokenization, fuzzy matching (`"tayler" -> "taylor"`), geo queries, and aggregations for facet counts (genre, city, date buckets). Keep ES in sync using CDC from Postgres: the Booking Service writes to an outbox table in the same transaction as the event mutation; Debezium streams outbox rows to Kafka; an ES indexer consumer applies them. This preserves exactly-once semantics relative to the source of truth.
+
+```mermaid
+graph LR
+    PG[(PostgreSQL<br/>event mutation<br/>+ outbox row<br/>same transaction)]
+    DBZ[Debezium<br/>CDC connector]
+    K[[Kafka]]
+    IDX[ES Indexer<br/>consumer]
+    ES[(Elasticsearch<br/>inverted index<br/>sharded by event_id)]
+
+    PG --> DBZ --> K --> IDX --> ES
+
+    style PG fill:#e1f5ff
+    style DBZ fill:#FFE4B5
+    style K fill:#FFE4B5
+    style ES fill:#90EE90
+```
 
 **Shard ES by `event_id`**, not by venue or category, to keep the write path simple. Hot events get disproportionate query traffic; ES shard routing by `event_id` contains this load to one shard.
 
@@ -230,9 +396,27 @@ For the event detail page, use a three-tier cache: in-process LRU on each Event 
 
 ---
 
-## Scaling Journey: 0 to Infinity
+## 📈 Scaling Journey: 0 to Infinity
 
 Every stage answers four questions: what is the goal, what does the architecture look like, what are we explicitly skipping, and what failure mode forces us into the next stage.
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0–100<br/>Monolith + Postgres<br/>atomic UPDATE hold"]
+    S2["Stage 2<br/>100–1K<br/>Split services<br/>read replica + Redis cache"]
+    S3["Stage 3<br/>1K–100K<br/>Elasticsearch + CDC<br/>Redis SETNX holds + SSE"]
+    S4["Stage 4<br/>100K–10M<br/>Virtual waiting room<br/>Redis split by event"]
+    S5["Stage 5<br/>10M+<br/>Shard Postgres by event_id<br/>multi-region active-active"]
+
+    S1 -->|"pool saturates on Stripe round-trip"| S2
+    S2 -->|"tsvector saturates read replica"| S3
+    S3 -->|"2M clients, no admission control"| S4
+    S4 -->|"single primary + regional outage"| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0 to 100 Users (MVP)
 
@@ -335,7 +519,7 @@ At this point the system's bottleneck is no longer technical; it is venue capaci
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 These are the production realities that separate a textbook answer from a real engineering discussion. Knowing these signals to an interviewer that you have thought about the problem at operational depth, not just design depth.
 
@@ -357,6 +541,8 @@ Production ticketing systems do not display exact remaining inventory. Showing t
 
 ### Seat Map Is a Static Asset, Not an API Call
 
+> 💡 **Serve the seat map from a CDN, keep only availability dynamic.** At 1M concurrent users loading a 500KB SVG, that is 500GB of transfer in minutes — routine for a CDN, catastrophic for an app server. The event-page API returns a CDN reference plus a small JSON of `ticket_id → AVAILABLE/HELD/BOOKED`, never the map itself.
+
 The venue seat map SVG, which can exceed 500KB, must be served from a CDN, not your application API. On sale day, millions of users load the seat map simultaneously. At 1 million concurrent users loading a 500KB SVG, that is 500GB of transfer in a matter of minutes — catastrophic for an application server, completely routine for a CDN. Only seat availability — a small JSON payload listing which `ticket_id` values are AVAILABLE, HELD, or BOOKED — is dynamic and served from the API. The API response for the event page should return a reference to the CDN URL for the seat map, not the map itself. This separation is the single most impactful bandwidth optimization in the entire system.
 
 ### Shard by Event ID, Not Venue ID
@@ -377,10 +563,27 @@ The traffic curve for a hot on-sale is unlike normal traffic patterns: flat base
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Level | Breadth : Depth | What the interviewer expects |
 |-------|-----------------|------------------------------|
 | **Mid (E4)** | 80 : 20 | Clean API and data model. Correct high-level diagram. Can explain at least one workable double-booking solution (status + expiry). Interviewer drives the deep dives; candidate answers correctly when prompted. |
 | **Senior (E5)** | 60 : 40 | Moves through breadth quickly and confidently. Proactively deep-dives on seat locking (Redis TTL hold vs atomic SQL, trade-offs, why SELECT FOR UPDATE breaks at scale), search (ES vs Postgres FTS, sync strategy), and scale (caching, read replicas, CDN for seat maps). Articulates trade-offs without being asked. Mentions idempotency for the checkout flow. |
 | **Staff (L6+)** | 40 : 60 | Minimal hand-holding on basics. 2 to 3 expert deep dives with real operational detail: virtual waiting room token design and admission rate calculus, CDC from Postgres to ES with exactly-once semantics, sharding by `event_id` with explicit reasoning why not `venue_id`, capacity pre-warming playbook for on-sales, intentional oversell modeling for GA events. References the Taylor Swift failure as an admission control problem, not a database problem. Offers perspective the interviewer learns from. |
+
+---
+
+## 📚 Related Concepts
+
+- [Distributed Locking](../CoreConcepts/DistributedLocking.md) — the Redis `SETNX ... EX 600` seat hold and why it beats `SELECT FOR UPDATE` for the reservation mutex.
+- [Redis](../CoreConcepts/Redis.md) — triple duty here: TTL seat holds, read-through event cache, and the sorted-set waiting room.
+- [Caching](../CoreConcepts/Caching.md) — three-tier event-page caching (L1 in-process LRU, L2 Redis, L3 CDN) with `event_version` counter invalidation.
+- [Sharding](../CoreConcepts/Sharding.md) — sharding Postgres and Redis by `event_id` (the unit of contention), not `venue_id`.
+- [Data Modelling](../CoreConcepts/DataModelling.md) — the Event / Venue / Ticket / Booking schema and ticket status transitions.
+- [Data Indexing](../CoreConcepts/DataIndexing.md) — Postgres `tsvector` + GIN full-text search before graduating to Elasticsearch.
+- [Dealing with Contention](../SystemDesign/Patterns/DealingWithContention.md) — the general pattern behind double-booking prevention on hot seats.
+- [Elasticsearch](../SystemDesign/DeepDives/Elasticsearch.md) — the inverted index, fuzzy matching, and facet aggregations for event search.
+- [Kafka](../SystemDesign/DeepDives/Kafka.md) — CDC transport from the Postgres outbox to the ES indexer, and async fanout work.
+- [Real-Time Updates](../SystemDesign/Patterns/Real-TimeUpdates.md) — SSE / WebSocket fanout for live seat-map greying and queue position.
+- [Online Auction (breakdown)](../SystemDesign/ProblemBreakdowns/OnlineAuction.md) — a sibling contention problem with bounded holds and bidding.
+- [Ticketmaster (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/Ticketmaster.md) — the source breakdown this doc expands on.

@@ -1,4 +1,25 @@
-# Kafka
+# 📨 Kafka
+
+> **Overview**: Apache Kafka is an open-source distributed event streaming platform that can be used either as a message queue or as a stream processing system. It stores messages as ordered, immutable partitions distributed across brokers, using producers to write data to topics and consumers (organized into consumer groups) to read it. Configured with appropriate replication and acknowledgment settings, Kafka delivers high performance, horizontal scalability, and strong durability guarantees for real-time data at scale.
+
+## 📋 Table of Contents
+- [🧒 Layman's Explanation](#-laymans-explanation)
+- [🎯 A Motivating Example](#-a-motivating-example)
+- [🏗️ Basic Terminology and Architecture](#️-basic-terminology-and-architecture)
+- [🔬 How Kafka Works](#-how-kafka-works)
+- [🎤 When to use Kafka in your interview](#-when-to-use-kafka-in-your-interview)
+- [🔎 What you should know about Kafka for System Design Interviews](#-what-you-should-know-about-kafka-for-system-design-interviews)
+- [📝 Summary](#-summary)
+- [🎓 Key Takeaways](#-key-takeaways)
+- [📚 Related Concepts](#-related-concepts)
+
+---
+
+## 🧒 Layman's Explanation
+
+Imagine a stadium's live-scoreboard operation. Every time something happens on the pitch — a goal, a booking, a substitution — a scorekeeper (the **producer**) writes it on a card and drops it into a labeled inbox tray. Kafka is the wall of inbox trays: there is one set of trays per sport (a **topic**), and within each sport the cards are split across several trays (**partitions**) so multiple assistants can work in parallel. To keep each game's story in the right order, all cards for a single game always go into the same tray — that "which tray?" decision is the **partition key**.
+
+A team of updaters (a **consumer group**) then picks up the trays, one tray per person, so no card gets handled twice. Each updater also remembers the number of the last card they processed (the **offset**), so if they step away and come back they resume exactly where they left off. And the trays are append-only: you can only add a new card to the bottom, never erase one — which is precisely why Kafka can replay the entire history later.
 
 Learn about how you can use Kafka to solve a large number of problems in System Design.
 
@@ -12,7 +33,7 @@ There is a good chance you've heard of Kafka. It's popular. In fact, [according 
 
 In this deep dive, we're going to take a top down approach. Starting with a zoomed out view of Kafka and progressing into more and more detail. If you know the basics, feel free to skip ahead to the more advanced sections.
 
-### A Motivating Example
+### 🎯 A Motivating Example
 
 It's the World Cup (my personal favorite competition). And we run a website that provides real-time statistics on the matches. Each time a goal is scored, a player is booked, or a substitution is made, we want to update our website with the latest information.
 
@@ -40,7 +61,7 @@ Lastly, we've decided that we want to expand our hypothetical World Cup to more 
 
 ![A Motivating Example](assets/h1hXEoBYiLJ9.3ateecmbh2ugs.svg)
 
-### Basic Terminology and Architecture
+### 🏗️ Basic Terminology and Architecture
 
 The example is great, but let's define Kafka a bit more concretely by formalizing some of the key terms and concepts introduced above.
 
@@ -56,7 +77,49 @@ Last up we have our **producers** and **consumers**. Producers are the ones who 
 
 Importantly, you can use Kafka as either a message queue or a stream. Frankly, the distinction here is minor. In both modes, consumers track their progress using offset commits. The key difference is in the consumption pattern: when used as a message queue, each message is processed by one consumer in a group and then effectively "consumed." When used as a stream, the log is retained and can be replayed, multiple consumer groups can independently read the same data, and consumers can process data continuously as it arrives.
 
-## How Kafka Works
+Putting the terminology together, a single topic's partitions are spread across the brokers in the cluster; producers route each message to a partition by hashing its key, and each partition is consumed by exactly one member of a consumer group:
+
+```mermaid
+graph TB
+    subgraph "Producers"
+        P1[Producer]
+        P2[Producer]
+    end
+
+    subgraph "Kafka Cluster"
+        subgraph "Broker 1"
+            PA0[("Topic A<br/>Partition 0<br/>append-only log")]
+        end
+        subgraph "Broker 2"
+            PA1[("Topic A<br/>Partition 1<br/>append-only log")]
+        end
+        subgraph "Broker 3"
+            PA2[("Topic A<br/>Partition 2<br/>append-only log")]
+        end
+    end
+
+    subgraph "Consumer Group"
+        C1[Consumer]
+        C2[Consumer]
+        C3[Consumer]
+    end
+
+    P1 -->|"hash(key) % N"| PA0
+    P1 --> PA1
+    P2 --> PA2
+    PA0 --> C1
+    PA1 --> C2
+    PA2 --> C3
+
+    style PA0 fill:#e1f5ff
+    style PA1 fill:#e1f5ff
+    style PA2 fill:#e1f5ff
+    style C1 fill:#90EE90
+    style C2 fill:#90EE90
+    style C3 fill:#90EE90
+```
+
+## 🔬 How Kafka Works
 
 When an event occurs, the producer formats a message, also referred to as a record, and sends it to a Kafka topic. A message consists of four fields, all technically optional: a value (the payload), a key, a timestamp, and headers. The key is used to determine which partition the message is sent to. The timestamp records when the message was created or ingested (but ordering within a partition is determined by offsets, not timestamps). Headers, like HTTP headers, are key-value pairs that can be used to store metadata about the message.
 
@@ -170,7 +233,7 @@ Tying it all together, we get something like this:
 
 ![Output](assets/3waBqlnGSZeb.2m-ttfp_-4a-x.svg)
 
-## When to use Kafka in your interview
+## 🎤 When to use Kafka in your interview
 
 Kafka can be used as either a message queue or a stream.
 
@@ -187,13 +250,13 @@ Streams are useful when:
 - You require continuous and immediate processing of incoming data, treating it as a real-time flow. See [Design an Ad Click Aggregator](https://www.hellointerview.com/learn/system-design/problem-breakdowns/ad-click-aggregator) for an example where we aggregate click data in real-time.
 - Messages need to be processed by multiple consumers simultaneously. In [Design FB Live Comments](https://www.hellointerview.com/learn/system-design/problem-breakdowns/fb-live-comments) we can use Kafka as a pub/sub system to send comments to multiple consumers.
 
-## What you should know about Kafka for System Design Interviews
+## 🔎 What you should know about Kafka for System Design Interviews
 
 There is a lot to know about Kafka. But we'll focus in on this bits that are most likely to be relevant to your system design interview.
 
 > This deep dive is rather exhaustive, especially as it pertains to the knowledge needed for an interview. Don't feel overwhelmed. If you're a junior or mid-level engineer, you likely won't need to know anything below this point. If you're a senior engineer, you should be familiar with some of the topics we're about to cover. Staff engineers and above would do well to know the majority of the topics below, but by no means is this knowledge required to pass an interview.
 
-### Scalability
+### 📈 Scalability
 
 Let's start by understanding the constraints of a single Kafka broker. It's important in your interview to estimate the throughput and number of messages you'll be storing in order to determine whether we need to worry about scaling in the first place.
 
@@ -223,13 +286,36 @@ There are a few strategies to handle hot partitions:
 3. **Use a compound key**: Instead of using just the ad ID, use a combination of ad ID and another attribute, such as geographical region or user ID segments, to form a compound key. This approach helps in distributing traffic more evenly and is particularly useful if you can identify attributes that vary independently of the ad ID.
 4. **Back pressure**: Depending on your requirements, one easy solution is to just slow down the producer. If you're using a managed Kafka service, they may have built-in mechanisms to handle this. If you're running your own Kafka cluster, you can implement back pressure by having the producer check the lag on the partition and slow down if it's too high.
 
-### Fault Tolerance and Durability
+### 🛡️ Fault Tolerance and Durability
 
 If you chose Kafka, one reason may have been because of its strong durability guarantees. But how does Kafka ensure that your data is safe and that no messages are lost?
 
 Kafka ensures data durability through its replication mechanism. Each partition is replicated across multiple brokers, with one broker acting as the leader and others as followers. When a producer sends a message, it is written to the leader and then replicated to the followers. This ensures that even if a broker fails, the data remains available. Producer acknowledgments (`acks` setting) play a crucial role here. Setting `acks=all` ensures that the message is acknowledged only when all **in-sync replicas (ISR)** have received it, providing the strongest durability guarantee available.
 
 Depending on how much durability you need, you can configure the replication factor of your topics. The replication factor is the number of replicas that are maintained for each partition. A replication factor of 3 is common, meaning that each partition has 3 total replicas (1 leader + 2 followers). So if one broker fails, the data is still available on the other two and we can promote a follower to be the new leader.
+
+```mermaid
+graph TB
+    Prod[Producer] -->|"write (acks=all)"| L
+
+    subgraph "Broker 1"
+        L[("Partition 0<br/>LEADER")]
+    end
+    subgraph "Broker 2"
+        F1[("Partition 0<br/>Follower (ISR)")]
+    end
+    subgraph "Broker 3"
+        F2[("Partition 0<br/>Follower (ISR)")]
+    end
+
+    L -->|replicate| F1
+    L -->|replicate| F2
+    Cons[Consumer] -->|read| L
+
+    style L fill:#90EE90
+    style F1 fill:#e1f5ff
+    style F2 fill:#e1f5ff
+```
 
 **But what happens when a consumer goes down?**
 
@@ -242,7 +328,7 @@ What is far more relevant and likely is that a consumer goes down. When a consum
 
 The trade-off you may need to consider in an interview is when to commit offsets. In [Design a Web Crawler](https://www.hellointerview.com/learn/system-design/problem-breakdowns/web-crawler), for example, you want to be careful not to commit the offset until you're sure the raw HTML has been stored in your blob storage. The more work a consumer has to do, the more likely you are to have to redo work if the consumer fails. For this reason, keeping the work of the consumer as small as possible is a good strategy -- as was the case in Web Crawler where we broke the crawler into 2 phases: downloading the HTML and then parsing it.
 
-### Handling Retries and Errors
+### ⚠️ Handling Retries and Errors
 
 While Kafka itself handles most of the reliability (as we saw above), our system may fail getting messages into and out of Kafka. We need to handle these scenarios gracefully.
 
@@ -270,7 +356,7 @@ On the consumer side, we may fail to process a message for any number of reasons
 
 You'll see in our [Web Crawler](https://www.hellointerview.com/learn/system-design/problem-breakdowns/web-crawler) breakdown that we actually opt for SQS instead of Kafka so that we could take advantage of the built-in retry and dead letter queue functionality without having to implement it ourselves.
 
-### Performance Optimizations
+### ⚡ Performance Optimizations
 
 Especially when using Kafka as an event stream, we need to be mindful of performance so that we can process messages as quickly as possible.
 
@@ -303,13 +389,13 @@ await producer.send({
 
 Arguably the biggest impact you can have to performance comes back to your choice of partition key. The goal is to maximize parallelism by ensuring that messages are evenly distributed across partitions. In your interview, discussing the partition strategy, as we go into above, should just about always be where you start.
 
-### Retention Policies
+### 🗄️ Retention Policies
 
 Kafka topics have a retention policy that determines how long messages are retained in the log. This is configured via the `retention.ms` and `retention.bytes` settings. The default retention policy is to keep messages for 7 days.
 
 In your interview, you may be asked to design a system that needs to store messages for a longer period of time. In this case, you can configure the retention policy to keep messages for a longer duration. Just be mindful of the impact on storage costs and performance.
 
-## Summary
+## 📝 Summary
 
 Congrats! You made it through. Let's recap quickly.
 
@@ -318,6 +404,26 @@ Apache Kafka is an open-source, distributed event streaming platform engineered 
 When it comes to scale, make sure you start by discussing your partitioning strategy and how you'll handle hot partitions. And remember, Kafka is always available, sometimes consistent 😝
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **Partitions are the unit of parallelism and ordering.** A topic is a logical grouping; partitions are the physical, append-only logs. Ordering is only guaranteed *within* a partition, so choosing a good partition key is the single most important decision — it's where your scaling conversation should start.
+- **Consumer groups distribute work without double-processing.** Each partition is assigned to exactly one consumer in a group, and consumers track progress via committed offsets so they can resume after a crash or rebalance.
+- **Durability comes from replication + acks.** Each partition is replicated (factor of 3 is common: 1 leader + 2 followers), and `acks=all` only acknowledges once all in-sync replicas (ISR) have the message — the strongest guarantee. Kafka is "always available, sometimes consistent."
+- **Watch out for hot partitions.** A skewed key (e.g. a viral ad) overwhelms one partition; mitigate with no-key default partitioning, random salting, compound keys, or producer back pressure.
+- **Kafka delivers at-least-once by default.** A consumer that crashes after processing but before committing will reprocess — keep consumer work small, commit carefully, and reach for idempotent producers + transactions if you need exactly-once.
+- **Don't abuse Kafka as a database or blob store.** Keep messages under ~1MB and store large payloads (e.g. videos) in S3 with just a pointer in the message; a single broker handles roughly 1TB and up to ~1M messages/sec before scaling matters.
+
+## 📚 Related Concepts
+
+- [Redis](Redis.md) — an alternative for lightweight queues and pub/sub; contrast its in-memory model with Kafka's durable log.
+- [Flink](Flink.md) — a stream-processing engine that commonly consumes from Kafka topics.
+- [Consistent Hashing](../../CoreConcepts/ConsistentHashing.md) — the key-hashing intuition behind partition assignment.
+- [Sharding](../../CoreConcepts/Sharding.md) — partitioning data across nodes, the same principle Kafka applies to topics.
+- [Managing Long Running Tasks](../Patterns/ManagingLongRunningTasks.md) — the async-worker pattern Kafka enables (e.g. YouTube transcoding).
+- [Scaling Writes](../Patterns/ScalingWrites.md) — where Kafka fits as a write-buffer and decoupling layer.
+- [Ad Click Aggregator](../ProblemBreakdowns/AdClickAggregator.md) — the hot-partition and streaming example referenced throughout this deep dive.
+- [Web Crawler](../ProblemBreakdowns/WebCrawler.md) — offset-commit timing and the Kafka-vs-SQS retry trade-off in practice.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/deep-dives/kafka](https://www.hellointerview.com/learn/system-design/deep-dives/kafka)*

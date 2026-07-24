@@ -1,10 +1,22 @@
-# Proximity Search
+# 📍 Proximity Search
 
-Learn how production systems index latitude and longitude for fast nearby queries, from spatial trees to encoded keys like geohash, S2, and H3.
+> **Overview**: Proximity search is about querying by location instead of by ID or value — drivers near a rider, restaurants near a user, people near a place. A plain B-tree index fails at this because a one-dimensional sort order can't preserve two-dimensional closeness, so production systems fall back to one of two families: custom spatial trees (quadtree, k-d/BKD, R-tree) for geometric data, or encoded keys (geohash, S2, H3) that flatten each point into a single sortable value an ordinary index already handles. Either way, the index only ever hands you a cheap candidate set — you always finish with exact distance or geometry math.
 
-Watch the author walk through the problem step-by-step
+## 📋 Table of Contents
+- [🧒 Layman's Explanation](#-laymans-explanation)
+- [🌳 Custom Spatial Trees](#-custom-spatial-trees)
+- [🔑 Encoded Keys](#-encoded-keys)
+- [🎤 Which Should You Use?](#-which-should-you-use)
+- [🎓 Key Takeaways](#-key-takeaways)
+- [📚 Related Concepts](#-related-concepts)
 
-Watch the author walk through the problem step-by-step
+---
+
+## 🧒 Layman's Explanation
+
+Imagine a library where every book is filed by the reader's age. Finding "everyone between 20 and 30" is easy — those cards sit right next to each other in one drawer. But now imagine you want "every reader who lives within two kilometers of the front door." Address has two numbers, a street and a cross-street, and no single filing order can keep two-dimensional neighbors sitting next to each other on one shelf. Sort by street and you get one long avenue; sort by cross-street and you get one long boulevard; neither tells you who is actually *close*.
+
+Systems recover that lost closeness in two ways. The first is to draw a map and keep chopping it into smaller and smaller boxes until each box holds only a handful of people — that's a **spatial tree**, and it's great when your "people" are actually shapes like roads, counties, or delivery zones. The second is to give every location a postal-code-like string where two places that share a longer prefix are guaranteed to be nearer — that's an **encoded key** (geohash, S2, H3), and it's perfect for points that move constantly, like drivers, because updating a location is just changing one number. And no matter which you use, the map only narrows you down to the right block; you still have to walk that block and measure the exact distance to each door.
 
 Proximity search is one of those oddly specific topics that's somehow become a regular in system design interviews. It shows up anytime you're searching by location instead of by ID or value, like drivers near a rider, restaurants near a user, or people near a location.
 
@@ -20,11 +32,39 @@ The root problem is that a one-dimensional sort order can't preserve two-dimensi
 
 Almost every system you'll reach for in an interview takes one of two approaches, and which one fits comes down to the shape of your data. If your data is geometric, full of polygons, roads, and delivery zones where containment and intersection matter, you want a custom tree that understands shapes, which is what PostGIS and Elasticsearch give you. If your data is mostly points that move constantly, like drivers or live user locations, you want to flatten each location into a single sortable key that an ordinary index already handles, which is the trick behind Redis geospatial, geohash, S2, and H3. Once you know which approach a system takes, its tradeoffs fall right out.
 
-> One more idea ties the whole field together. A spatial index almost never produces the final answer on its own. What it does is turn "check every row" into "check a small candidate set," and then you finish the job with exact distance or geometry math on that handful of candidates. Every structure we're about to look at is just a different way to generate that candidate set cheaply.
+> 💡 One more idea ties the whole field together. A spatial index almost never produces the final answer on its own. What it does is turn "check every row" into "check a small candidate set," and then you finish the job with exact distance or geometry math on that handful of candidates. Every structure we're about to look at is just a different way to generate that candidate set cheaply.
 
-## Custom Spatial Trees
+The shared shape of every spatial query, whichever structure you pick:
+
+```mermaid
+graph LR
+    Q["Query point<br/>(rider location)"] --> I["Spatial index<br/>tree or encoded key"]
+    I --> C["Small candidate set<br/>a patch of the map"]
+    C --> P["Post-filter<br/>exact distance /<br/>geometry math"]
+    P --> A["Final answer<br/>nearby drivers"]
+
+    style Q fill:#FFB6C1
+    style I fill:#FFE4B5
+    style C fill:#e1f5ff
+    style P fill:#FFE4B5
+    style A fill:#90EE90
+```
+
+## 🌳 Custom Spatial Trees
 
 The first approach builds a purpose-made tree for spatial data. The trick that makes these work in a database, rather than just in memory, is shaping the tree to behave like a B-tree on disk, with balanced page-sized nodes and predictable depth. We'll walk through three of them, and each one solves a problem the previous design couldn't, so the progression reads as a clean chain of fixes rather than a pile of unrelated structures.
+
+```mermaid
+graph LR
+    Q["Quadtree<br/>four-way split<br/>at cell midpoint"] -->|"splits at midpoint →<br/>depth blows up on<br/>dense clusters"| K["k-d tree<br/>alternate x/y<br/>split at median"]
+    K -->|"pointers don't map<br/>onto disk pages"| B["BKD tree<br/>points packed into<br/>page-sized blocks"]
+    B -->|"needs shapes +<br/>cheap updates"| R["R-tree / R*-tree<br/>minimum bounding<br/>rectangles"]
+
+    style Q fill:#FFB6C1
+    style K fill:#FFE4B5
+    style B fill:#FFE4B5
+    style R fill:#90EE90
+```
 
 ### Quadtrees
 
@@ -74,7 +114,7 @@ Unlike quadtree cells, R-tree rectangles can overlap, and that overlap is the tr
 
 R-trees are the workhorse of production spatial indexes. [PostGIS](https://www.hellointerview.com/learn/system-design/deep-dives/postgres) builds its spatial indexes on Postgres's GiST framework, which gives you R-tree-style bounding-box behavior, while SQLite and Oracle Spatial ship their own R-tree variants. If your problem involves real geometry, like "does this delivery zone contain this address" or "does this road cross this county," this is the approach you want.
 
-## Encoded Keys
+## 🔑 Encoded Keys
 
 Every spatial tree we just looked at is a custom structure, and they all work, but they're a lot of machinery to carry around. Your database needs special indexing code, special query code, special tooling, and usually a dedicated spatial extension installed before any of it runs.
 
@@ -96,7 +136,7 @@ The payoff is that keys sharing a prefix are usually near each other. That drops
 
 The same idea shows up in [Redis](https://www.hellointerview.com/learn/system-design/deep-dives/redis) geo commands. When you call `GEOADD`, Redis interleaves the latitude and longitude into a 52-bit geohash integer and stores it as the score in a sorted set. A nearby query becomes a `ZRANGEBYSCORE` over those scores, which is the prefix-scan idea from a moment ago wearing different syntax.
 
-There's one catch you have to know, because it bites people. Geohashes have edge cases at cell boundaries. Two points a meter apart can land in completely different cells, and get completely different prefixes, if they happen to straddle a boundary. Picture a rider standing right on the edge of cell `dr5ru`. The closest driver might be ten meters away in the neighboring cell `dr5rg`, and a naive prefix scan over `dr5ru` would miss them entirely.
+> ⚠️ There's one catch you have to know, because it bites people. Geohashes have edge cases at cell boundaries. Two points a meter apart can land in completely different cells, and get completely different prefixes, if they happen to straddle a boundary. Picture a rider standing right on the edge of cell `dr5ru`. The closest driver might be ten meters away in the neighboring cell `dr5rg`, and a naive prefix scan over `dr5ru` would miss them entirely.
 
 The standard fix is the 3x3 trick. You compute the cell your query point lands in, then walk to the eight neighboring cells, and query all nine as a unit. Now you can't miss anyone within one cell's distance of you, no matter how close to a boundary you are. Then you post-filter the results by exact distance to drop the corners that are technically inside your query window but actually too far away. Almost every encoded-key index in production does some version of this query-the-ring-and-post-filter dance.
 
@@ -114,11 +154,40 @@ H3 differs in one way that matters. Geohash and S2 lay their cells along a space
 
 The dispatch pattern falls right out of that. Snap each driver to an H3 cell, say a 200-meter one, and when a rider opens the app, take their cell plus the surrounding ring, grabbing another ring out if you need a wider net. Then you run `WHERE h3_cell IN (list of cell IDs)`, a plain lookup on an ordinary integer index, and post-filter by exact distance. It's all cheap writes and cheap candidate generation with no spatial extension anywhere, which is the shape you want when location updates are arriving constantly.
 
-> In an interview, you rarely need to name H3 versus S2 versus geohash to score the point. What lands is explaining why a plain index fails on lat/long, then reaching for the boring production option and walking the tradeoff out loud. Name the specific library if you know it, but the reasoning is what tells your interviewer you actually understand the problem.
+> 💡 In an interview, you rarely need to name H3 versus S2 versus geohash to score the point. What lands is explaining why a plain index fails on lat/long, then reaching for the boring production option and walking the tradeoff out loud. Name the specific library if you know it, but the reasoning is what tells your interviewer you actually understand the problem.
 
-## Which Should You Use?
+## 🎤 Which Should You Use?
 
 Most production systems you're likely to reach for fall into one of the two approaches we've covered, a custom spatial tree or an encoded key, and choosing between them comes down to the shape of your data.
+
+```mermaid
+graph TB
+    D{"What shape is<br/>your data?"}
+    D -->|"Geometric:<br/>polygons, roads,<br/>delivery zones"| T["Custom spatial tree"]
+    D -->|"Points that<br/>move constantly:<br/>drivers, devices"| E["Encoded cells"]
+
+    subgraph "Custom spatial tree"
+        T --> T1["Understands shapes<br/>containment / intersection"]
+        T1 --> T2["Needs spatial extension<br/>pricier writes / rebalancing"]
+        T2 --> T3["PostGIS · Elasticsearch"]
+    end
+
+    subgraph "Encoded cells"
+        E --> E1["Cheap writes:<br/>one integer update"]
+        E1 --> E2["Query a ring of<br/>neighbor cells"]
+        E2 --> E3["Redis · geohash · S2 · H3"]
+    end
+
+    T3 --> F["Index hands you candidates →<br/>always post-filter by<br/>exact distance / geometry"]
+    E3 --> F
+
+    style D fill:#FFE4B5
+    style T fill:#f3e5f5
+    style E fill:#e1f5ff
+    style T3 fill:#f3e5f5
+    style E3 fill:#e1f5ff
+    style F fill:#90EE90
+```
 
 Reach for a custom spatial tree when your data is geometric, full of polygons, roads, delivery zones, and questions of containment or intersection. You need the database to understand shapes, and you're willing to pay for a spatial extension and pricier writes to get it. PostGIS, with its R-tree-style GiST index, is the usual default, and an R-tree handles points, lines, and polygons alike. The catch is writes. Rebalancing rectangles is real work, and the BKD variant Elasticsearch uses is essentially write-once, so neither loves data that churns.
 
@@ -129,6 +198,24 @@ Again, whichever one you land on, the index only ever hands you candidates. It n
 Spatial tree for shapes. Encoded cells for moving points. And always, always post-filter.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **A plain B-tree can't do proximity.** A one-dimensional sort order can't preserve two-dimensional closeness — index on latitude or longitude and you get a strip of the earth with millions of unranked rows, forcing a brute-force distance check on every one.
+- **Two families, chosen by data shape.** Custom spatial trees (quadtree → k-d/BKD → R-tree) for geometric data with polygons and containment; encoded keys (geohash, S2, H3) for points that move constantly.
+- **The tree lineage is a chain of fixes.** Quadtrees split at the midpoint (deep on dense clusters); k-d trees split at the median (balanced at `log n`); BKD trees pack points into disk-page blocks (but are write-once); R-trees add minimum bounding rectangles for shapes and stay B-tree-balanced on disk.
+- **Encoded keys reuse infrastructure you already have.** A geohash prefix scan, a Redis `ZRANGEBYSCORE`, or an `h3_cell IN (...)` lookup all run on an ordinary index — no spatial extension required — and a moving driver is a single integer update.
+- **Boundaries always leak, so query the ring.** Points a meter apart can land in different cells with different prefixes, so you query your cell plus its neighbors (the 3×3 / ring trick) and then post-filter.
+- **The index only ever gives candidates.** Every structure just turns "check every row" into "check a small patch," and you always finish with exact distance or geometry math. Spatial tree for shapes, encoded cells for moving points, and always post-filter.
+
+## 📚 Related Concepts
+
+- [Database Indexing](../../CoreConcepts/DataIndexing.md) — why B-trees make range scans cheap and why they can't rank by 2D distance.
+- [Redis](Redis.md) — the in-memory store whose geo commands (`GEOADD`, `ZRANGEBYSCORE`) implement the geohash-as-sorted-set trick.
+- [Elasticsearch](Elasticsearch.md) — uses BKD trees for its geo fields.
+- [PostgreSQL](Postgresql.md) — PostGIS builds R-tree-style spatial indexes on Postgres's GiST framework.
+- [Data Structures for Big Data](DataStructuresForBigData.md) — companion tour of specialized indexing structures.
+- [Sharding](../../CoreConcepts/Sharding.md) — geographic sharding pairs naturally with spatial partitioning of location data.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/deep-dives/proximity-search](https://www.hellointerview.com/learn/system-design/deep-dives/proximity-search)*

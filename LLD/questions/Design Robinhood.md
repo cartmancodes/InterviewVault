@@ -1,36 +1,40 @@
-# Design Robinhood
+# 📈 Design Robinhood
 
 > **Pattern**: Trading / Real-time Prices
 > **Difficulty**: Hard
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/robinhood)
 
+> **Summary**: Robinhood is a retail brokerage that runs two very different data paths at once. The **price feed** is a read-heavy firehose: exchange trade events must fan out over WebSocket to millions of phones under ~200 ms p95. **Order management** is write-heavy and strongly consistent: money is real, so orders need idempotency, cash/share holds, and a durable audit trail. Keeping these two paths separate is the central architectural choice. The hardest moment is the 9:30 AM market-open spike, when volume jumps 10–50x and the system must absorb the flood without dropping an order or quoting a stale price.
+
 ---
 
-## Table of Contents
+## 📋 Table of Contents
 
-1. [Understanding the Problem](#understanding-the-problem)
+1. [Understanding the Problem](#-understanding-the-problem)
    - [Functional Requirements](#functional-requirements)
    - [Non-Functional Requirements](#non-functional-requirements)
-2. [Core Entities](#core-entities)
-3. [API Design](#api-design)
-4. [High-Level Design](#high-level-design)
-5. [Deep Dives](#deep-dives)
+2. [Layman's Explanation](#-laymans-explanation)
+3. [Core Entities](#-core-entities)
+4. [API Design](#-api-design)
+5. [High-Level Design](#-high-level-design)
+6. [Deep Dives](#-deep-dives)
    1. [Order Routing to the Exchange](#1-order-routing-to-the-exchange)
    2. [Real-Time Price Feed Fanout](#2-real-time-price-feed-fanout)
    3. [Consistency of Balances and Positions](#3-consistency-of-balances-and-positions)
    4. [Market-Open Bursts and Load Shedding](#4-market-open-bursts-and-load-shedding)
-6. [Scaling Journey: 0 to Infinity](#scaling-journey-0--)
-   - [Stage 1: 0 to 100 Users (MVP)](#stage-1-0100-users-mvp)
-   - [Stage 2: 100 to 1,000 Users](#stage-2-1001000-users)
-   - [Stage 3: 1K to 100K Users](#stage-3-1k100k-users)
-   - [Stage 4: 100K to 10M Users](#stage-4-100k10m-users)
+7. [Scaling Journey: 0 to Infinity](#-scaling-journey-0-to-infinity)
+   - [Stage 1: 0 to 100 Users (MVP)](#stage-1-0-to-100-users-mvp)
+   - [Stage 2: 100 to 1,000 Users](#stage-2-100-to-1000-users)
+   - [Stage 3: 1K to 100K Users](#stage-3-1k-to-100k-users)
+   - [Stage 4: 100K to 10M Users](#stage-4-100k-to-10m-users)
    - [Stage 5: 10M+ Users](#stage-5-10m-users)
-7. [Insider Tips and Tricks](#insider-tips-and-tricks)
-8. [Expected Depth by Level](#expected-depth-by-level)
+8. [Insider Tips and Tricks](#-insider-tips-and-tricks)
+9. [Expected Depth by Level](#-expected-depth-by-level)
+10. [Related Concepts](#-related-concepts)
 
 ---
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 Robinhood is a retail brokerage app: users watch prices tick in real time and submit market or limit orders that are ultimately filled at an external exchange (NYSE, Nasdaq, or a market maker). The design is hard for two reasons: (1) price data is a firehose that must be fanned out with sub-second latency to millions of phones, and (2) orders touch money, so we need strong consistency and idempotency even when the system is under market-open stress. Critically, we are not building the exchange; we are the broker that holds user accounts, routes orders, and displays state.
 
@@ -79,7 +83,7 @@ Real Robinhood has to comply with FINRA and SEC rules, reconcile its books again
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 - **User / Account** - identity, KYC status, buying power (cash available), total equity. One user typically has one brokerage account.
 - **Stock (Symbol)** - reference data about a ticker: symbol, name, exchange, lot size. Relatively static.
@@ -89,9 +93,69 @@ Real Robinhood has to comply with FINRA and SEC rules, reconcile its books again
 - **Position** - a user's current holding for a symbol: userId, symbol, quantity, averageCost. Derived from the stream of fills.
 - **Balance Ledger Entry** - append-only record of cash movements: debit on buy fill, credit on sell fill, holds on open buy orders. The source of truth for buying power.
 
+```mermaid
+erDiagram
+    ACCOUNT ||--o{ ORDER : places
+    ACCOUNT ||--o{ POSITION : holds
+    ACCOUNT ||--o{ LEDGER_ENTRY : records
+    STOCK ||--o{ QUOTE : "ticks"
+    STOCK ||--o{ ORDER : "is for"
+    STOCK ||--o{ POSITION : "is for"
+    ORDER ||--o{ FILL : "executed by"
+
+    ACCOUNT {
+        string userId
+        string kycStatus
+        decimal buyingPower
+        decimal equity
+    }
+    STOCK {
+        string symbol
+        string name
+        string exchange
+        int lotSize
+    }
+    QUOTE {
+        string symbol
+        decimal lastPrice
+        int size
+        decimal bid
+        decimal ask
+        timestamp ts
+    }
+    ORDER {
+        string orderId
+        string clientOrderId
+        string externalOrderId
+        string side
+        string type
+        int quantity
+        decimal limitPrice
+        string status
+    }
+    FILL {
+        string orderId
+        decimal price
+        int quantity
+        timestamp ts
+    }
+    POSITION {
+        string userId
+        string symbol
+        int quantity
+        decimal averageCost
+    }
+    LEDGER_ENTRY {
+        string userId
+        string kind
+        decimal amount
+        timestamp ts
+    }
+```
+
 ---
 
-## API Design
+## 🔌 API Design
 
 All APIs are HTTPS and authenticated with a session token. Price streaming is a separate WebSocket channel.
 
@@ -131,9 +195,57 @@ The POST /v1/orders endpoint is synchronous from the client's perspective but in
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
 There are two fundamentally different data paths, and keeping them separate is the central architectural choice.
+
+```mermaid
+graph TB
+    subgraph Clients
+        APP[Mobile App]
+    end
+
+    subgraph "Path A — Price Fanout (read-heavy, eventual)"
+        ING[Market Data Ingestor<br/>persistent exchange feed]
+        BUS[[Price Bus<br/>Kafka / Redis Pub-Sub<br/>keyed by symbol]]
+        WSG[WebSocket Gateway<br/>interest maps]
+        QC[(Quote Cache<br/>Redis · latest tick)]
+    end
+
+    subgraph "Path B — Order Management (write-heavy, strong)"
+        GW[API Gateway<br/>auth + rate limit]
+        OS[Order Service<br/>validate + hold]
+        AS[Account Service]
+        PG[(Postgres<br/>orders · holds · ledger)]
+        OR[Order Router<br/>FIX / broker REST]
+        EH[Execution Handler<br/>consumes fills]
+    end
+
+    EX[Exchange / Market Maker<br/>NYSE · Nasdaq · Citadel]
+
+    APP -->|WS subscribe| WSG
+    APP -->|GET /quote| QC
+    APP -->|POST /orders| GW
+    ING --> BUS
+    ING --> QC
+    BUS --> WSG
+    WSG -.push ticks + order events.-> APP
+    GW --> OS
+    OS --> AS
+    AS --> PG
+    OS --> OR
+    OR -->|FIX NewOrderSingle| EX
+    EX -->|fill events| EH
+    EH --> PG
+    EH -.order event.-> WSG
+
+    style ING fill:#90EE90
+    style BUS fill:#FFE4B5
+    style QC fill:#e1f5ff
+    style PG fill:#e1f5ff
+    style OS fill:#90EE90
+    style EX fill:#f3e5f5
+```
 
 **Path A: Price Fanout (read-heavy, eventually consistent)**
 1. A **Market Data Ingestor** holds persistent connections to the exchange's trade feed (e.g., SIP / direct exchange feeds).
@@ -152,7 +264,7 @@ The two paths share only the WebSocket gateway layer, which multiplexes price ti
 
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. Order Routing to the Exchange
 
@@ -165,6 +277,56 @@ The two paths share only the WebSocket gateway layer, which multiplexes price ti
 - **FIX protocol as the integration layer.** The Order Router communicates over FIX sessions. Every FIX message carries a `ClOrdID` that maps back to our internal `orderId`. The router maintains a bidirectional correlation map `(FIX session, ClOrdID) ↔ orderId`. All exchange callbacks — `ExecutionReport`, `OrderCancelReject`, etc. — arrive on this session and are dispatched via the correlation map.
 - **Exchange acks are the source of truth for fills, not for acceptance.** Our DB says the order exists; the exchange tells us what actually traded. We reconcile the two with a periodic drop-copy feed and a nightly recon job.
 - **Cancel races.** A user can tap cancel after the order has already been filled. The router sends the cancel, but the exchange may reply "too late, filled." We treat the exchange's response as authoritative and surface the outcome.
+
+The durable-accept-before-route flow, with the outbox pattern guaranteeing the Kafka publish happens if and only if the Postgres commit succeeded:
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant OS as Order Service
+    participant PG as Postgres
+    participant RLY as Outbox Relay
+    participant K as Kafka
+    participant OR as Order Router
+    participant EX as Exchange
+
+    C->>OS: POST /orders { clientOrderId }
+    OS->>PG: BEGIN
+    Note over OS,PG: unique constraint on clientOrderId<br/>collapses retries into one insert
+    OS->>PG: insert order (status=NEW) + cash/share hold + outbox row
+    OS->>PG: COMMIT
+    OS-->>C: 200 { orderId, status: pending }
+    RLY->>PG: tail outbox table
+    RLY->>K: produce order.accepted
+    K->>OR: consume
+    OR->>EX: FIX NewOrderSingle (ClOrdID)
+    EX-->>OR: ExecutionReport (Accepted / Filled)
+    OR->>PG: update order state via correlation map
+```
+
+The full order state machine tracks every state the exchange surfaces. `PendingNew` — after the FIX `NewOrderSingle` is sent but before the exchange acknowledges — is the dangerous window where cancels must be **queued locally**, not sent to the exchange:
+
+```mermaid
+stateDiagram-v2
+    [*] --> New
+    New --> PendingNew: FIX NewOrderSingle sent
+    PendingNew --> Accepted: exchange ack
+    PendingNew --> Rejected: exchange reject
+    Accepted --> PartiallyFilled: partial execution
+    Accepted --> Filled: full execution
+    PartiallyFilled --> Filled: remaining filled
+    PartiallyFilled --> Canceled: cancel accepted
+    Accepted --> Canceled: cancel accepted
+    Filled --> [*]
+    Canceled --> [*]
+    Rejected --> [*]
+
+    note right of PendingNew
+        Cancel requests here are
+        queued locally and flushed
+        once the exchange ack arrives
+    end note
+```
 
 **Why not call the exchange synchronously from the request handler?** Because exchange RTT can spike to seconds, and tying the user's HTTP connection to the exchange socket couples two very different SLAs. Kafka-in-the-middle lets us accept orders at 99.99% availability even when the exchange is slow.
 
@@ -180,6 +342,43 @@ The two paths share only the WebSocket gateway layer, which multiplexes price ti
 - **Quote cache.** The latest tick per symbol lives in Redis with a short TTL so HTTP `GET /quote` does not need to hit the bus.
 - **Binary framing.** At scale, JSON over WebSocket is wasteful. Protobuf (or a compact custom binary frame) cuts payload size by 3–5x compared to JSON, directly reducing gateway egress bandwidth and CPU time spent on serialization. JSON is kept only for debug/admin endpoints where human readability matters.
 
+> 💡 **Coalesce, never buffer, for slow clients.** For a price feed, the current price is the only price that matters. A slow connection should drop superseded ticks and keep just the latest per symbol — unbounded buffering trades memory exhaustion and stale delivery for data nobody wants.
+
+The fanout path — single-writer ingestion, symbol-partitioned bus, and per-gateway interest maps with hot-symbol subscriber sharding:
+
+```mermaid
+graph TB
+    EX[Exchange Trade Feed<br/>SIP / direct feeds]
+    subgraph "Ingestion (single writer per symbol)"
+        I1[Ingestor A<br/>owns TSLA, AAPL]
+        I2[Ingestor B<br/>owns NVDA, MSFT]
+    end
+    BUS[[Price Bus<br/>topics partitioned by symbol]]
+    subgraph "WebSocket Gateways (interest maps)"
+        G1[Gateway 1<br/>symbol to connIds]
+        G2[Gateway 2<br/>hot-symbol shard<br/>hash connId % N]
+    end
+    QC[(Quote Cache<br/>Redis · short TTL)]
+    C1[Client subscribers]
+
+    EX --> I1
+    EX --> I2
+    I1 --> BUS
+    I2 --> BUS
+    I1 --> QC
+    I2 --> QC
+    BUS -->|subscribe owned symbols| G1
+    BUS -->|subscribe owned symbols| G2
+    G1 -.push tick.-> C1
+    G2 -.push tick.-> C1
+
+    style EX fill:#f3e5f5
+    style BUS fill:#FFE4B5
+    style QC fill:#e1f5ff
+    style I1 fill:#90EE90
+    style I2 fill:#90EE90
+```
+
 ### 3. Consistency of Balances and Positions
 
 **The problem.** Money is real. If two buy orders race for the same $1,000 of buying power, at most one must succeed. After a fill, the position must reflect the new share count without drift, even if components crash mid-update.
@@ -192,6 +391,32 @@ The two paths share only the WebSocket gateway layer, which multiplexes price ti
 - **Fills are reconciled, not trusted blindly.** The execution handler processes exchange fill messages idempotently (keyed by exchange fill ID). If a fill arrives for $100 but we only held $90 (due to price slippage between placement and fill for a market order), we have explicit policy: accept the overage if within the pre-sized buffer, or otherwise flag for risk review.
 - **Nightly reconciliation against the clearing firm.** Clearing firms (DTCC/DTC in the US) send a daily position file listing every account's shares and cash balances as of end-of-day. We run an automated reconciliation job comparing our internal ledger totals against this file. Any discrepancy — whether a miscredited share, a miscounted cash event, or a silently dropped fill — is treated as a bug and escalates to on-call. Regulators require this. It also serves as a safety net for silent corruption in the event-sourcing projection.
 
+The two-phase hold lifecycle — hold on accept, release-and-settle on fill, or release-only on cancel:
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant OS as Order Service
+    participant PG as Postgres Account
+    participant EH as Execution Handler
+    participant EX as Exchange
+
+    C->>OS: POST /orders (buy)
+    OS->>PG: BEGIN (serializable)
+    OS->>PG: check cash - held_cash >= order_value
+    OS->>PG: held_cash += order_value, insert order, bump version
+    OS->>PG: COMMIT
+    Note over PG: hold is visible to any<br/>concurrent balance check
+    OS-->>C: accepted (pending)
+    alt Fill confirmation
+        EX-->>EH: fill event (idempotent, keyed by fill ID)
+        EH->>PG: release hold, permanently debit cash, credit shares
+    else Cancel
+        C->>OS: DELETE /orders/{id}
+        OS->>PG: release hold (no debit)
+    end
+```
+
 ### 4. Market-Open Bursts and Load Shedding
 
 **The problem.** At 9:30:00 AM ET, order and quote volume can be 10-50x baseline. Many users pre-queue orders overnight. A naive system will saturate its DB connections, exhaust its Kafka producers, and take down both the order path and the price path.
@@ -201,6 +426,8 @@ The two paths share only the WebSocket gateway layer, which multiplexes price ti
 - **Staggered order release with jitter.** Overnight-queued limit orders from thousands of users cannot all be sent to the exchange at exactly 9:30:00.000 ET. This creates a thundering herd both internally and at the exchange, which enforces its own FIX session rate limits per participant. We release queued orders over a randomized window (e.g., 9:30:00 to 9:30:30) with per-order jitter drawn from a uniform distribution. This smooths internal queue depth, prevents FIX session saturation, and avoids our routing being flagged by the exchange for abnormal burst patterns.
 - **Asynchronous pipeline with bounded queues.** The Order Service's only synchronous work is validation, hold placement, and Kafka publish. Routing to the exchange is async. This shields the user-facing path from exchange slowness.
 - **Kafka producer backpressure.** If Kafka producer ack lag exceeds the configured threshold (indicating the broker is behind), the Order Service returns **503 with a `Retry-After` header** rather than accepting orders it cannot durably commit. This makes backpressure explicit and surfaceable to the client, which can implement exponential backoff. Silent acceptance followed by eventual loss is far worse than a transparent 503.
+
+> ⚠️ **Never accept an order you cannot durably commit.** When the broker is behind, reject with an explicit `503 + Retry-After` so the client can back off. Silently accepting an order that later evaporates is the worst possible failure mode in a system where the missing order is real money.
 - **Per-user rate limits.** A single user cannot submit 1,000 orders per second. Token bucket per userId at the API gateway, enforced in Redis.
 - **Priority queues for order pipeline.** Cancel orders get their own Kafka topic / partition with higher consumer priority, because a stuck cancel has regulatory consequences. New orders are best-effort fast.
 - **Load shedding on the price path.** If WebSocket Gateways approach CPU limits, we shed by (a) reducing tick frequency per symbol to a cap (e.g., 10/sec even if the exchange ticks 500/sec), (b) temporarily disconnecting idle clients, (c) serving HTTP quote reads from the stale Redis cache with a banner.
@@ -209,9 +436,27 @@ The two paths share only the WebSocket gateway layer, which multiplexes price ti
 
 ---
 
-## Scaling Journey: 0 to Infinity
+## 📈 Scaling Journey: 0 to Infinity
 
 This is my own walkthrough of how I would evolve a Robinhood-style broker from weekend prototype to a venue serving tens of millions of active traders. Each stage names the bottleneck that forced the next step.
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0–100<br/>Monolith + Postgres<br/>poll quotes, sync route"]
+    S2["Stage 2<br/>100–1K<br/>Ingestor + Redis<br/>WebSocket + job queue"]
+    S3["Stage 3<br/>1K–100K<br/>Split services + Kafka<br/>WS gateway fleet"]
+    S4["Stage 4<br/>100K–10M<br/>User-hash + symbol shard<br/>event-sourced ledger"]
+    S5["Stage 5<br/>10M+<br/>Pre-scale + load shed<br/>warm DR + kill switches"]
+
+    S1 -->|"per-symbol polling stalls"| S2
+    S2 -->|"Redis Pub/Sub drops, hot Postgres"| S3
+    S3 -->|"market-open overwhelms shared PG"| S4
+    S4 -->|"queueing delays + reconciliation"| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0 to 100 Users (MVP)
 
@@ -277,7 +522,7 @@ At this point the interesting engineering is less about scale and more about saf
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 ### Cash Holds Are a Two-Phase Commit Without the Protocol
 When a buy order is submitted, reserve (hold) the buying power immediately in the same DB transaction that creates the order row. Only release the hold on fill confirmation or explicit cancellation. If you deduct buying power on fill instead, two concurrent orders can both pass the balance check and both get placed — the account goes negative after fills land.
@@ -305,7 +550,7 @@ Robinhood routes retail orders not directly to exchanges but to market makers (C
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Area | Mid-level | Senior | Staff+ |
 | --- | --- | --- | --- |
@@ -316,3 +561,19 @@ Robinhood routes retail orders not directly to exchanges but to market makers (C
 | Consistency | Note ACID Postgres for balances. | Cash holds on order placement, idempotent fill processing, optimistic concurrency on accounts. | Event-sourced ledger as system of record, reconciliation against clearing broker, policy for slippage and overfills, replay for disputes. |
 | Market-open / scaling | Acknowledge spikes exist. | Async order pipeline, rate limits, pre-warming. | Randomized release of queued orders, priority queues for cancels, tiered quote rates by user class, end-to-end load-shedding playbook. |
 | Failure modes | Handles "server crashes." | Retries, exchange timeouts, duplicate-order prevention via clientOrderId. | Partial exchange outages, cancel-vs-fill races, multi-region DR strategy, per-subsystem kill switches, observability and on-call runbooks. |
+
+---
+
+## 📚 Related Concepts
+
+- [Redis](../CoreConcepts/Redis.md) — the quote cache (latest tick per symbol, short TTL), Pub/Sub price fanout, and per-user token-bucket rate limiting.
+- [Consistent Hashing](../CoreConcepts/ConsistentHashing.md) — per-symbol single-writer ingestion and routing subscribers to the owning gateway shard.
+- [Sharding](../CoreConcepts/Sharding.md) — user-hash sharding of the account/order write path vs symbol-hash sharding of the price path.
+- [Caching](../CoreConcepts/Caching.md) — serving cold `GET /quote` reads from Redis so HTTP loads never hit the bus.
+- [Networking](../CoreConcepts/Networking.md) — WebSocket push for ticks and order events, binary framing, and backpressure/coalescing for slow clients.
+- [Kafka](../SystemDesign/DeepDives/Kafka.md) — the price bus and the durable order pipeline (outbox → topic → router), plus prioritized cancel partitions.
+- [Postgresql](../SystemDesign/DeepDives/Postgresql.md) — the ACID account store: serializable balance checks, cash/share holds, and the idempotency unique constraint.
+- [Dealing With Contention](../SystemDesign/Patterns/DealingWithContention.md) — the two-phase hold pattern and optimistic concurrency that stop two orders from double-spending the same buying power.
+- [Real-Time Updates](../SystemDesign/Patterns/Real-TimeUpdates.md) — the push-over-WebSocket fanout model behind sub-200ms price delivery.
+- [Payment System](../SystemDesign/ProblemBreakdowns/PaymentSystem.md) — event-sourced ledgers, idempotent processing, and reconciliation as the money-movement backbone.
+- [Robinhood (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/Robinhood.md) — the source breakdown this doc expands on.

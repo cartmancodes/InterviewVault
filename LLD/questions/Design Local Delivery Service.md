@@ -1,37 +1,41 @@
-# Design Local Delivery Service (GoPuff-style)
+# 🛒 Design Local Delivery Service (GoPuff-style)
 
 > **Pattern**: Geospatial / Inventory
 > **Difficulty**: Medium
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/gopuff)
 
+> **Summary**: A GoPuff-style service delivers from small "dark store" micro-fulfillment DCs, showing each user only the items that can physically reach them within roughly one hour. Two problems intertwine: a *geospatial* one (which DCs can serve this location?) and an *inventory-consistency* one (never sell the same physical unit twice). The design answers reads with PostGIS polygon-containment for nearby-DC search plus a Redis browse cache and Postgres read replicas to absorb ~20k availability QPS, and answers writes with an optimistic-lock (`UPDATE ... WHERE available > 0`) commit on a single relational store, evolving to regional sharding and CQRS with CDC as write contention and read volume grow.
+
 ---
 
-## Table of Contents
+## 📋 Table of Contents
 
 1. [Understanding the Problem](#understanding-the-problem)
    - [Functional Requirements](#functional-requirements)
    - [Non-Functional Requirements](#non-functional-requirements)
-2. [Core Entities](#core-entities)
-3. [API Design](#api-design)
-4. [High-Level Design](#high-level-design)
-5. [Deep Dives](#deep-dives)
+2. [Layman's Explanation](#laymans-explanation)
+3. [Core Entities](#core-entities)
+4. [API Design](#api-design)
+5. [High-Level Design](#high-level-design)
+6. [Deep Dives](#deep-dives)
    1. [Nearby-DC Search with Travel Time](#1-nearby-dc-search-with-travel-time)
    2. [Inventory Consistency and Avoiding Overselling](#2-inventory-consistency-and-avoiding-overselling)
    3. [Scaling Availability Reads at 20k QPS](#3-scaling-availability-reads-at-20k-qps)
    4. [Geospatial Indexing Strategies](#4-geospatial-indexing-strategies)
    5. [Regional Sharding and Partitioning](#5-regional-sharding-and-partitioning)
-6. [Scaling Journey: 0 to infinity](#scaling-journey-0-to-infinity)
-   - [Stage 1: 0 to 100 Users (MVP)](#stage-1-0100-users-mvp)
-   - [Stage 2: 100 to 1,000 Users](#stage-2-1001000-users)
-   - [Stage 3: 1K to 100K Users](#stage-3-1k100k-users)
-   - [Stage 4: 100K to 10M Users](#stage-4-100k10m-users)
+7. [Scaling Journey: 0 to infinity](#scaling-journey-0-to-infinity)
+   - [Stage 1: 0 to 100 Users (MVP)](#stage-1-0-to-100-users-mvp)
+   - [Stage 2: 100 to 1,000 Users](#stage-2-100-to-1000-users)
+   - [Stage 3: 1K to 100K Users](#stage-3-1k-to-100k-users)
+   - [Stage 4: 100K to 10M Users](#stage-4-100k-to-10m-users)
    - [Stage 5: 10M+ Users](#stage-5-10m-users)
-7. [Insider Tips and Tricks](#insider-tips-and-tricks)
-8. [Expected Depth by Level](#expected-depth-by-level)
+8. [Insider Tips and Tricks](#insider-tips-and-tricks)
+9. [Expected Depth by Level](#expected-depth-by-level)
+10. [Related Concepts](#related-concepts)
 
 ---
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 GoPuff-style local delivery is an e-commerce system that operates out of small "dark stores" or micro-fulfillment distribution centers (DCs). Users in a geographic area open the app, see only the items that can reach them within roughly one hour, place an order, and have it delivered quickly. The challenge is that inventory is physical, finite, and localized: what a user in Manhattan sees differs from what a user in Brooklyn sees, and two users cannot both buy the last box of Cheetos at the same DC.
 
@@ -85,7 +89,7 @@ A real pizza dispatcher couldn't optimize routes for batched deliveries (one dri
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 | Entity | Description | Notes |
 |---|---|---|
@@ -96,9 +100,42 @@ A real pizza dispatcher couldn't optimize routes for batched deliveries (one dri
 
 The data model is deliberately small. The tricky piece is that `Inventory` is the thing that gets contended on writes, while `DistributionCenter` (rarely changing) is what drives the geospatial read path.
 
+```mermaid
+erDiagram
+    ITEM ||--o{ INVENTORY : "stocked as"
+    DISTRIBUTIONCENTER ||--o{ INVENTORY : "holds"
+    ORDER }o--|| ITEM : "references"
+    ORDER }o--|| DISTRIBUTIONCENTER : "fulfilled by"
+
+    ITEM {
+        string itemId PK
+        string name
+    }
+    INVENTORY {
+        string itemId PK
+        string dcId PK
+        int available
+    }
+    DISTRIBUTIONCENTER {
+        string dcId PK
+        float lat
+        float lng
+        polygon delivery_zone
+        string operating_hours
+    }
+    ORDER {
+        string orderId PK
+        string userId
+        string delivery_address
+        string status
+    }
+```
+
+*Read path (hot) is driven by `DistributionCenter` geometry; write contention concentrates on `Inventory` rows.*
+
 ---
 
-## API Design
+## 🔌 API Design
 
 ```
 GET /availability?lat={lat}&lng={lng}&limit=20
@@ -128,9 +165,44 @@ Out of scope but mentioned in passing: `GET /orders/{id}` for status, `GET /sear
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
 The system decomposes into a few services and a single authoritative store for inventory and orders.
+
+```mermaid
+graph TB
+    subgraph Clients
+        APP[User App]
+    end
+
+    subgraph Services
+        AS[Availability Service<br/>GET /availability<br/>aggregate qty per item]
+        NS[Nearby Service<br/>ST_Contains polygon<br/>+ in-memory zone cache]
+        OS[Orders Service<br/>POST /orders<br/>optimistic-lock decrement]
+    end
+
+    subgraph Stores
+        PG[(Primary Postgres + PostGIS<br/>Item · Inventory · Order · DC)]
+        RR[(Read Replicas<br/>availability reads)]
+    end
+
+    TT[Travel-Time API<br/>Google Distance Matrix / HERE]
+
+    APP -->|availability| AS
+    APP -->|order| OS
+    AS -->|which DCs?| NS
+    AS -->|read inventory| RR
+    NS -->|shortlist ETA| TT
+    NS -.->|ST_Contains| PG
+    OS -->|check + decrement + write| PG
+    PG -.->|replication| RR
+
+    style PG fill:#e1f5ff
+    style RR fill:#e1f5ff
+    style TT fill:#f3e5f5
+    style OS fill:#90EE90
+    style AS fill:#90EE90
+```
 
 1. **Availability Service** handles `GET /availability`. It first asks the Nearby Service for DCs whose delivery polygon contains the user's coordinates, then queries inventory for those DCs and aggregates quantities per item.
 
@@ -144,13 +216,28 @@ The read path (availability) is hot and can tolerate slight staleness. The write
 
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. Nearby-DC Search with Travel Time
 
 A naive Haversine-distance filter is wrong for two independent reasons. First, road networks and traffic dominate delivery time in dense urban areas; 10 miles across Manhattan at 5 PM is not the same as 10 miles in suburbia. Second, and less obvious, a radius query returns DCs that are geographically close but may be unreachable by road — a DC across a river with no nearby bridge, or on the other side of a divided highway, can show as 0.5 miles away but be 15 minutes of drive time. Calling a travel-time API against all 10k DCs per request is also wrong: cost and latency explode.
 
 The right answer is three-stage filtering. Stage one performs a PostGIS `ST_Contains(delivery_zone_polygon, user_point)` query to return only DCs whose hand-drawn delivery polygon actually includes the user's location. Delivery zone polygons are maintained by operations teams and stored as GeoJSON; they already encode road-reachability implicitly because operations draws them to follow streets, rivers, and barriers. Stage two applies a coarse Haversine radius filter as a bounding-box prefilter to limit how many polygons the database must test. Stage three calls the travel-time provider (Google Distance Matrix, HERE, or similar) on the handful of surviving candidates to get a true drive-time estimate for ETA purposes. DC zone geometries change rarely, so the Nearby Service can cache the full polygon dataset in memory and refresh every five minutes; only the travel-time leg hits the external network per request.
+
+```mermaid
+graph LR
+    U[User point<br/>lat,lng] --> S1[Stage 1<br/>ST_Contains<br/>delivery polygons]
+    S1 --> S2[Stage 2<br/>Haversine radius<br/>bounding-box prefilter]
+    S2 --> S3[Stage 3<br/>Travel-Time API<br/>on shortlist only]
+    S3 --> R[Eligible DCs<br/>+ true drive-time ETA]
+
+    style S1 fill:#e1f5ff
+    style S2 fill:#FFE4B5
+    style S3 fill:#f3e5f5
+    style R fill:#90EE90
+```
+
+> ⚠️ **A naive Haversine radius query is wrong.** A DC across a river with no nearby bridge, or on the far side of a divided highway, can show as 0.5 miles away yet be 15 minutes of drive time. Hand-drawn delivery polygons encode road-reachability implicitly; only the surviving shortlist ever hits the external travel-time provider, so cost and latency stay bounded.
 
 When no polygon-based zones exist yet (early stage), fall back to a configurable radius and document the known shortcoming. The migration path to polygons is an operational concern, not a code rewrite.
 
@@ -159,6 +246,17 @@ When no polygon-based zones exist yet (early stage), fall back to a configurable
 The tempting but broken design puts orders in one database and inventory in another (say, Redis for speed). This introduces a distributed transaction problem: a crash between "write order" and "decrement inventory" leaves the two stores out of sync. Compensating logic and distributed locks follow, and deadlocks appear when two orders touch overlapping items.
 
 The clean answer is to keep `Inventory` and `Order` in the same relational database and use a two-phase write pattern. At checkout initiation the Orders Service soft-reserves items by decrementing a `reserved` counter without touching `available`. The reservation row carries a TTL; a background job (or Postgres `pg_cron`) expires and releases it after 10 minutes if payment never completes. At payment success the service hard-commits: it decrements `available`, increments `sold`, and deletes the reservation row. If payment fails or the session times out the release path fires. This two-phase pattern means no DB lock is held during the external payment call — a potentially slow operation — while still guaranteeing that stock cannot be double-sold.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Available
+    Available --> Reserved: checkout init<br/>(reserved++, 10-min TTL)
+    Reserved --> Committed: payment success<br/>(available--, sold++)
+    Reserved --> Available: payment fail /<br/>timeout / TTL expiry<br/>(release)
+    Committed --> [*]
+```
+
+*Soft-reserve holds no DB row lock during the slow external payment call; the TTL guarantees abandoned carts return stock to the pool automatically.*
 
 For the final decrement, use optimistic locking rather than a row lock:
 
@@ -170,6 +268,19 @@ WHERE sku_id = ? AND available > 0;
 
 Check rows affected: if the result is 0, the item sold out between the inventory check and the commit. Return a 409 to the user. No lock was held; the conflict is detected at write time. If two users simultaneously pass the inventory check for the last unit, exactly one of their UPDATE statements will match `available > 0`; the other returns 0 rows affected and loses cleanly. This is safer than SERIALIZABLE isolation for hot items because it does not produce serialization failures that require retry logic; the conflict path is explicit and deterministic.
 
+```mermaid
+sequenceDiagram
+    participant A as User A
+    participant B as User B
+    participant PG as Postgres (last unit)
+
+    A->>PG: UPDATE ... WHERE available > 0
+    B->>PG: UPDATE ... WHERE available > 0
+    PG-->>A: 1 row affected -> 201 Created
+    PG-->>B: 0 rows affected -> 409 Conflict
+    Note over PG: available decremented exactly once<br/>no lock held, no deadlock
+```
+
 ### 3. Scaling Availability Reads at 20k QPS
 
 Twenty thousand availability queries per second is well beyond what a single Postgres primary handles. Two layers relieve it, and they serve different consistency tiers deliberately.
@@ -179,6 +290,25 @@ The first layer is a Redis cache keyed by something coarse like `(h3_cell, itemI
 The second layer is Postgres read replicas. Availability cache misses read from replicas (lag of a few seconds is fine on this path). Writes always go to the primary. These two layers together mean the primary only sees cache-miss traffic, which at a 30-second TTL and 20k QPS is a small fraction of origin requests.
 
 Checkout-time inventory is a different story entirely. The `POST /orders` write path never reads from cache or replicas. It reads from the primary via the optimistic `UPDATE ... WHERE available > 0` pattern described above. Strong consistency is enforced precisely because real money is at stake. The two tiers — eventually consistent browse cache and strongly consistent checkout write — are an intentional design choice, not an oversight.
+
+```mermaid
+graph TB
+    BROWSE[Browse read<br/>GET /availability<br/>~20k QPS] --> CACHE[(Redis cache<br/>h3_cell + item batch<br/>30-60s TTL)]
+    CACHE -->|hit| BROWSE
+    CACHE -->|miss| RR[(Read Replicas<br/>few-sec lag OK)]
+    RR --> PG[(Primary Postgres)]
+
+    CHECKOUT[Checkout write<br/>POST /orders] -->|bypass cache + replicas| PG
+    PG -.->|invalidate keys on commit| CACHE
+
+    style CACHE fill:#e1f5ff
+    style RR fill:#e1f5ff
+    style PG fill:#e1f5ff
+    style BROWSE fill:#FFE4B5
+    style CHECKOUT fill:#90EE90
+```
+
+> 💡 **Two consistency tiers, one inventory number.** The browse path collapses ~20k QPS to a handful of origin fetches per TTL window and tolerates a 30-second stale count (it commits to nothing). The checkout path bypasses cache and replicas entirely and hits the primary with a strongly consistent write — real money is at stake. On commit, the Orders Service publishes key invalidations so the cache never serves oversold state longer than the TTL.
 
 ### 4. Geospatial Indexing Strategies
 
@@ -203,9 +333,27 @@ The Item catalog and the Inventory table are also separate data domains and shou
 
 ---
 
-## Scaling Journey: 0 to infinity
+## 📈 Scaling Journey: 0 to infinity
 
 Each stage below states its goal, the architecture in play, what we deliberately skip, and the specific failure that pushes us to the next stage. Scaling here is dominated by two pressures: availability-read QPS, and inventory-write contention. The stages track how those pressures force structural change.
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0–100<br/>Monolith + 1 Postgres<br/>single DC"]
+    S2["Stage 2<br/>100–1K<br/>Nearby Svc + PostGIS<br/>polygons + travel-time"]
+    S3["Stage 3<br/>1K–100K<br/>Redis cache + replicas<br/>split services + Kafka"]
+    S4["Stage 4<br/>100K–10M<br/>Regional sharding<br/>H3 + soft-reserve"]
+    S5["Stage 5<br/>10M+<br/>Per-DC partitions<br/>CQRS + CDC + ML ETA"]
+
+    S1 -->|"2nd DC: location matters"| S2
+    S2 -->|"read QPS crowds out writes"| S3
+    S3 -->|"single primary write bottleneck"| S4
+    S4 -->|"per-DC write hotspots"| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0 to 100 Users (MVP)
 
@@ -278,7 +426,7 @@ Each stage below states its goal, the architecture in play, what we deliberately
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 ### Delivery Zones Are Polygons, Not Circles
 
@@ -322,10 +470,28 @@ A user standing exactly at the boundary between two geohash cells may be equidis
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Level | Breadth vs Depth | What interviewers want to see | Specific expectations for this problem |
 |---|---|---|---|
 | **Mid-level** | ~80% breadth, 20% depth | A clear, working design end-to-end. | Correct API shapes, sensible entities, a single Postgres with optimistic locking for orders, an in-memory DC list for the Nearby step. Candidate should recognize availability is read-heavy but may not drive the cache design without prompting. |
 | **Senior** | ~60% breadth, 40% depth | Proactive identification of bottlenecks and justified trade-offs. | Candidate brings up read/write asymmetry unprompted, proposes Redis (browse tier) + replica reads for availability, explains why optimistic locking beats distributed locks at the inventory decrement step, and handles the Nearby-with-travel-time deep dive cleanly. Should discuss regional sharding at least at a conceptual level. Bonus: mentions delivery zones as polygons rather than radii. |
 | **Staff+** | ~40% breadth, 60% depth | Novel insights, failure-mode anticipation, deep ownership of 2-3 areas. | Candidate anticipates hotspot DCs, discusses CQRS with CDC for extreme read scale, reasons about geospatial index choice (PostGIS polygon containment vs H3 vs Elasticsearch geo_shape) with trade-offs, and addresses cross-region consistency, the soft-reserve / hard-commit pattern, and blast-radius containment. Unprompted: the two inventory consistency tiers (browse vs checkout), the geohash neighbor-expansion requirement, capacity-weighted DC selection, and separation of catalog from inventory as distinct data domains. Should also talk about operational concerns: invalidation correctness, monitoring for overselling as a business-critical alert, and graceful degradation when the travel-time provider is unavailable. |
+
+---
+
+## 📚 Related Concepts
+
+- [Sharding](../CoreConcepts/Sharding.md) — regional sharding of inventory and orders by geography (H3 res-4 / zip3), keeping transactions single-shard.
+- [Caching](../CoreConcepts/Caching.md) — the browse-tier availability cache with short TTL and write-through invalidation.
+- [Redis](../CoreConcepts/Redis.md) — the `(h3_cell, item batch)` browse cache that collapses ~20k QPS to a few origin fetches.
+- [Data Indexing](../CoreConcepts/DataIndexing.md) — PostGIS `GIST` spatial index for `ST_Contains` polygon-containment queries in O(log n).
+- [Data Modelling](../CoreConcepts/DataModelling.md) — separating slow-changing catalog from per-second inventory as distinct data domains.
+- [Proximity Search](../SystemDesign/DeepDives/ProximitySearch.md) — geospatial index choices (geohash neighbor expansion, H3 hex grid, PostGIS) in depth.
+- [PostgreSQL](../SystemDesign/DeepDives/Postgresql.md) — the primary store colocating inventory and orders for strong consistency.
+- [Elasticsearch](../SystemDesign/DeepDives/Elasticsearch.md) — `geo_shape` polygon containment when geospatial merges with catalog search.
+- [Kafka](../SystemDesign/DeepDives/Kafka.md) — the async event bus for post-order work and the CDC (Debezium) stream feeding CQRS read views.
+- [Dealing With Contention](../SystemDesign/Patterns/DealingWithContention.md) — optimistic locking (`UPDATE ... WHERE available > 0`) to resolve the last-item race without deadlocks.
+- [Scaling Reads](../SystemDesign/Patterns/ScalingReads.md) — the cache + read-replica layers that shield the primary from availability QPS.
+- [Local Delivery Service (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/LocalDeliveryService.md) — the source breakdown this doc expands on.
+- [Uber](../SystemDesign/ProblemBreakdowns/Uber.md) — sibling geospatial-matching problem with H3 cells and dispatch exclusivity.

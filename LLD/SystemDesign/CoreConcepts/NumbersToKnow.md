@@ -1,6 +1,25 @@
-# Numbers to Know
+# 📊 Numbers to Know
 
-Learn about the numbers you need to know for system design interviews.
+> **Overview**: Modern hardware has changed the calculus of system design — a single machine now holds terabytes of RAM, single databases handle dozens of terabytes at millisecond latency, and message queues push millions of messages per second. This page collects the numbers that actually matter in 2026 so you can estimate capacity accurately, know where the real limits are, and avoid over-engineering systems based on outdated constraints.
+
+## 📋 Table of Contents
+- [🧒 Layman's Explanation](#laymans-explanation)
+- [🖥️ Modern Hardware Limits](#modern-hardware-limits)
+- [🎤 Applying These Numbers in System Design Interviews](#applying-these-numbers-in-system-design-interviews)
+- [📋 Cheat Sheet](#cheat-sheet)
+- [⚠️ Common Mistakes In Interviews](#common-mistakes-in-interviews)
+- [💰 What about costs?](#what-about-costs)
+- [📝 Conclusion](#conclusion)
+- [🎓 Key Takeaways](#key-takeaways)
+- [📚 Related Concepts](#related-concepts)
+
+---
+
+## 🧒 Layman's Explanation
+
+Imagine you're moving house and you assume you'll need a whole fleet of trucks making dozens of trips. But you're picturing the little handcart your grandparents used decades ago. In reality, a modern moving truck is enormous — one trip might carry everything you own. If you plan the whole move around the old handcart, you'll hire far too many trucks, coordinate a needlessly complex convoy, and spend money and effort solving a problem you don't actually have.
+
+System design is the same. Many engineers still "pack for the handcart" — they reach for sharding, message queues, and distributed caches because they remember when a database maxed out at 100GB and a Redis instance held 32GB. But today's single "truck" is huge: one database holds tens of terabytes, one cache holds ~1TB in RAM, one server juggles 100k+ connections. Knowing the real size of the modern truck is what lets you make the right call — one machine when one will do, and scaling out only when you've done the math and genuinely need it.
 
 Our industry moves fast. The hardware we build systems on evolves constantly, which means even recent textbooks can become outdated quickly. A book published just a few years ago might be teaching patterns that still make sense, but quoting numbers that are off by orders of magnitude.
 
@@ -10,7 +29,7 @@ This isn't the candidate's fault – they're doing the right thing by studying. 
 
 Let's look at the numbers that actually matter in 2026.
 
-## Modern Hardware Limits
+## 🖥️ Modern Hardware Limits
 
 Modern servers pack serious computing power. An AWS [M6i.32xlarge](https://aws.amazon.com/ec2/instance-types/m6i/) comes with 512 GiB of memory and 128 vCPUs for general workloads. Memory-optimized instances go further: the [X1e.32xlarge](https://aws.amazon.com/ec2/instance-types/x1e/) provides 4 TB of RAM, while the [U-24tb1.metal](https://aws.amazon.com/blogs/aws/ec2-high-memory-update-new-18-tb-and-24-tb-instances/) reaches 24 TB of RAM. This shift matters because many applications that once required distributed systems can now run on a single machine.
 
@@ -20,11 +39,25 @@ Network capabilities haven't stagnated either. Within a datacenter, 25 Gbps is c
 
 These aren't just incremental improvements – they represent a step change in what's possible. When textbooks talk about splitting databases at 100GB or avoiding large objects in memory, they're working from outdated constraints. The hardware running our systems today would have been unimaginable a decade ago, and these capabilities fundamentally change how we approach system design.
 
-## Applying These Numbers in System Design Interviews
+## 🎤 Applying These Numbers in System Design Interviews
 
 Let's look at how these numbers impact specific components and the decisions we make when designing systems in an interview.
 
-### Caching
+The mental model these numbers unlock is the same for every component: estimate your load, compare it against what a single modern machine can actually handle, and only reach for distributed complexity once you've confirmed you've crossed a real scale trigger.
+
+```mermaid
+graph LR
+    E["Estimate load<br/>data volume &amp; throughput"] --> C{"Within modern<br/>single-node limits?"}
+    C -->|Yes| S["Stay simple<br/>single DB + replicas<br/>cache only if needed"]
+    C -->|No| X["Scale out<br/>shard · queue ·<br/>more instances"]
+
+    style E fill:#FFE4B5
+    style C fill:#e1f5ff
+    style S fill:#90EE90
+    style X fill:#FFB6C1
+```
+
+### 🗄️ Caching
 
 In-memory caches have grown exponentially in both size and capability. Gone are the days of 32-64GB Redis instances that required careful memory management and partial dataset caching. Today's caches routinely handle terabyte-scale datasets with single-digit millisecond latency, and a single instance can process hundreds of thousands of operations per second. This shift in scale changes the entire approach to caching strategy.
 
@@ -44,7 +77,7 @@ When to consider scaling:
 
 These capabilities fundamentally change caching strategy. The ability to cache entire databases in memory, even at hundreds of gigabytes, means you can often avoid complex partial caching schemes altogether. This "cache everything" approach, while seemingly brute force, typically costs less than engineering time spent on selective caching logic. When you do need to scale, the bottleneck is usually operations per second or network bandwidth, not memory size – a counterintuitive shift from just a few years ago.
 
-### Databases
+### 🛢️ Databases
 
 The raw power of modern databases surprises even experienced engineers. Single PostgreSQL or MySQL instances now routinely handle dozens of terabytes of data while maintaining millisecond-level response times. This isn't just about storage either. Modern databases efficiently handle tens of thousands of transactions per second on a single primary, with the bottleneck often being operational concerns rather than performance limits.
 
@@ -69,11 +102,11 @@ When to consider sharding:
 
 While the largest systems in the world (social networks, e-commerce giants, etc.) absolutely need sharding to handle their scale, many candidates jump to distributed solutions too early. For systems handling millions or even tens of millions of users, a well-tuned single database can often handle the load. When you do need to scale, carefully consider what's driving the decision: is it pure data volume, operational concerns like backup windows, or the need for geographic distribution? Understanding these tradeoffs leads to better scaling decisions.
 
-> A "single instance" doesn't mean a single point of failure. In practice, you'd still run a primary with read replicas for availability (e.g. Aurora's multi-AZ failover). The point here is that you often don't need to shard the data — replication for HA is a separate concern from horizontal partitioning for scale.
+> 💡 A "single instance" doesn't mean a single point of failure. In practice, you'd still run a primary with read replicas for availability (e.g. Aurora's multi-AZ failover). The point here is that you often don't need to shard the data — replication for HA is a separate concern from horizontal partitioning for scale.
 
-> More often than not I see candidates reaching for scaling too quickly. They have 500GB or a couple of terabytes of data and they're start explaining how they'd shard the database. Slow down, do the math, and make sure sharding is actually needed before you start explaining how you'd do it.
+> ⚠️ More often than not I see candidates reaching for scaling too quickly. They have 500GB or a couple of terabytes of data and they're start explaining how they'd shard the database. Slow down, do the math, and make sure sharding is actually needed before you start explaining how you'd do it.
 
-### Application Servers
+### 🖥️ Application Servers
 
 Modern application servers have evolved beyond the resource constraints that shaped many traditional design patterns. Today's servers routinely handle thousands of concurrent connections with modest resource usage, while cloud platforms enable rapid scaling in response to load. CPU processing power, rather than memory or connection limits, typically determines your server's capabilities.
 
@@ -94,7 +127,7 @@ When to consider horizontal scaling:
 
 The implications for system design are significant. While the trend toward stateless services is valuable for scaling, don't forget that each server has substantial memory available. Local caching, in-memory computations, and session handling can all leverage this memory to improve performance dramatically. CPU is almost always your first bottleneck, not memory, so don't shy away from memory-intensive optimizations when they make sense. When you do need to scale, cloud platforms can spin up new instances in 30-60 seconds for containerized apps, making aggressive auto-scaling a viable alternative to over-provisioning. This combination of powerful individual instances and rapid scaling means you can often achieve high performance through simple architectures.
 
-### Message Queues
+### 📨 Message Queues
 
 Message queues have transformed from simple task delegation systems into high-performance data highways. Modern systems like Kafka process [millions of messages per second](https://engineering.linkedin.com/kafka/benchmarking-apache-kafka-2-million-writes-second-three-cheap-machines) with single-digit millisecond latency, while maintaining weeks or months of data. This combination of speed and durability has expanded their role far beyond traditional async processing.
 
@@ -115,7 +148,7 @@ When to consider scaling:
 
 The performance characteristics of modern queues challenge traditional system design assumptions. With consistent sub-5ms latencies, you can now use queues within synchronous request flows—getting the benefits of reliable delivery and decoupling without forcing APIs to be async. This speed, combined with practically unlimited storage, means queues can serve as the backbone for event sourcing, real-time analytics, and data integration patterns that previously required specialized systems.
 
-## Cheat Sheet
+## 📋 Cheat Sheet
 
 Here is a one-stop-shop for the numbers you need to know in 2026. These numbers represent typical values for well-tuned systems with specific workloads - your requirements may vary based on workload, hardware, and configuration. Use them as a starting point for capacity planning and system design discussions, not as hard limits. Remember that cloud providers regularly update their offerings, so while I'll try to keep this up to date, it should be treated more as a starting point than a hard limit.
 
@@ -126,7 +159,7 @@ Here is a one-stop-shop for the numbers you need to know in 2026. These numbers 
 | **App Servers** | - 100k+ concurrent connections<br>- 8-64 cores @ 2-4 GHz<br>- 64-512GB RAM standard, up to 2TB | - CPU > 70% utilization<br>- Response latency > SLA<br>- Connections near 100k/instance<br>- Memory > 80% |
 | **Message Queues** | - Up to 1 million msgs/sec per broker<br>- Sub-5ms end-to-end latency<br>- Up to 50TB storage | - Throughput near 800k msgs/sec<br>- Partition count ~200k per cluster<br>- Growing consumer lag |
 
-## Common Mistakes In Interviews
+## ⚠️ Common Mistakes In Interviews
 
 ### Premature sharding
 
@@ -138,7 +171,7 @@ The same thing comes up a lot with caches. Take a [LeetCode](https://hellointerv
 
 I see this most with SSDs. Candidates tend to vastly overestimate the latency to query an SSD (Database) for a simple key or row lookup. We're talking sub-millisecond to a few milliseconds for indexed lookups. It's fast! Candidates will oftentimes justify adding a caching layer to reduce latency when the simple row lookup is already fast enough -- no need to add additional infrastructure.
 
-> Note, this is only for simple row lookups with an index. It is still wise to cache expensive queries.
+> 💡 **Note**: this is only for simple row lookups with an index. It is still wise to cache expensive queries.
 
 ### Over-engineering given a high write throughput
 
@@ -150,7 +183,7 @@ Message queues become valuable when you need guaranteed delivery in case of down
 
 The core point is to understand your actual write patterns and requirements before adding infrastructure complexity. Modern databases are incredibly capable, and simple solutions often perform better than you might expect.
 
-## What about costs?
+## 💰 What about costs?
 
 When you're actually designing a real system, cost is often a major factor. You'll sketch out estimates for your usage, multiply those by pricing tables, and try to compare the exact dollar costs of different options to establish a TCO (Total Cost of Ownership).
 
@@ -158,7 +191,7 @@ But in system design interviews, this is rarely the focus. First, most candidate
 
 So interviewers tend to not be especially sensitive to exact costs. That's not to say you should ignore the abstract idea of whether something is cost-effective or not. Having 100 machines when 1 will do, or using a bank of in-memory caches when users only need their data in hundreds of milliseconds will trigger a flag from an interviewer. But we would not recommend you memorize AWS pricing tables — spend your time elsewhere.
 
-## Conclusion
+## 📝 Conclusion
 
 Modern hardware capabilities have fundamentally changed the calculus of system design. While distributed systems and horizontal scaling remain necessary for the world's largest applications, many systems can be significantly simpler than what traditional wisdom suggests.
 
@@ -172,6 +205,25 @@ Understanding these numbers helps you make better scaling decisions:
 The key insight isn't that vertical scaling is always the answer – it's knowing where the real limits are. This knowledge helps you avoid premature optimization and build simpler systems that can grow with your needs. In system design interviews, demonstrating this understanding shows that you can balance theoretical knowledge with practical experience – a crucial skill, especially for the more senior levels.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **The hardware moved, so should your estimates.** A single machine now offers up to ~24TB RAM; caches hold ~1TB in memory; single databases handle up to 64 TiB (256 TiB on Aurora) at millisecond latency. Quoting 2015-era limits is the clearest tell of book-only knowledge.
+- **Do the math before you scale.** 10M businesses at ~1KB each is only ~10GB — even 10x'd for reviews that's ~100GB. A LeetCode leaderboard of 100k competitions × 100k users fits in ~400GB. Neither needs sharding.
+- **CPU is usually the first bottleneck, not memory.** App servers handle 100k+ concurrent connections with 64–512GB RAM standard; scale horizontally around 70–80% CPU, and use the spare memory for local caching and in-memory work.
+- **Know the scale triggers per component:** caches past ~1TB or 100k+ ops/sec; databases past ~50 TiB or 10k+ write TPS; message queues nearing 800k msgs/sec per broker or ~200k partitions per cluster.
+- **Modern queues are fast enough for synchronous flows** (1–5ms end-to-end) as long as there's no backlog — reliable delivery without forcing every API async.
+- **Costs rarely decide interviews.** Don't memorize pricing tables; aim for order-of-magnitude estimates and flag only egregiously wasteful designs (100 machines when 1 will do).
+
+## 📚 Related Concepts
+
+- [Sharding](../../CoreConcepts/Sharding.md) — when horizontal partitioning is actually warranted (and when it's premature).
+- [Caching](../../CoreConcepts/Caching.md) — the "cache everything" strategy these memory numbers enable.
+- [Data Indexing](../../CoreConcepts/DataIndexing.md) — why indexed row lookups are sub-millisecond and rarely need a cache in front.
+- [Scaling Reads](../Patterns/ScalingReads.md) — the ~50k–100k RPS rule of thumb before scaling out reads.
+- [Scaling Writes](../Patterns/ScalingWrites.md) — the write-throughput limits that justify (or don't) a message queue.
+- [Kafka](../DeepDives/Kafka.md) — the message queue behind the million-messages-per-second figures.
+- [PostgreSQL](../DeepDives/Postgresql.md) — the single-instance database whose limits anchor these estimates.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/core-concepts/numbers-to-know](https://www.hellointerview.com/learn/system-design/core-concepts/numbers-to-know)*

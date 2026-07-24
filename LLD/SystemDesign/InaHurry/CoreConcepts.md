@@ -1,4 +1,27 @@
-# Core Concepts
+# 🧠 Core Concepts
+
+> **Overview**: Core concepts are the technology-agnostic building blocks that show up in nearly every system design interview — caching, sharding, indexing, data modeling, networking, consistency, and the rough numbers behind capacity decisions. They are the vocabulary and grammar you need *before* you can design Instagram or a ride-sharing service, and interviewers assume you know them. This page gives a quick, interview-focused tour of each, with links out to the full deep dives.
+
+## 📋 Table of Contents
+
+- [🧒 Layman's Explanation](#laymans-explanation)
+- [🌐 Networking Essentials](#networking-essentials)
+- [🔌 API Design](#api-design)
+- [🗄️ Data Modeling](#data-modeling)
+- [🔍 Database Indexing](#database-indexing)
+- [⚡ Caching](#caching)
+- [🧩 Sharding](#sharding)
+- [🔗 Consistent Hashing](#consistent-hashing)
+- [⚖️ CAP Theorem](#cap-theorem)
+- [🔢 Numbers to Know](#numbers-to-know)
+- [🎓 Key Takeaways](#key-takeaways)
+- [📚 Related Concepts](#related-concepts)
+
+---
+
+## 🧒 Layman's Explanation
+
+Imagine you're setting up a busy restaurant. **Networking** is how the waiters talk to the kitchen — a quick shout works for a simple order, but a live back-and-forth conversation (WebSockets) is different from the kitchen just calling out "order up!" (Server-Sent Events). **API design** is the menu: a clear, predictable list of what customers can ask for. **Data modeling** is how you organize the pantry — one big labeled shelf per ingredient (normalized) versus pre-made meal kits with everything bundled together (denormalized). **Indexing** is the alphabetized recipe binder so a cook doesn't flip through every page to find one dish. **Caching** is keeping the popular dishes warm on the pass so you don't re-cook them for every order. **Sharding** is opening more kitchens when one can't keep up, each handling its own set of tables. **Consistent hashing** is the seating plan that lets you add or close a kitchen without reshuffling every reservation. The **CAP theorem** is the hard choice during a crisis: if the phone line to the second kitchen goes down, do you stop taking orders (consistency) or keep serving with slightly-out-of-date info (availability)? And **Numbers to Know** are the rules of thumb — how many covers one cook can handle — that tell you *when* you actually need that second kitchen instead of guessing.
 
 Learn the most important concepts you'll need for system design interviews, put together by FAANG managers and staff engineers.
 
@@ -10,7 +33,7 @@ Think of core concepts as the vocabulary and grammar of system design. Before yo
 
 This page provides a quick overview of each core concept with just enough context to understand what it is, why it matters, and when to reach for it. Each section links to a deeper article where you can learn the full details, common pitfalls, and interview-specific guidance. If you're short on time, this overview will get you functional knowledge. If you're serious about mastering system design, read the full articles.
 
-## [Networking Essentials](https://www.hellointerview.com/learn/system-design/core-concepts/networking-essentials)
+## 🌐 [Networking Essentials](https://www.hellointerview.com/learn/system-design/core-concepts/networking-essentials)
 
 Networking is one of those topics where you can go incredibly deep, but for system design interviews you need to know the practical bits that come up when you're designing distributed systems. At a basic level, you need to understand how services talk to each other and what happens when those connections fail or get slow.
 
@@ -32,7 +55,7 @@ Geography and latency matter more than most candidates realize. A request from N
 
 Learn the full details in our [Networking Essentials](https://www.hellointerview.com/learn/system-design/core-concepts/networking-essentials) guide.
 
-## [API Design](https://www.hellointerview.com/learn/system-design/core-concepts/api-design)
+## 🔌 [API Design](https://www.hellointerview.com/learn/system-design/core-concepts/api-design)
 
 In almost every system design interview, you'll need to sketch out the APIs that clients use to interact with your system. The good news is that most interviewers don't care about perfect API design. They want to see that you can create reasonable endpoints and move on to the harder architectural problems. That said, sloppy API design can signal inexperience, so it's worth knowing the basics.
 
@@ -44,7 +67,7 @@ There are a few concepts worth mentioning when they come up. If you're returning
 
 Read our full [API Design](https://www.hellointerview.com/learn/system-design/core-concepts/api-design) breakdown for interview-focused guidance.
 
-## [Data Modeling](https://www.hellointerview.com/learn/system-design/core-concepts/data-modeling)
+## 🗄️ [Data Modeling](https://www.hellointerview.com/learn/system-design/core-concepts/data-modeling)
 
 Data modeling is one of those things that sounds simple but has massive downstream effects on your system. The decisions you make about what data to store and how to structure it directly affect performance, scalability, and how painful it is to build and maintain your system.
 
@@ -62,7 +85,7 @@ NoSQL databases force you to think differently. DynamoDB requires you to design 
 
 Learn more in our [Data Modeling](https://www.hellointerview.com/learn/system-design/core-concepts/data-modeling) article.
 
-## [Database Indexing](https://www.hellointerview.com/learn/system-design/core-concepts/db-indexing)
+## 🔍 [Database Indexing](https://www.hellointerview.com/learn/system-design/core-concepts/db-indexing)
 
 Indexes are used to make database queries fast. Without an index, finding a user by email means scanning every single row in your users table. If you have 10 million users, that's 10 million rows to check. With an index on the email column, the database can jump straight to the right row in milliseconds.
 
@@ -76,7 +99,7 @@ For specialized needs beyond what your primary database supports, you'll need ex
 
 Get the full breakdown in our [Database Indexing](https://www.hellointerview.com/learn/system-design/core-concepts/db-indexing) guide.
 
-## [Caching](https://www.hellointerview.com/learn/system-design/core-concepts/caching)
+## ⚡ [Caching](https://www.hellointerview.com/learn/system-design/core-concepts/caching)
 
 Caching comes up in almost every system design interview, usually when you identify that your database is getting hammered with reads. The idea is simple. Store frequently accessed data in fast memory (like Redis) so you can skip the database entirely for most reads.
 
@@ -85,6 +108,23 @@ The performance difference is massive. A cache hit on Redis takes around 1ms com
 ![External Caching](assets/i-fdmuqwKz7t.2y32e8ylfd7zm.svg)
 
 The pattern you'll use 90% of the time is cache-aside with Redis. On a read, check the cache first. If the data is there, return it. If not, query the database, store the result in the cache with a TTL, and return it. This is straightforward to implement and works for most read-heavy systems.
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant Cache as Redis Cache
+    participant DB as Database
+    App->>Cache: GET key
+    alt Cache hit (~1ms)
+        Cache-->>App: return value
+    else Cache miss
+        Cache-->>App: not found
+        App->>DB: query (20-50ms)
+        DB-->>App: return value
+        App->>Cache: SET key value (with TTL)
+        App-->>App: return value
+    end
+```
 
 But caching introduces real complexity. The hardest part is invalidation. When a user updates their profile in the database, you need to delete or update the cached copy. Otherwise the next read returns stale data. There are a few strategies here. You can invalidate the cache entry immediately after writes, use short TTLs and accept some staleness, or combine both. The right choice depends on how fresh your data needs to be.
 
@@ -96,7 +136,7 @@ CDN caching is different. It's for static assets like images, videos, and JavaSc
 
 Dive deeper in our [Caching](https://www.hellointerview.com/learn/system-design/core-concepts/caching) article, or see how caching fits into the [Scaling Reads](https://www.hellointerview.com/learn/system-design/patterns/scaling-reads) pattern.
 
-## [Sharding](https://www.hellointerview.com/learn/system-design/core-concepts/sharding)
+## 🧩 [Sharding](https://www.hellointerview.com/learn/system-design/core-concepts/sharding)
 
 Sharding comes up when you've outgrown a single database and need to split your data across multiple independent servers. This happens when you hit storage limits (a single Postgres instance maxes out in the TB), write throughput limits (tens of thousands of writes per second), or read throughput that even replicas can't handle.
 
@@ -114,7 +154,7 @@ In interviews, bring up sharding after you've justified why a single database wo
 
 Get the full breakdown in our [Sharding](https://www.hellointerview.com/learn/system-design/core-concepts/sharding) guide, or see how sharding fits into the [Scaling Writes](https://www.hellointerview.com/learn/system-design/patterns/scaling-writes) pattern.
 
-## [Consistent Hashing](https://www.hellointerview.com/learn/system-design/core-concepts/consistent-hashing)
+## 🔗 [Consistent Hashing](https://www.hellointerview.com/learn/system-design/core-concepts/consistent-hashing)
 
 Consistent hashing solves a specific problem that comes up with distributed caches and sharded databases. When you use simple hash-based distribution (`hash(key) % N` to pick which server stores the data), adding or removing a server changes N. That means almost every key maps to a different server, so you'd have to move most of your data around. With millions of cache entries or database records, that's a disaster.
 
@@ -132,7 +172,7 @@ The main time to bring it up is when you're discussing elastic scaling. If your 
 
 Learn the details in our [Consistent Hashing](https://www.hellointerview.com/learn/system-design/core-concepts/consistent-hashing) article.
 
-## [CAP Theorem](https://www.hellointerview.com/learn/system-design/core-concepts/cap-theorem)
+## ⚖️ [CAP Theorem](https://www.hellointerview.com/learn/system-design/core-concepts/cap-theorem)
 
 The CAP theorem comes up when you're designing distributed systems and need to make tradeoffs about how your data behaves during failures. It states you can only have two of three properties at once. Consistency (all nodes see the same data), Availability (every request gets a response), and Partition tolerance (system works even when network connections fail between nodes). Since network partitions are unavoidable in distributed systems, you're really choosing between consistency and availability.
 
@@ -152,7 +192,7 @@ In interviews, when you mention replication or distributed data, your interviewe
 
 Read more in our [CAP Theorem](https://www.hellointerview.com/learn/system-design/core-concepts/cap-theorem) breakdown.
 
-## [Numbers to Know](https://www.hellointerview.com/learn/system-design/core-concepts/numbers-to-know)
+## 🔢 [Numbers to Know](https://www.hellointerview.com/learn/system-design/core-concepts/numbers-to-know)
 
 As discussed in the [Delivery Framework](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery), you don't need to do back-of-the-envelope calculations at the start of an interview. That's not what interviewers care about. What matters is doing them when you need to make a decision. Should you shard the database? Can a single Redis instance handle the cache load? You can't answer these questions without rough numbers.
 
@@ -174,6 +214,28 @@ Storage capacity matters for sharding decisions. A single Postgres instance hand
 Get the full reference in our [Numbers to Know](https://www.hellointerview.com/learn/system-design/core-concepts/numbers-to-know) guide.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **Default to the boring choice.** REST over HTTP/TCP, a normalized relational model, cache-aside with Redis — these handle ~90% of interviews. Reach for WebSockets, NoSQL, or sharding only when the problem forces it.
+- **Modern hardware is bigger than you think.** A tuned DB does tens of thousands of QPS and holds a few TB; a single Redis handles 100k+ ops/sec. Don't shard or cache prematurely — do the capacity math first.
+- **Every technique is a tradeoff.** Denormalization buys read speed with write complexity; sharding buys scale by making cross-shard queries and transactions hard; caching buys latency but forces you to solve invalidation.
+- **Caching's hard part is correctness.** Watch for stale reads on invalidation, cache stampedes when a hot key expires, and full-cache outages — mitigate with TTLs, locking/early recompute, and fallbacks.
+- **Pick your shard key and index around access patterns.** Both indexing and sharding optimize the queries you design for and penalize the ones you didn't — know your queries upfront.
+- **Consistency is per-feature, not per-system.** Default to eventual consistency (availability) unless the problem involves money, inventory, or booking limited resources, where strong consistency is worth the latency.
+
+## 📚 Related Concepts
+
+- [Networking](../../CoreConcepts/Networking.md) — protocols, load balancing, and stateful connections in depth.
+- [Data Modelling](../../CoreConcepts/DataModelling.md) — relational vs NoSQL and normalization tradeoffs.
+- [Data Indexing](../../CoreConcepts/DataIndexing.md) — B-trees, hash, and specialized index types.
+- [Caching](../../CoreConcepts/Caching.md) — cache-aside, invalidation, and stampede defenses.
+- [Sharding](../../CoreConcepts/Sharding.md) — shard keys, hot spots, and resharding pain.
+- [Consistent Hashing](../../CoreConcepts/ConsistentHashing.md) — the ring that makes elastic scaling practical.
+- [Redis](../../CoreConcepts/Redis.md) — the in-memory store behind most application caches.
+- [Numbers to Know](../CoreConcepts/NumbersToKnow.md) — the full capacity-and-latency reference table.
+- [CAP Theorem](../CoreConcepts/CapTheorem.md) — consistency vs availability during partitions.
+- [Scaling Reads](../Patterns/ScalingReads.md) — how indexing, caching, and replicas fit a read-heavy design.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/in-a-hurry/core-concepts](https://www.hellointerview.com/learn/system-design/in-a-hurry/core-concepts)*

@@ -1,37 +1,41 @@
-# Design Payment System
+# 💳 Design Payment System
 
 > **Pattern**: Ledger / Idempotency
 > **Difficulty**: Hard
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/payment-system)
 
+> **Summary**: A payment system sits between merchants, customers, and external PSPs (Stripe, Adyen, Braintree) and moves money exactly once even when the network, the PSP, or our own services fail mid-transaction. The hard parts are not the happy path: they are end-to-end idempotency (client → service → PSP → ledger), an append-only double-entry ledger whose debits and credits always sum to zero, choosing correctness over availability on the write path, and daily reconciliation against the PSP's record of truth. The mature design never holds a DB transaction open across a PSP call, resolves timeout ambiguity with webhooks plus a PENDING-recovery worker, and shards the ledger by account so every money-moving write stays single-shard.
+
 ---
 
-## Table of Contents
+## 📋 Table of Contents
 
-1. [Understanding the Problem](#understanding-the-problem)
+1. [🎯 Understanding the Problem](#-understanding-the-problem)
    - [Functional Requirements](#functional-requirements)
    - [Non-Functional Requirements](#non-functional-requirements)
-2. [Core Entities](#core-entities)
-3. [API Design](#api-design)
-4. [High-Level Design](#high-level-design)
-5. [Deep Dives](#deep-dives)
+2. [🧒 Layman's Explanation](#-laymans-explanation)
+3. [🔑 Core Entities](#-core-entities)
+4. [🔌 API Design](#-api-design)
+5. [🏗️ High-Level Design](#-high-level-design)
+6. [🔬 Deep Dives](#-deep-dives)
    1. [Idempotency End-to-End](#1-idempotency-end-to-end)
    2. [Double-Entry Ledger](#2-double-entry-ledger)
    3. [PSP Integration (Stripe/Adyen)](#3-psp-integration-stripeadyen)
    4. [Consistency vs Availability for Money](#4-consistency-vs-availability-for-money)
    5. [Reconciliation and Settlement](#5-reconciliation-and-settlement)
-6. [Scaling Journey: 0 to Infinity](#scaling-journey-0-to-infinity)
+7. [📈 Scaling Journey: 0 to Infinity](#-scaling-journey-0-to-infinity)
    - [Stage 1: 0 to 100 Transactions per day (MVP)](#stage-1-0-to-100-transactionsday-mvp)
    - [Stage 2: 100 to 10K Transactions per day](#stage-2-100-to-10k-transactionsday)
    - [Stage 3: 10K to 1M Transactions per day](#stage-3-10k-to-1m-transactionsday)
    - [Stage 4: 1M to 100M Transactions per day](#stage-4-1m-to-100m-transactionsday)
    - [Stage 5: 100M+ Transactions per day (Hyperscale)](#stage-5-100m-transactionsday-hyperscale)
-7. [Insider Tips and Tricks](#insider-tips-and-tricks)
-8. [Expected Depth by Level](#expected-depth-by-level)
+8. [💡 Insider Tips and Tricks](#-insider-tips-and-tricks)
+9. [🎓 Expected Depth by Level](#-expected-depth-by-level)
+10. [📚 Related Concepts](#-related-concepts)
 
 ---
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 A payment system sits between merchants, customers, and one or more external payment service providers (PSPs like Stripe, Adyen, Braintree). Its job is to accept a charge request, move money from the customer's funding source to the merchant's account, and record that movement in a way that survives retries, partial failures, and audits. The hard part is not the happy path; it is guaranteeing that every dollar is accounted for exactly once even when the network, the PSP, or your own services fail mid-transaction.
 
@@ -90,7 +94,7 @@ Real payment systems do far more than the coffee-shop ledger. They run **fraud d
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 | Entity | Purpose | Key Attributes |
 |--------|---------|----------------|
@@ -107,9 +111,70 @@ Key relationships: every Transaction writes two or more LedgerEntry rows that su
 
 Note that monetary amounts are stored in the smallest denomination of the currency (`amount_cents` for USD/EUR, integer yen for JPY). Never use a float column for money.
 
+```mermaid
+erDiagram
+    USER ||--o{ PAYMENT_METHOD : owns
+    USER ||--o{ TRANSACTION : "is charged in"
+    MERCHANT ||--o{ TRANSACTION : receives
+    MERCHANT ||--o{ PAYOUT : "settled via"
+    PAYMENT_METHOD ||--o{ TRANSACTION : "funds"
+    TRANSACTION ||--|{ LEDGER_ENTRY : "posts (sums to zero)"
+    TRANSACTION ||--|| IDEMPOTENCY_KEY : "dedup by"
+    ACCOUNT ||--o{ LEDGER_ENTRY : "debited/credited"
+    PAYOUT ||--o{ TRANSACTION : aggregates
+
+    USER {
+        uuid user_id PK
+        string email
+        string psp_customer_id
+    }
+    MERCHANT {
+        uuid merchant_id PK
+        string psp_account_id
+        string payout_schedule
+    }
+    PAYMENT_METHOD {
+        uuid payment_method_id PK
+        string psp_token
+        string brand
+        string last4
+    }
+    TRANSACTION {
+        uuid transaction_id PK
+        bigint amount_cents
+        string currency
+        string status
+        string psp_charge_id
+        string idempotency_key
+    }
+    LEDGER_ENTRY {
+        uuid entry_id PK
+        uuid transaction_id FK
+        uuid account_id FK
+        string direction
+        bigint amount_cents
+    }
+    ACCOUNT {
+        uuid account_id PK
+        string owner_type
+        string currency
+    }
+    PAYOUT {
+        uuid payout_id PK
+        bigint amount_cents
+        string status
+    }
+    IDEMPOTENCY_KEY {
+        string key PK
+        string request_hash
+        string status
+        timestamp expires_at
+    }
+```
+
 ---
 
-## API Design
+## 🔌 API Design
 
 ```
 # Create a charge (merchant-initiated, idempotent)
@@ -143,30 +208,56 @@ Notes:
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
-```
-                        +-----------------------+
-   Merchant backend --> |   API Gateway / WAF   | -> auth, rate-limit, mTLS
-                        +-----------+-----------+
-                                    |
-                  +-----------------+-----------------+
-                  |                                   |
-          Payment Service                     Webhook Handler
-          (orchestrator)                        (PSP callbacks)
-                  |                                   |
-          +-------+--------+                          |
-          |                |                          |
-   Idempotency Store   Ledger Service  <--------------+
-      (Postgres /         (Postgres,
-       Redis + DB)      double-entry,
-                        strong write
-                        consistency)
-          |
-          v
-   PSP Adapter  --->  Stripe / Adyen / Braintree
-          |
-   Outbox table --> Kafka --> [ Notification, Analytics, Search projection, Reconciliation ]
+```mermaid
+graph TB
+    MB[Merchant Backend]
+    PSP[Stripe / Adyen / Braintree]
+
+    subgraph Edge
+        GW[API Gateway / WAF<br/>auth · rate-limit · mTLS]
+    end
+
+    subgraph Services
+        PAY[Payment Service<br/>orchestrator]
+        WH[Webhook Handler<br/>PSP callbacks]
+        LED[Ledger Service<br/>double-entry<br/>strong write consistency]
+        ADP[PSP Adapter<br/>common interface]
+    end
+
+    subgraph Stores
+        IDEM[(Idempotency Store<br/>Redis hot + Postgres)]
+        PGDB[(Postgres<br/>append-only ledger)]
+        OBX[(Outbox Table)]
+        KAFKA[[Kafka]]
+    end
+
+    subgraph Downstream
+        DS[Notification · Analytics<br/>Search projection · Reconciliation]
+    end
+
+    MB --> GW
+    GW --> PAY
+    PSP -.signed webhooks.-> GW
+    GW --> WH
+    PAY --> IDEM
+    PAY --> ADP
+    PAY --> LED
+    WH --> LED
+    ADP --> PSP
+    LED --> PGDB
+    LED --> OBX
+    OBX --> KAFKA
+    KAFKA --> DS
+
+    style PAY fill:#90EE90
+    style LED fill:#90EE90
+    style IDEM fill:#e1f5ff
+    style PGDB fill:#e1f5ff
+    style OBX fill:#e1f5ff
+    style KAFKA fill:#FFE4B5
+    style PSP fill:#f3e5f5
 ```
 
 - **API Gateway** terminates TLS, enforces mTLS for merchant traffic, rate-limits by API key, and routes to the Payment Service.
@@ -179,7 +270,7 @@ Notes:
 
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. Idempotency End-to-End
 
@@ -212,6 +303,35 @@ We also store a hash of the request body. If the same key is reused with a diffe
 **Retention.** Keep idempotency rows for at least 24 hours, ideally 7 days. After that, a replayed request would appear fresh, but PSPs hold their idempotency records for a similar window, so the PSP layer still catches duplicates.
 
 **The PENDING recovery path.** When the synchronous PSP call times out, the transaction remains `PENDING` and the idempotency key is left `IN_PROGRESS`. A background worker queries transactions in `PENDING` state older than a configurable threshold (e.g., 2 minutes) and calls the PSP's retrieve API (`GET /charges/{psp_charge_id}`) to learn the true final state. This closes the gap between timeout ambiguity and final consistency without requiring a client retry.
+
+The end-to-end retry flow: the first request times out (client never sees the response), the client re-sends the *same* client-generated key, and the idempotency store returns the cached result instead of charging twice.
+
+```mermaid
+sequenceDiagram
+    participant C as Merchant Client
+    participant P as Payment Service
+    participant I as Idempotency Store
+    participant PSP as PSP
+
+    Note over C: generate UUID key once, store locally
+    C->>P: POST /payments (key K)
+    P->>I: INSERT key K ON CONFLICT DO NOTHING
+    I-->>P: inserted (fresh) → IN_PROGRESS
+    P->>PSP: charges.create (idem-key K-charge)
+    Note over P,PSP: network times out — no response reaches P
+    P--xC: (response lost)
+
+    Note over C: retry with the SAME key K
+    C->>P: POST /payments (key K)
+    P->>I: INSERT key K ON CONFLICT DO NOTHING
+    alt existing row COMPLETED
+        I-->>P: conflict, cached response
+        P-->>C: 200 same transaction_id (no re-charge)
+    else existing row IN_PROGRESS
+        I-->>P: conflict, in progress
+        P-->>C: 409 request_in_progress (retry later)
+    end
+```
 
 ### 2. Double-Entry Ledger
 
@@ -253,22 +373,36 @@ CREATE TABLE ledger_entries (
 CREATE INDEX ON ledger_entries (account_id, posted_at);
 ```
 
-`BIGINT` not `FLOAT` and not `NUMERIC(18,4)`: integers are exact; floats are not. $10.50 is stored as `1050`. A lost half-cent on a floating-point rounding error is a ledger-breaking bug that is nearly impossible to detect at scale.
+> ⚠️ **Store money as `BIGINT` cents, never `FLOAT` and not `NUMERIC(18,4)`.** Integers are exact; floats are not. $10.50 is stored as `1050`. A lost half-cent on a floating-point rounding error is a ledger-breaking bug that is nearly impossible to detect at scale.
 
 ### 3. PSP Integration (Stripe/Adyen)
 
 The Payment Service never talks to a card network directly. It talks to a PSP, which handles PCI, card-network routing, 3DS, and fraud. The integration has three surfaces:
 
 **Synchronous API call (authorize/capture).**
-```
-1. Payment Service writes idempotency row (IN_PROGRESS) + transaction row (PENDING) in one DB txn.
-2. Payment Service calls PSP.charges.create(...) with its own idempotency key (derived from transaction_id).
-3. On 2xx: update transaction to AUTHORIZED/CAPTURED, write ledger entries, mark idempotency row COMPLETED. All in one DB txn.
-4. On 4xx (hard failure): update transaction to FAILED, mark idempotency row COMPLETED with the failure payload.
-5. On 5xx or timeout: leave transaction in PENDING. Mark idempotency row IN_PROGRESS. Rely on webhook reconciliation and the PENDING recovery worker to finalize.
+
+```mermaid
+sequenceDiagram
+    participant P as Payment Service
+    participant DB as Postgres (txn + idem + ledger)
+    participant PSP as PSP
+
+    P->>DB: TXN 1 — write idem row (IN_PROGRESS) + transaction (PENDING)
+    Note over P,DB: commit before PSP call — never hold a txn across the round trip
+    P->>PSP: charges.create (idem-key = transaction_id-charge)
+    alt 2xx success
+        PSP-->>P: charge succeeded
+        P->>DB: TXN 2 — status AUTHORIZED/CAPTURED, write ledger entries, idem COMPLETED
+    else 4xx hard failure
+        PSP-->>P: declined
+        P->>DB: TXN 2 — status FAILED, idem COMPLETED (failure payload)
+    else 5xx or timeout
+        PSP--xP: no clear answer
+        Note over P,DB: leave PENDING + idem IN_PROGRESS<br/>webhook + PENDING-recovery worker finalize later
+    end
 ```
 
-The critical rule: **never hold a DB transaction open across the PSP HTTP call.** The PSP round trip is 200 to 2000 ms; holding a connection open across it strangles the connection pool at modest concurrency. Open a txn, write pending state, commit, call PSP, open a second txn, write final state. Yes, this means two write transactions per charge and a window of ambiguity between them. That window is resolved by the webhook handler and the PENDING recovery worker.
+> ⚠️ **Never hold a DB transaction open across the PSP HTTP call.** The PSP round trip is 200 to 2000 ms; holding a connection open across it strangles the connection pool at modest concurrency. Open a txn, write pending state, commit, call PSP, open a second txn, write final state. Yes, this means two write transactions per charge and a window of ambiguity between them — that window is resolved by the webhook handler and the PENDING recovery worker.
 
 **Webhook ingestion.** The PSP will send `charge.succeeded` or `charge.failed` asynchronously. Sometimes the webhook arrives before our sync response, sometimes hours later (during PSP outages). The webhook handler:
 1. Verifies the signature header (HMAC-SHA256 for Stripe, HMAC-SHA512 for Adyen). Reject silently on failure — do not log the payload, which may contain PAN fragments.
@@ -283,11 +417,21 @@ The critical rule: **never hold a DB transaction open across the PSP HTTP call.*
 
 **Payment state machine.** State transitions are not inferred from field nullness; they are explicit and validated. The valid transitions are:
 
-```
-initiated -> pending -> authorized -> captured -> settled
-                    \-> failed
-                              \-> refunded (after settled)
-                              \-> disputed (after settled)
+```mermaid
+stateDiagram-v2
+    [*] --> initiated
+    initiated --> pending
+    pending --> authorized
+    pending --> failed
+    authorized --> captured
+    authorized --> failed
+    captured --> settled
+    settled --> refunded
+    settled --> disputed
+    failed --> [*]
+    refunded --> [*]
+    disputed --> [*]
+    settled --> [*]
 ```
 
 The application layer rejects any transition that is not in the allowed set. You cannot capture a payment that is not authorized. You cannot refund a payment that is not settled.
@@ -318,6 +462,33 @@ Even with perfect idempotency and double-entry, our ledger can drift from the PS
 5. Auto-heal common cases (missed webhook -> re-fire our own webhook handler). Escalate unresolved cases to ops.
 6. Discrepancy rates above 0.01% of transaction volume trigger a P1 page. Money bugs do not wait.
 
+```mermaid
+sequenceDiagram
+    participant J as Reconciliation Job
+    participant PSP as PSP Report API
+    participant L as Local Ledger
+    participant E as reconciliation_exceptions
+    participant O as Ops
+
+    J->>PSP: pull prior-day balance transactions
+    PSP-->>J: authoritative payment records
+    loop each PSP record
+        J->>L: look up transaction by psp_charge_id
+        J->>J: compare state, amount, fees, currency
+        alt match
+            J->>J: OK
+        else discrepancy
+            J->>E: emit MISSING_LOCAL / MISSING_PSP / AMOUNT_MISMATCH / STATUS_MISMATCH
+        end
+    end
+    J->>J: auto-heal common cases (re-fire own webhook handler)
+    alt drift > 0.01% of volume
+        E->>O: P1 page
+    else unresolved cases
+        E->>O: escalate to ops
+    end
+```
+
 **Settlement / payouts.** The PSP holds funds for a rolling window (Stripe default: 2 days), then settles to the merchant. Our payout records mirror this: nightly job aggregates captured transactions per merchant, matches them to the PSP's payout event, and writes the balancing ledger entries (`Debit psp_clearing, Credit merchant`).
 
 **Invariants the recon job verifies.**
@@ -329,9 +500,27 @@ Even with perfect idempotency and double-entry, our ledger can drift from the PS
 
 ---
 
-## Scaling Journey: 0 to Infinity
+## 📈 Scaling Journey: 0 to Infinity
 
 Every stage answers four questions: what is the goal, what does the architecture look like, what are we explicitly skipping, and what failure mode forces us into the next stage. Note that the bottleneck in payments is rarely raw QPS; it is correctness under partial failure.
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0–100/day<br/>Monolith + Postgres<br/>sync Stripe call"]
+    S2["Stage 2<br/>100–10K/day<br/>Split services + outbox<br/>PENDING retry worker"]
+    S3["Stage 3<br/>10K–1M/day<br/>Ledger Service + Kafka<br/>auto reconciliation"]
+    S4["Stage 4<br/>1M–100M/day<br/>Shard by account_id<br/>regional primaries"]
+    S5["Stage 5<br/>100M+/day<br/>Per-account regions<br/>continuous recon"]
+
+    S1 -->|"Stripe outage: PENDING lost"| S2
+    S2 -->|"ledger unbounded + audit broken"| S3
+    S3 -->|"single primary chokes @1B rows"| S4
+    S4 -->|"region outage + data residency"| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0 to 100 Transactions/day (MVP)
 
@@ -439,7 +628,7 @@ At this point the bottleneck is organizational, not technical: regulatory approv
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 ### Idempotency Keys Must Be Client-Generated, Not Server-Generated
 If the server generates idempotency keys on receipt of a request, a network timeout (client never receives the 200) means the client retries and gets a new server-generated key — the payment runs twice. The client must generate the idempotency key before sending the request (a UUID generated on the client side). On retry, the same key is re-sent. The server detects the duplicate key and returns the cached response without re-processing. Stripe, Braintree, and Adyen all require client-generated idempotency keys.
@@ -467,10 +656,26 @@ A chargeback occurs when a cardholder disputes a charge with their bank. The ban
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Level | Breadth : Depth | What the interviewer expects |
 |-------|-----------------|------------------------------|
 | **Mid (E4)** | 80 : 20 | Clean API with idempotency key header. Correct data model including a ledger table. Can explain why single-entry `balance` columns are dangerous. Gets the synchronous happy path right; answers the webhook / retry question when prompted. One correct statement about PCI (tokens, not PANs). |
 | **Senior (E5)** | 60 : 40 | Proactively raises idempotency end-to-end (client -> service -> PSP -> ledger). Designs double-entry with clear invariants. Articulates outbox pattern for downstream decoupling. Explains why we never hold a DB transaction across a PSP call. Walks through webhook reconciliation and the PENDING-state recovery path. Names PCI boundary cleanly. |
 | **Staff (L6+)** | 40 : 60 | Minimal hand-holding on basics. Deep dives with operational detail: reconciliation drift detection and auto-heal, multi-PSP routing with circuit breakers, ledger sharding strategy (single-shard transactions via clearing accounts), data residency and multi-region trade-offs, capacity planning for flash sales, migration strategy for ledger schema changes. Discusses invariant preservation as a first-class engineering problem, not a nice-to-have. Offers opinions on Spanner vs sharded Postgres with concrete criteria. |
+
+---
+
+## 📚 Related Concepts
+
+- [Distributed Locking](../CoreConcepts/DistributedLocking.md) — the idempotency-key row lock and the `IN_PROGRESS` guard that stop double-charge races.
+- [Data Modelling](../CoreConcepts/DataModelling.md) — the append-only double-entry ledger schema and why balance is a materialized view, not a column.
+- [Sharding](../CoreConcepts/Sharding.md) — sharding the ledger by `account_id` so every money-moving write stays single-shard.
+- [Redis](../CoreConcepts/Redis.md) — the hot idempotency-key lookup path backed by Postgres for durability.
+- [Kafka](../SystemDesign/DeepDives/Kafka.md) — the outbox → Kafka backbone decoupling notifications, analytics, and reconciliation from the write path.
+- [PostgreSQL](../SystemDesign/DeepDives/Postgresql.md) — the strongly consistent ledger store with synchronous replication.
+- [CAP Theorem](../SystemDesign/CoreConcepts/CapTheorem.md) — choosing consistency over availability on the ledger write path.
+- [Multi-Step Processes](../SystemDesign/Patterns/Multi-StepProcesses.md) — the outbox pattern and saga/compensation for cross-service money flows.
+- [Dealing with Contention](../SystemDesign/Patterns/DealingWithContention.md) — conditional writes and unique constraints as the idempotency backstop.
+- [Managing Long-Running Tasks](../SystemDesign/Patterns/ManagingLongRunningTasks.md) — the background PENDING-recovery worker that finalizes timed-out charges.
+- [Payment System (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/PaymentSystem.md) — the source breakdown this doc expands on.

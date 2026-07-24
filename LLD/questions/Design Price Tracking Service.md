@@ -1,33 +1,37 @@
-# Design Price Tracking Service (CamelCamelCamel)
+# 🏷️ Design Price Tracking Service (CamelCamelCamel)
 
 > **Pattern**: Scraping / Time-series / Alerting
 > **Difficulty**: Medium
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/camelcamelcamel)
 
+> **Summary**: A price tracker lets users view a product's historical price chart and get notified when it drops below a target. The hard parts are not the UI but the data pipeline behind it: politely scraping hundreds of millions of products against aggressive anti-bot defenses, deduplicating noisy samples from scrapers and a crowd-sourced Chrome extension, storing years of time-series cheaply, and fanning alerts out within an hour without melting the notifier during a flash sale. The mature design leans on a Redis-backed scraper control plane, a Kafka ingest backbone feeding a Sample Processor, TimescaleDB with change-data-only storage, and a Redis watcher index for O(log N) alert matching.
+
 ---
 
-## Table of Contents
+## 📋 Table of Contents
 
-1. [Understanding the Problem](#understanding-the-problem)
+1. [🎯 Understanding the Problem](#-understanding-the-problem)
    - [Functional Requirements](#functional-requirements)
    - [Non-Functional Requirements](#non-functional-requirements)
-2. [Core Entities](#core-entities)
-3. [API Design](#api-design)
-4. [High-Level Design](#high-level-design)
-5. [Deep Dives](#deep-dives)
+2. [🧒 Layman's Explanation](#-laymans-explanation)
+3. [🔑 Core Entities](#-core-entities)
+4. [🔌 API Design](#-api-design)
+5. [🏗️ High-Level Design](#️-high-level-design)
+6. [🔬 Deep Dives](#-deep-dives)
    - [1. Scraping Strategy and Politeness](#1-scraping-strategy-and-politeness)
    - [2. Price Sample Deduplication](#2-price-sample-deduplication)
    - [3. Scraper Scheduling and Prioritization](#3-scraper-scheduling-and-prioritization)
    - [4. Alert Matching and Fan-out](#4-alert-matching-and-fan-out)
    - [5. Price History Storage](#5-price-history-storage)
    - [6. Chrome Extension Ingest and Trust](#6-chrome-extension-ingest-and-trust)
-6. [Scaling Journey: 0 to infinity](#scaling-journey-0--)
-7. [Insider Tips and Tricks](#insider-tips-and-tricks)
-8. [Expected Depth by Level](#expected-depth-by-level)
+7. [📈 Scaling Journey: 0 to infinity](#-scaling-journey-0-to-infinity)
+8. [💡 Insider Tips and Tricks](#-insider-tips-and-tricks)
+9. [🎓 Expected Depth by Level](#-expected-depth-by-level)
+10. [📚 Related Concepts](#-related-concepts)
 
 ---
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 A price tracking service (in the spirit of CamelCamelCamel) lets users look up the historical price of a product on a marketplace like Amazon, and subscribe to notifications when the price drops below a chosen threshold. The hard parts are not the UI or the alert logic but the data pipeline behind them: discovering and re-scraping hundreds of millions of products politely, deduplicating noisy price samples, and fanning alerts out quickly when a price finally moves.
 
@@ -77,7 +81,7 @@ A flyer-watching friend is purely passive — they read the prices, you decide. 
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 | Entity | Fields | Notes |
 |---|---|---|
@@ -87,9 +91,58 @@ A flyer-watching friend is purely passive — they read the prices, you decide. 
 | **Alert** | `alert_id` (PK), `watcher_id`, `triggered_at`, `price_cents`, `delivery_channel`, `delivery_status` | Write-once log of what was sent, for idempotency and history. |
 | **User** | `user_id`, `email`, `push_token`, `timezone`, `quiet_hours` | Standard account entity; minimal here. |
 
+```mermaid
+erDiagram
+    USER ||--o{ WATCHER : "creates"
+    PRODUCT ||--o{ WATCHER : "is watched by"
+    PRODUCT ||--o{ PRICE_SAMPLE : "accumulates"
+    WATCHER ||--o{ ALERT : "fires"
+
+    USER {
+        string user_id PK
+        string email
+        string push_token
+        string timezone
+        string quiet_hours
+    }
+    PRODUCT {
+        string product_id PK
+        string title
+        string category
+        string image_url
+        timestamp last_seen_at
+        int tracked_rank
+    }
+    PRICE_SAMPLE {
+        string product_id FK
+        timestamp observed_at
+        int price_cents
+        string currency
+        string availability
+        string source
+        string variant_id
+    }
+    WATCHER {
+        string watcher_id PK
+        string user_id FK
+        string product_id FK
+        int target_price_cents
+        timestamp created_at
+        bool active
+    }
+    ALERT {
+        string alert_id PK
+        string watcher_id FK
+        timestamp triggered_at
+        int price_cents
+        string delivery_channel
+        string delivery_status
+    }
+```
+
 ---
 
-## API Design
+## 🔌 API Design
 
 ```http
 # Search for a product by free text or marketplace URL
@@ -119,59 +172,73 @@ All write endpoints require an auth token; the extension ingest is authed but ra
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
-```
-                    +--------------------+
-  Web / Extension   |   API Gateway      |-----> Auth / rate limit
-  ---------------> |   (read + write)    |
-                    +----------+---------+
-                               |
-           +-------------------+-------------------+-----------------+
-           v                   v                   v                 v
-   Product Service     Watcher Service     History Service    Ingest API
-   (catalog / search)  (CRUD watchers)     (chart queries)    (extension samples)
-           |                   |                   |                 |
-           v                   v                   v                 v
-       Postgres            Postgres        Time-series DB         Kafka
-       (products,          (watchers,      (price_samples)   ("raw_samples" topic)
-        metadata)           alerts)
-                                                                      |
-                                                                      v
-                                                            +-----------------+
-                                                            | Sample Processor|
-                                                            | - dedup         |
-                                                            | - validate      |
-                                                            | - write TSDB    |
-                                                            | - publish "price_change"
-                                                            +--------+--------+
-                                                                     |
-                                                                     v
-                                                            +-----------------+
-                                                            | Alert Matcher   |
-                                                            | (watcher index  |
-                                                            |  in Redis)      |
-                                                            +--------+--------+
-                                                                     |
-                                                                     v
-                                                            Notification workers
-                                                            (email / push / SMS)
+```mermaid
+graph TB
+    subgraph Clients
+        WEB[Web App]
+        EXT[Chrome Extension]
+    end
 
-  +--------------------------+
-  | Scraper Control Plane    |
-  |  - URL frontier          |  produces scrape jobs keyed by priority
-  |  - per-domain politeness |
-  |  - job scheduler         |
-  +-----------+--------------+
-              |
-              v
-  +--------------------------+        +--------------------------+
-  | Scraper Workers          | ---->  | Proxy pool / headless    |
-  | (fetch + parse)          |        | browser farm             |
-  +-----------+--------------+        +--------------------------+
-              |
-              v
-        Kafka "raw_samples"   (same topic as extension ingest)
+    GW[API Gateway<br/>auth + rate limit]
+
+    subgraph "Read / Write Services"
+        PS[Product Service<br/>catalog / search]
+        WS[Watcher Service<br/>CRUD watchers]
+        HS[History Service<br/>chart queries]
+        IN[Ingest API<br/>extension samples]
+    end
+
+    subgraph "Scraper Plane"
+        SCP[Scraper Control Plane<br/>URL frontier · politeness<br/>· job scheduler]
+        SW[Scraper Workers<br/>fetch + parse]
+        PROXY[Proxy Pool /<br/>Headless Browser Farm]
+    end
+
+    KAFKA[[Kafka<br/>raw_samples topic]]
+    SPROC[Sample Processor<br/>dedup · validate<br/>· write TSDB<br/>· publish price_change]
+    AM[Alert Matcher<br/>watcher index in Redis]
+    NW[Notification Workers<br/>email / push / SMS]
+
+    subgraph Stores
+        PGP[(Postgres<br/>products · metadata)]
+        PGW[(Postgres<br/>watchers · alerts)]
+        TSDB[(Time-series DB<br/>price_samples)]
+        REDIS[(Redis<br/>chart cache · watcher index)]
+    end
+
+    WEB --> GW
+    EXT --> GW
+    GW --> PS
+    GW --> WS
+    GW --> HS
+    GW --> IN
+    PS --> PGP
+    WS --> PGW
+    HS --> TSDB
+    HS --> REDIS
+    IN --> KAFKA
+
+    SCP --> SW
+    SW --> PROXY
+    SW --> KAFKA
+
+    KAFKA --> SPROC
+    SPROC --> TSDB
+    SPROC -->|price_change| AM
+    AM --> REDIS
+    AM --> NW
+    NW --> PGW
+
+    style REDIS fill:#e1f5ff
+    style PGP fill:#e1f5ff
+    style PGW fill:#e1f5ff
+    style TSDB fill:#e1f5ff
+    style KAFKA fill:#FFE4B5
+    style PROXY fill:#f3e5f5
+    style SPROC fill:#90EE90
+    style AM fill:#90EE90
 ```
 
 Key flows:
@@ -181,11 +248,47 @@ Key flows:
 
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. Scraping Strategy and Politeness
 
 Amazon aggressively rate-limits scrapers, so the scraper fleet is the most sensitive and operationally expensive component. Getting blocked is a business-ending failure; a thoughtful politeness architecture is non-negotiable.
+
+> ⚠️ **Getting the IP pool banned is a business-ending failure.** The scraper fleet is a first-class infrastructure concern, not an afterthought. Every request must clear a distributed per-egress-IP token bucket, ride a rotating healthy proxy, and vary its fingerprint — a single process enforcing rate limits, or a static User-Agent, is detected and blocked within hours.
+
+The full scrape loop, from popping a due job to publishing a sample:
+
+```mermaid
+sequenceDiagram
+    participant F as URL Frontier<br/>(Redis ZSET)
+    participant W as Scraper Worker
+    participant TB as Token Bucket<br/>(Redis + Lua)
+    participant P as Proxy Pool
+    participant M as Marketplace
+    participant K as Kafka raw_samples
+
+    W->>F: ZPOPMIN (due job)
+    F-->>W: product_id, url
+    W->>TB: check-and-decrement (hostname, egress_ip)
+    alt Under rate limit
+        TB-->>W: token granted
+        W->>P: request healthy proxy
+        P-->>W: rotated proxy + fingerprint
+        W->>M: GET product page
+        alt 200 OK + price parsed
+            M-->>W: HTML
+            W->>K: publish price sample
+            W->>F: reschedule (next_scrape_at by volatility)
+        else CAPTCHA / 429 / 403
+            M-->>W: block response
+            W->>P: mark proxy dirty (cooldown)
+            W->>F: mark product for delayed retry
+        end
+    else Over rate limit
+        TB-->>W: denied
+        W->>F: requeue, back off
+    end
+```
 
 - **URL frontier:** Redis sorted set keyed by `next_scrape_at`; workers atomically pop due jobs via `ZPOPMIN`, attempt the fetch, and reschedule based on observed update frequency. The sorted set doubles as a priority queue — a product with an active watcher gets a lower score (sooner next_scrape_at) than an unwatched one.
 - **Per-domain token bucket:** even though we target one marketplace, we shard the rate-limit bucket by `(hostname, egress_ip)` to stay under polite limits. A central Redis token bucket per egress IP enforces a configurable ceiling (e.g., 2 req/sec/IP). Workers check-and-decrement atomically with a Lua script before dispatching.
@@ -200,6 +303,29 @@ Amazon aggressively rate-limits scrapers, so the scraper fleet is the most sensi
 ### 2. Price Sample Deduplication
 
 Raw samples arrive from three independent sources — scrapers (retried on failure), the Chrome extension (many users may report the same product seconds apart), and an optional affiliate API. Without dedup, the TSDB balloons, historical charts show false volatility, and alerts flap on noise.
+
+A raw sample runs a gauntlet before it becomes a trusted, chart-visible, alert-eligible row:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Ingested
+    Ingested --> Discarded: exact dup (Redis SETNX hit)
+    Ingested --> NoOp: price == last stored
+    NoOp --> [*]: update last_seen_at, no new row
+    Ingested --> Quarantined: >80% below 30-day min
+    Ingested --> Tentative: untrusted source (extension)
+    Ingested --> Confirmed: trusted scraper sample
+
+    Quarantined --> Confirmed: rescrape confirms low price
+    Quarantined --> Discarded: not confirmed after 30 min
+    Tentative --> Confirmed: 2 users agree OR scrape agrees
+    Tentative --> Discarded: no corroboration
+
+    Confirmed --> [*]: written to TSDB, alert-eligible
+    Discarded --> [*]
+```
+
+> 💡 **No-op dedup keeps the time series sparse.** If `new_price == last_stored_price` and availability matches, update `last_seen_at` in place and skip the insert. For a stable commodity checked hourly this cuts row volume by 95%+ — only genuine price changes ever generate a new row.
 
 - **Idempotency key on ingest:** before writing to Kafka, the Ingest API stamps each sample with a content hash `sha256(product_id + variant_id + price_cents + minute_bucket)`. Downstream, the Sample Processor uses this hash as a Kafka message key, which guarantees same-keyed messages land on the same partition and can be deduplicated by a compacted topic or in-memory state.
 - **Short-window exact dedup in Sample Processor:** a Redis set `dedup:{product_id}:{price_cents}:{minute_bucket}` with a 15-minute TTL drops in-flight duplicates. The set uses `SETNX` — if the key already exists, the sample is discarded without writing to TSDB.
@@ -222,6 +348,29 @@ We cannot scrape 500M products uniformly — budget, proxy health, and the marke
 ### 4. Alert Matching and Fan-out
 
 When a `price_change` event lands, we must find every user watching that product, evaluate their individual target prices, and deliver notifications — correctly, exactly once, and without melting the notification service during a flash sale that moves a popular product.
+
+```mermaid
+sequenceDiagram
+    participant SP as Sample Processor
+    participant AM as Alert Matcher
+    participant RIX as Redis watcher index<br/>watchers:{product_id}
+    participant PG as Postgres<br/>(prefs + outbox)
+    participant DW as Delivery Worker
+    participant N as Notification Service
+
+    SP->>AM: price_change {product_id, new_price}
+    AM->>RIX: ZRANGEBYSCORE 0 new_price
+    RIX-->>AM: triggered watcher_ids (O(log N + K))
+    AM->>AM: verify below target ≥30 min<br/>+ plausible vs 90-day min
+    AM->>PG: write alert + outbox row (same txn)
+    AM->>AM: coalesce per (user_id, product_id), 5-min window
+    DW->>PG: read outbox
+    DW->>N: send (dedupe by alert_id + channel)
+    N-->>DW: delivered
+    DW->>PG: mark outbox delivered
+```
+
+> 💡 **The Redis sorted-set index makes alert matching an O(log N + K) inverted-index lookup, not a full table scan.** Score = `target_price_cents`, member = `watcher_id`. `ZRANGEBYSCORE watchers:{product_id} 0 {new_price}` returns exactly the watchers whose target is at or above the new price — eliminating a per-event DB round-trip on the hot path.
 
 - **Watcher index in Redis:** `watchers:{product_id}` is a sorted set where the score is `target_price_cents` and the member is `watcher_id`. On a `price_change` event, `ZRANGEBYSCORE watchers:{product_id} 0 {new_price}` returns every watcher whose target is at or above the new price — in O(log N + K) time. This is an inverted index lookup, not a full table scan. Updating the index on watcher creation/deletion is O(log N).
 - **Alert evaluation is a hot path — keep it O(1) per sample:** at millions of products with daily price movements, the alert matcher must process events without per-event database queries. The Redis sorted-set index is the key — it eliminates the DB round-trip for the common case. Only after identifying triggered watchers does the service touch Postgres (to load delivery preferences).
@@ -257,9 +406,27 @@ The extension is a force multiplier for freshness: real users naturally visit pr
 
 ---
 
-## Scaling Journey: 0 to infinity
+## 📈 Scaling Journey: 0 to infinity
 
 The story begins with a weekend project and ends with a hyperscale ingest platform. Each stage solves the failure mode that breaks the previous one.
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0–100 products<br/>cron + SQLite<br/>+ Flask"]
+    S2["Stage 2<br/>100–10K<br/>Celery + Postgres<br/>+ Redis token bucket"]
+    S3["Stage 3<br/>10K–1M<br/>Scraper control plane<br/>Kafka + TimescaleDB"]
+    S4["Stage 4<br/>1M–100M<br/>Sharded TSDB<br/>2-stage alert fan-out"]
+    S5["Stage 5<br/>100M+<br/>Multi-region<br/>ML change detection"]
+
+    S1 -->|"cron can't finish cycle<br/>+ SQLite contention"| S2
+    S2 -->|"CAPTCHAs + Postgres<br/>past 100M rows"| S3
+    S3 -->|"TSDB write ceiling<br/>+ alert latency spikes"| S4
+    S4 -->|"catalog + watcher index<br/>outgrow single cluster"| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0 - 100 Products Tracked
 
@@ -337,7 +504,7 @@ The story begins with a weekend project and ends with a hyperscale ingest platfo
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 ### Scraping at Scale Requires Distributed Politeness Management
 
@@ -373,7 +540,7 @@ A tracked product's price in USD should not be displayed as-is to a user in Euro
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Area | Mid-level | Senior | Staff |
 |---|---|---|---|

@@ -1,4 +1,17 @@
-# API Design
+# 🔌 API Design
+
+> **Overview**: API design is the step in a system design interview where you define how clients interact with your system. It follows predictable patterns: pick a protocol (REST, GraphQL, or RPC), define your resources, and specify how clients pass data and get responses back. This guide covers all the basics needed to impress during the ~5-minute API portion of the interview.
+
+## 📋 Table of Contents
+- [Layman's Explanation](#laymans-explanation)
+- [API Types](#api-types)
+- [Common API Patterns](#common-api-patterns)
+- [Security Considerations](#security-considerations)
+- [Conclusion](#conclusion)
+- [Key Takeaways](#key-takeaways)
+- [Related Concepts](#related-concepts)
+
+---
 
 Learn about API design for system design interviews
 
@@ -12,7 +25,17 @@ API design follows predictable patterns. You'll pick a protocol, define your res
 
 > Before we go deep here, I want to make one thing super clear: most interviewers don't care deeply about your API design being perfect. They want to see that you can design a reasonable API and move on to the more complex parts of your system. That said, if you're interviewing for frontend or product roles, API design matters more since you'll be working closely with APIs daily. Also, for junior roles, there's less expectation on your ability to design distributed systems, so there may be more time spent in the interview on APIs.
 
-## API Types
+## 🧒 Layman's Explanation
+
+Think of your API as the **menu and ordering system at a restaurant**. The kitchen (your server) does the real work, but customers (clients) never walk in and start cooking — they interact through a well-defined contract.
+
+- **REST** is ordering by pointing at named dishes on the menu. Everything is a *thing* (a noun): "table 12's order," "the salmon plate." You use standard gestures — take (GET), place (POST), replace (PUT), remove (DELETE).
+- **GraphQL** is telling the waiter *exactly* what you want on your plate: "the salmon, but only the fish and the lemon, hold everything else." One conversation, precisely the data you asked for — no more, no less.
+- **RPC** is skipping the menu and calling the kitchen directly to *do something*: "checkPermission," "createBooking." You think in actions, not dishes.
+
+And when you place an order, *where* you put each detail matters: the table number is written on the ticket itself (**path parameter**, required), "make it spicy" is a note on the side (**query parameter**, optional), and the full list of items is the order slip (**request body**, the payload). The waiter then brings back both a status ("here you go" = 200, "we're out of that" = 404) and the food itself (the response body).
+
+## 🔌 API Types
 
 In an interview, you'll typically choose between three main API protocols:
 
@@ -101,6 +124,17 @@ POST /events/123/bookings?notify=true
 ```
 
 The event ID (123) is in the path because you need to specify which event you're booking. The notification preference is a query parameter because it's optional behavior. The actual booking details go in the request body because they're the core data you're creating.
+
+```mermaid
+graph LR
+    REQ["POST /events/123/bookings?notify=true<br/>+ JSON body"] --> P["Path param<br/>/events/123<br/>which resource — required"]
+    REQ --> Q["Query param<br/>?notify=true<br/>optional modifier"]
+    REQ --> B["Request body<br/>tickets, payment_method<br/>the payload"]
+
+    style P fill:#e1f5ff
+    style Q fill:#FFE4B5
+    style B fill:#90EE90
+```
 
 #### Returning Data
 
@@ -249,7 +283,7 @@ For our Ticketmaster example, you might use REST APIs for your public endpoints 
 
 > Unless explicitly asked, you won't typically outline your internal APIs during the API step of the interview. Instead, focus on just the user facing APIs here. At most, you'll call out that internal services communicate over RPC during your high-level design.
 
-## Common API Patterns
+## 🔧 Common API Patterns
 
 Regardless of whether you choose REST, GraphQL, or RPC, there are some patterns that apply across all API types. These are worth knowing since they come up in most real-world systems.
 
@@ -295,7 +329,7 @@ For interviews, URL versioning is usually the safer choice because it's more wid
 
 > You'll see that in our breakdowns we don't even include versioning in the API design. This is more a product of it just not being important to most interviewers rather than a statement that it's not important in practice (it is).
 
-## Security Considerations
+## 🔒 Security Considerations
 
 Security is often treated as an afterthought in interviews, but demonstrating security awareness can set you apart. You don't need to design a bulletproof security system, but showing that you understand basic API security principles signals that you think about production-ready systems.
 
@@ -329,6 +363,19 @@ JWT tokens, on the other hand, encode user information directly into the token i
 Conveniently, when that JWT comes back with future requests, you can verify it's authentic by checking the signature, and you can read the user information directly from the token without any database lookups. The token itself carries all the context you need to authorize the request.
 
 JWTs work particularly well for distributed systems because any service with access to the verification key can validate tokens independently. If your mobile app sends a JWT to your API gateway, the gateway can verify the user's identity and forward the request to your booking service with confidence.
+
+```mermaid
+sequenceDiagram
+    participant U as Client (Mobile App)
+    participant G as API Gateway
+    participant S as Booking Service
+    U->>G: Request + JWT (Bearer token)
+    G->>G: Verify signature with key
+    Note over G: Read user_id, role, exp<br/>from token — no DB lookup
+    G->>S: Forward request with user context
+    S->>S: Authorize (owns booking OR admin?)
+    S-->>U: 200 OK on success / 401 if not authenticated
+```
 
 ```
 // JWT payload
@@ -382,7 +429,7 @@ You typically implement rate limiting at the API gateway level or using middlewa
 
 > In interviews, mentioning rate limiting shows you understand production concerns, but don't spend time designing the specific algorithms unless asked. A simple "we'll implement rate limiting to prevent abuse" is usually sufficient.
 
-## Conclusion
+## 📝 Conclusion
 
 API design in system design interviews is about demonstrating solid engineering judgment, not creating perfect specifications. Focus on choosing the right protocol for your use case (usually REST), modeling your resources clearly, and showing you understand the basics of authentication and security.
 
@@ -391,6 +438,24 @@ It's all about balance in an interview. Spend enough time to show you can design
 Answer the question below to find your gaps.
 
 Get a quick-reference sheet for this topic, perfect for last-minute review.
+
+## 🎓 Key Takeaways
+
+- **Default to REST.** It's well-understood, maps naturally to CRUD and HTTP semantics, and covers ~90% of use cases. Reach for GraphQL only on clear over-/under-fetching problems, and RPC (gRPC) for high-performance internal service-to-service calls.
+- **Model resources as plural nouns, not actions.** Resources represent *things* in your system (events, venues, tickets, bookings) — your core entities — not verbs like "book" or "purchase."
+- **Know your HTTP methods and idempotency.** GET, PUT, and DELETE are idempotent; POST and PATCH are not guaranteed to be — which matters when networks fail and clients retry (you don't want duplicate bookings).
+- **Put inputs in the right place.** Path parameters identify the resource (required), query parameters filter/modify (optional), and the request body carries the payload.
+- **Pick a pagination and versioning strategy.** Offset-based pagination is simple; cursor-based is stable under inserts. URL versioning (`/v1/events`) is the safe interview default.
+- **Show security awareness without overbuilding.** JWTs for user sessions, API keys for service/3rd-party access, RBAC for permissions, and rate limiting (return `429`) to prevent abuse — but timebox the whole API step to ~5 minutes.
+
+## 📚 Related Concepts
+
+- [Networking Essentials](./NetworkingEssentials.md) — protocol details behind REST vs. RPC and when performance justifies gRPC over JSON-on-HTTP.
+- [Networking](../../CoreConcepts/Networking.md) — deeper handwritten notes on HTTP, HTTP/2, and connection models.
+- [API Gateway](../DeepDives/ApiGateway.md) — where authentication and rate limiting are typically enforced.
+- [Real-Time Updates](../Patterns/Real-TimeUpdates.md) — WebSockets and Server-Sent Events for the real-time features REST/GraphQL/RPC don't cover.
+- [Rate Limiter](../ProblemBreakdowns/RateLimiter.md) — designing the throttling this page recommends mentioning.
+- [Ticketmaster](../ProblemBreakdowns/Ticketmaster.md) — the events/venues/tickets/bookings example used throughout this page.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/core-concepts/api-design](https://www.hellointerview.com/learn/system-design/core-concepts/api-design)*

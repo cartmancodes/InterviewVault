@@ -1,10 +1,30 @@
-# Managing Long Running Tasks
+# 🏃 Managing Long Running Tasks
 
 Learn about the long running tasks pattern and how to use it in your system design
 
-> 🏃 The Managing Long-Running Tasks pattern splits API requests into two phases: immediate acknowledgment and background processing. When users submit heavy tasks (like video encoding), the web server instantly validates the request, pushes a job to a queue (Redis/RabbitMQ), and returns a job ID, all within milliseconds. Meanwhile, separate worker processes continuously poll the queue, grab pending jobs, execute the actual time-consuming work, and update the job status in a database.
+> **Overview**: The Managing Long-Running Tasks pattern splits API requests into two phases: immediate acknowledgment and background processing. When users submit heavy tasks (like video encoding), the web server instantly validates the request, pushes a job to a queue (Redis/RabbitMQ), and returns a job ID, all within milliseconds. Meanwhile, separate worker processes continuously poll the queue, grab pending jobs, execute the actual time-consuming work, and update the job status in a database.
 
-## The Problem
+## 📋 Table of Contents
+- [Layman's Explanation](#laymans-explanation)
+- [The Problem](#the-problem)
+- [The Solution](#the-solution)
+- [Trade-offs](#trade-offs)
+- [How to Implement](#how-to-implement)
+- [When to Use in Interviews](#when-to-use-in-interviews)
+- [Common Deep Dives](#common-deep-dives)
+- [Conclusion](#conclusion)
+- [Key Takeaways](#key-takeaways)
+- [Related Concepts](#related-concepts)
+
+---
+
+## 🧒 Layman's Explanation
+
+Imagine dropping clothes off at a dry cleaner. You don't stand at the counter for the two days it takes to clean your suit — the clerk takes your items, hands you a numbered claim ticket, and you leave. That ticket is your **job ID**. Behind the scenes, the cleaning staff (the **worker pool**) works through a rack of tickets (the **queue**) at their own pace, and when your suit is ready they text you (the **notification**). If one presser calls in sick, another simply grabs the next ticket on the rack — nothing is lost. And a stain that just won't come out gets set aside on a special "needs attention" shelf (the **dead letter queue**) instead of jamming up the whole line.
+
+Synchronous processing is the opposite: it's like being forced to wait at the counter, staring at the wall, for the full 45 seconds it takes to generate a report — or worse, being kicked out (a **timeout**) before it's even done. The whole pattern boils down to one habit: take the ticket, walk away, and get notified when the work is actually finished.
+
+## ⚠️ The Problem
 
 Let's start with a problem. Imagine you run a simple website where users can view their profile. When a user loads their profile page, your server makes a quick database query to fetch their data. The whole process - querying the database, formatting the response, sending it back - takes less than 100 milliseconds. The user clicks and almost instantly sees their information. Life is good.
 
@@ -26,7 +46,7 @@ Alright, so synchronous processing clearly has its limits when operations take m
 
 [ChatGPT](https://www.hellointerview.com/learn/system-design/problem-breakdowns/chatgpt#long-running-tasks)
 
-## The Solution
+## 🛠️ The Solution
 
 Instead of making the user wait while we generate their PDF, we split the operation into two parts. When they click "Generate Report", we immediately store their request in a queue and return a response: "We're generating your report. We'll notify you when it's ready." This takes milliseconds, not minutes.
 
@@ -46,7 +66,7 @@ The user experience improves dramatically too. Instead of staring at a frozen br
 
 This pattern applies broadly to any operation that takes more than a few seconds. Image processing, video transcoding, bulk data imports, third-party API calls with strict rate limits, report generation, email campaigns - they can all benefit from async processing. The specific queue technology and worker implementation might vary, but the core pattern remains the same. Accept quickly, process asynchronously, notify when complete.
 
-## Trade-offs
+## ⚖️ Trade-offs
 
 Managing long-running tasks isn't magic. This approach solves some problems but creates others. Here's what you're getting into:
 
@@ -66,7 +86,7 @@ Managing long-running tasks isn't magic. This approach solves some problems but 
 
 Plus async patterns create new failure modes. What happens when the queue fills up? How do you handle poison messages that crash workers repeatedly? When do you give up retrying a failed job? These problems aren't impossible to solve, but they need planning that synchronous systems don't.
 
-## How to Implement
+## 🏗️ How to Implement
 
 At its core, two technologies are required to pull this off:
 
@@ -127,7 +147,7 @@ Importantly, each component can fail independently and the system will still fun
 
 > In interviews, don't overcomplicate this. Pick Kafka (or a queue you know well) for the queue unless there's a specific reason not to. Use regular server processes for workers unless the interviewer pushes for serverless. Focus on showing that you understand the separation of concerns rather than debating the merits of different queue technologies.
 
-## When to Use in Interviews
+## 🎤 When to Use in Interviews
 
 Don't wait for the interviewer to ask about managing long-running tasks. The key is recognizing problems that scream for async processing and proactively suggesting it.
 
@@ -156,9 +176,29 @@ Let's look at how managing long-running tasks shows up in popular system design 
 
 Notice the pattern: any operation involving heavy computation, external API calls, or fan-out to multiple users benefits from async processing. If the interviewer mentions any of these scenarios, managing long-running tasks should be part of your solution.
 
-## Common Deep Dives
+## 🔬 Common Deep Dives
 
 As you already know, interviewers love to catch you off guard and need to dig. Here are the five common areas of exploration, along with how to handle each one. It may be that you bring these up proactively, or they may be asked of you.
+
+Every one of these deep dives is really a question about how a job moves through its lifecycle — from acceptance, through processing and retries, to completion or the dead letter queue:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Pending: Web server validates<br/>request & enqueues job ID
+    Pending --> Processing: Worker pulls job<br/>from queue
+    Processing --> Completed: Work succeeds,<br/>results stored (S3 / DB)
+    Processing --> Failed: Worker crashes<br/>or job errors
+    Failed --> Pending: Retry by<br/>another worker
+    Failed --> DLQ: After 3–5 failures<br/>(poison message)
+    Completed --> [*]
+    DLQ --> Pending: Manual fix &<br/>re-enqueue
+    DLQ --> [*]: Human<br/>investigation
+
+    classDef good fill:#90EE90
+    classDef bad fill:#FFB6C1
+    class Completed good
+    class DLQ bad
+```
 
 ### Handling Failures
 

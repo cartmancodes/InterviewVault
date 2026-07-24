@@ -1,23 +1,26 @@
-# Design YouTube Top K Videos
+# 🔥 Design YouTube Top K Videos
 
 > **Pattern**: Streaming Aggregation / Heavy Hitters
 > **Difficulty**: Hard
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/top-k)
 
-## Table of Contents
+> **Summary**: Top-K answers one question fast — "what are the K most-viewed videos over a given time window?" — against YouTube-class write volume (~700K events/sec average, multi-million at peak) with tens-of-milliseconds p99 reads and sub-minute freshness. A naive `GROUP BY` melts at scale, so the mature design is a streaming pipeline: client beacons → Kafka partitioned by `video_id` → a Flink stream processor maintaining per-window counters → a materialized rollup store → a Redis/CDN cache the read path hits directly. The hard trade-offs are approximate counting (Count-Min Sketch + Space-Saving) to bound memory, tiered time-window rollups, hot-key mitigation for viral videos, and MapReduce-style fan-in across shards.
 
-1. [Understanding the Problem](#understanding-the-problem)
-2. [Core Entities](#core-entities)
-3. [API Design](#api-design)
-4. [High-Level Design](#high-level-design)
-5. [Deep Dives](#deep-dives)
-6. [Scaling Journey: 0 to Infinity](#scaling-journey-0--)
-7. [Insider Tips and Tricks](#insider-tips-and-tricks)
-8. [Expected Depth by Level](#expected-depth-by-level)
+## 📋 Table of Contents
+- [Understanding the Problem](#understanding-the-problem)
+- [Layman's Explanation](#laymans-explanation)
+- [Core Entities](#core-entities)
+- [API Design](#api-design)
+- [High-Level Design](#high-level-design)
+- [Deep Dives](#deep-dives)
+- [Scaling Journey: 0 to Infinity](#scaling-journey-0-to-infinity)
+- [Insider Tips and Tricks](#insider-tips-and-tricks)
+- [Expected Depth by Level](#expected-depth-by-level)
+- [Related Concepts](#related-concepts)
 
 ---
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 The goal is to build a service that answers a single question fast: "What are the K most-viewed videos over some time window?" Users are browsing a "Trending" page, an analytics dashboard, or a recommendation surface, and they expect the list back in milliseconds. The problem looks trivial at small scale (a single SQL `GROUP BY` will do), but the naive solution falls apart at YouTube-level throughput. The hard part is reconciling three simultaneously demanding constraints: massive write volume, low-latency reads, and correctness over many time windows.
 
@@ -66,7 +69,7 @@ Real YouTube fights view fraud (bots inflating counts), shifts top-K constantly 
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 - **View Event**: `{ video_id, user_id (optional), timestamp, region (optional) }`. The raw unit of work the system ingests. Billions per day.
 - **Video**: The thing being ranked. Only `video_id` matters for the ranking problem; other metadata lives in the catalog service.
@@ -76,7 +79,7 @@ Real YouTube fights view fraud (bots inflating counts), shifts top-K constantly 
 
 ---
 
-## API Design
+## 🔌 API Design
 
 A single read endpoint covers the functional scope. Writes arrive through the view-event pipeline, not a public API.
 
@@ -103,7 +106,7 @@ Notes on the design:
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
 The canonical architecture is a classic lambda-shaped pipeline collapsed into a pure streaming shape once you reach scale:
 
@@ -116,9 +119,80 @@ The canonical architecture is a classic lambda-shaped pipeline collapsed into a 
 
 Data flow at steady state: client beacon → Kafka → Flink → materialized rollup table → cache → API. Read path is entirely cache-hit in the happy case.
 
+```mermaid
+graph TB
+    subgraph Clients
+        BEACON[Client Beacon<br/>posts view events]
+        READER[Trending Page /<br/>Dashboard reader]
+    end
+
+    subgraph "Ingest & Buffer"
+        INGEST[Ingest Service<br/>validate + attribute]
+        KAFKA[[Kafka topic view-events<br/>partitioned by video_id]]
+    end
+
+    subgraph "Stream Processing"
+        FLINK[Stream Processor<br/>Flink · per-window counters<br/>RocksDB keyed state]
+        CKPT[(Checkpoints<br/>S3 / HDFS)]
+    end
+
+    subgraph "Serving"
+        STORE[(Aggregation Store<br/>materialized windowed counts<br/>Postgres / KV / Druid-Pinot)]
+        CACHE[(Cache layer<br/>Redis ZSET per window<br/>short TTL)]
+        TOPK[Top-K Service<br/>GET /top-k]
+    end
+
+    BEACON --> INGEST
+    INGEST --> KAFKA
+    KAFKA --> FLINK
+    FLINK -.checkpoint.-> CKPT
+    FLINK --> STORE
+    STORE --> CACHE
+    READER --> TOPK
+    TOPK --> CACHE
+    TOPK -.cache miss.-> STORE
+
+    style KAFKA fill:#FFE4B5
+    style FLINK fill:#90EE90
+    style STORE fill:#e1f5ff
+    style CACHE fill:#e1f5ff
+    style CKPT fill:#e1f5ff
+```
+
+**Write path (view event):** client beacon posts to the Ingest Service, which validates and appends to the `view-events` Kafka topic keyed by `video_id`. Partitioning by video means all events for a video land on the same partition, making downstream aggregation stateful-but-local. Flink consumes the topic and maintains per-window counters, checkpointing state to durable storage.
+
+**Read path (top-K query):** a reader calls `GET /top-k`; the Top-K Service returns a precomputed list straight out of the cache in the happy case, falling back to the aggregation store only on a cache miss. A background job refreshes the cached arrays at a cadence that matches the freshness SLA.
+
+```mermaid
+sequenceDiagram
+    participant B as Client Beacon
+    participant I as Ingest Service
+    participant K as Kafka (view-events)
+    participant F as Flink Processor
+    participant S as Aggregation Store
+    participant C as Redis Cache
+    participant A as Top-K API
+
+    B->>I: POST view event
+    I->>K: append (keyed by video_id)
+    K->>F: consume partition
+    F->>F: update per-window counters
+    F->>S: upsert materialized rollup
+    Note over C,S: background job refreshes cache from store
+    S->>C: write top-K arrays per window
+
+    A->>C: GET /top-k?window=1d&k=100
+    alt Cache hit (happy path)
+        C-->>A: precomputed top-K list
+    else Cache cold / miss
+        A->>S: query rollup directly
+        S-->>A: compute + return top-K
+    end
+```
+
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. Count-Min Sketch (CMS)
 
@@ -130,7 +204,9 @@ Sizing CMS correctly is a practical skill interviewers probe. The width `w` cont
 
 Trade-off: CMS gives you approximate counts for any key, but it does not by itself tell you which keys are the heavy hitters. You pair it with a second structure — a min-heap of size K, or a Space-Saving / Misra-Gries summary — that tracks candidate top items. Every increment updates the sketch; candidates admitted to the heap are verified against the sketch count.
 
-Gotcha: sketches drift over long horizons because old counts never decay. For all-time windows that is fine; for rolling windows you either rebuild per tumbling interval or run a forgetful variant — a sliding-window CMS with multiple generational layers. In the generational approach, you maintain G sketch generations of equal time span; on each event you increment the current generation's sketch, and the estimated count for any key is the sum across all non-expired generations. When the oldest generation falls outside the window, its sketch is discarded and a fresh generation starts.
+> ⚠️ **Gotcha: sketches drift over long horizons because old counts never decay.** For all-time windows that is fine; for rolling windows you either rebuild per tumbling interval or run a forgetful variant — a sliding-window CMS with multiple generational layers.
+
+In the generational approach, you maintain G sketch generations of equal time span; on each event you increment the current generation's sketch, and the estimated count for any key is the sum across all non-expired generations. When the oldest generation falls outside the window, its sketch is discarded and a fresh generation starts.
 
 ### 2. Heavy Hitters and Space-Saving
 
@@ -141,6 +217,22 @@ These algorithms are elegant because they give you the candidate set directly �
 The Space-Saving guarantee is stronger than CMS for top-K: any item with true frequency greater than `N / m` (where `m` is the number of monitored counters) is guaranteed to appear in the output set — there are no false negatives for truly popular items. CMS can overcount non-popular items and inadvertently elevate them into your candidate heap; Space-Saving cannot miss a genuinely high-frequency item. The error bound for count estimates is also bounded above by `N / m`, so with 10K slots and 1B events in a window, every item with more than 100K true views is guaranteed to be tracked. For trending content that floor is acceptable.
 
 The practical implication: in an interview, prefer Space-Saving over a raw CMS-plus-heap when you need a correctness guarantee about which items appear in the top-K set. Use CMS as a supplementary structure when you also need fast point-query estimates for arbitrary video IDs outside the tracked set.
+
+The two structures compose into a single per-window counting pipeline:
+
+```mermaid
+graph LR
+    EV[View Event<br/>video_id] --> CMS[Count-Min Sketch<br/>d rows x w cols<br/>approx count for ANY key]
+    EV --> SS[Space-Saving<br/>fixed ~10K slots<br/>candidate heavy hitters]
+    CMS -->|point-query estimate| VERIFY[Verify candidate<br/>counts]
+    SS -->|candidate set| VERIFY
+    VERIFY --> HEAP[Min-heap size K<br/>Top-K List]
+
+    style CMS fill:#e1f5ff
+    style SS fill:#90EE90
+    style HEAP fill:#90EE90
+    style VERIFY fill:#FFE4B5
+```
 
 ### 3. Streaming Aggregation with Flink
 
@@ -156,7 +248,9 @@ Shape of the job:
 
 Keyed partitioning is what makes this parallel. Each Flink task owns a disjoint set of `video_id` keys and never needs to coordinate with other tasks for aggregation. Cross-key coordination only happens at the top-K reduction step, which is a periodic fan-in rather than a per-event operation.
 
-A subtlety worth raising in interviews: Flink's exactly-once guarantee requires that sinks support idempotent writes or two-phase commit. Redis does not natively support 2PC, so the standard pattern is to write to Flink's Kafka sink with exactly-once semantics and have a separate job read from that output topic and write to Redis. Alternatively, accept at-least-once delivery to Redis and rely on the idempotent nature of counter increments — overcounting by a small number of replayed events is acceptable for a trending page.
+> 💡 **A subtlety worth raising in interviews:** Flink's exactly-once guarantee requires that sinks support idempotent writes or two-phase commit — and Redis does not natively support 2PC.
+
+The standard pattern is to write to Flink's Kafka sink with exactly-once semantics and have a separate job read from that output topic and write to Redis. Alternatively, accept at-least-once delivery to Redis and rely on the idempotent nature of counter increments — overcounting by a small number of replayed events is acceptable for a trending page.
 
 ### 4. Time Windows: Tumbling vs Sliding vs Session
 
@@ -175,6 +269,27 @@ Late-arriving events complicate all window types. A view event generated on a mo
 ### 5. Tiered Time-Window Aggregation
 
 Rather than keep one monolithic counter per window size, maintain rollups at multiple granularities: per-minute, per-hour, per-day, per-month. A query for "last 1 hour" sums 60 per-minute buckets. "Last 1 day" sums 24 per-hour buckets. "Last 1 month" sums 30 per-day buckets.
+
+```mermaid
+graph LR
+    EV[View Events] --> MIN[Per-minute buckets]
+    MIN -->|fold 60| HR[Per-hour buckets]
+    HR -->|fold 24| DAY[Per-day buckets]
+    DAY -->|fold 30| MON[Per-month buckets]
+
+    MIN -.sum 60.-> Q1["Query: last 1h"]
+    HR -.sum 24.-> Q2["Query: last 1d"]
+    DAY -.sum 30.-> Q3["Query: last 1m"]
+
+    style EV fill:#FFE4B5
+    style MIN fill:#e1f5ff
+    style HR fill:#e1f5ff
+    style DAY fill:#e1f5ff
+    style MON fill:#e1f5ff
+    style Q1 fill:#90EE90
+    style Q2 fill:#90EE90
+    style Q3 fill:#90EE90
+```
 
 This buys you three things. First, you can answer the implicit "sliding" semantics (last hour ending now) cheaply by summing a small, bounded number of pre-computed buckets. Second, you amortize writes: 60 events get folded into one per-minute bucket before anything touches the per-hour rollup. Third, old buckets can be evicted or moved to cold storage on a schedule that matches the largest window they feed.
 
@@ -204,6 +319,25 @@ Partition by `video_id` at every layer — Kafka, stream processor state, rollup
 
 Top-K queries require a fan-out: query each shard for its local top-K, merge the partial lists on the coordinator. This is the classic MapReduce top-K pattern. You need to request at least K results from each shard (more is safer if you expect imbalance); the merge step sorts `K * num_shards` items and returns the global top-K. At 100 shards and K=1000, the merge processes 100K items — trivially fast on a single node.
 
+```mermaid
+graph TB
+    COORD[Coordinator<br/>top-K query]
+    COORD -->|request K each| SH1[Shard 1<br/>local top-K]
+    COORD -->|request K each| SH2[Shard 2<br/>local top-K]
+    COORD -->|request K each| SH3[Shard N<br/>local top-K]
+    SH1 -->|partial list| MERGE[Merge + sort<br/>K x num_shards items]
+    SH2 -->|partial list| MERGE
+    SH3 -->|partial list| MERGE
+    MERGE --> OUT[Global Top-K]
+
+    style COORD fill:#FFE4B5
+    style SH1 fill:#e1f5ff
+    style SH2 fill:#e1f5ff
+    style SH3 fill:#e1f5ff
+    style MERGE fill:#FFE4B5
+    style OUT fill:#90EE90
+```
+
 Hot videos — a Mr. Beast launch going viral — can create hot partitions. A single video driving millions of events per second will saturate the Kafka partition and the Flink task that owns its key. Mitigations:
 
 - **Key salting for writes**: split the hot video's events across `N` sub-keys (`video_id:0`, `video_id:1`, ...). Each sub-key lands on a different partition and gets its own Flink task. At read time, sum the N sub-key counters to reconstruct the total. The tradeoff is that point queries for that video now require N lookups.
@@ -212,9 +346,27 @@ Hot videos — a Mr. Beast launch going viral — can create hot partitions. A s
 
 ---
 
-## Scaling Journey: 0 to Infinity
+## 📈 Scaling Journey: 0 to Infinity
 
 This is the progression I would walk through in an interview, grounding each step in what specifically breaks.
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0-100 ev/s<br/>Monolith + Postgres<br/>SQL GROUP BY"]
+    S2["Stage 2<br/>100-1K ev/s<br/>Rollup table + Redis<br/>cache w/ TTL"]
+    S3["Stage 3<br/>1K-100K ev/s<br/>Kafka + Flink<br/>exact counts + ZSET"]
+    S4["Stage 4<br/>100K-1M ev/s<br/>CMS + Space-Saving<br/>tiered rollups + OLAP"]
+    S5["Stage 5<br/>1M+ ev/s<br/>Multi-region ingest<br/>hierarchical top-K"]
+
+    S1 -->|"GROUP BY query times out"| S2
+    S2 -->|"synchronous rollup hotspot"| S3
+    S3 -->|"RocksDB state + ZSET blow budget"| S4
+    S4 -->|"single region + merge bottleneck"| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0 to 100 Events/sec
 
@@ -268,7 +420,7 @@ This is the progression I would walk through in an interview, grounding each ste
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 ### Count-Min Sketch Always Overestimates — This Is Acceptable
 Count-Min Sketch (CMS) stores a 2D array of counters (d rows × w columns). Each item is hashed to one counter per row; the estimated count is the minimum across all rows. Hash collisions cause overcounting — you might count "cat videos" 5 instead of 3. CMS never undercounts. For top-K ranking, overcounting is safer than undercounting (you might promote a slightly less popular video, never miss the actual #1). Width w and depth d control accuracy: w=2000, d=5 gives <1% error rate for typical workloads.
@@ -299,10 +451,24 @@ Requiring strong consistency (every reader sees the exact same top-K at the same
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Level | Breadth vs Depth | What the interviewer expects |
 |---|---|---|
 | **Mid-level (E4/L4)** | ~80% breadth, 20% depth | End-to-end correct design at modest scale. Clear API, reasonable data model, identifies at least one scaling pinch point (e.g., "this query will get slow"). Can name Kafka and Redis but may not reason about partitioning or exactly-once. Interviewer drives the deep dives. |
 | **Senior (E5/L5)** | ~60% breadth, 40% depth | Near-optimal topology. Proactively reaches for stream processing and pre-aggregation without prompting. Can explain tumbling vs sliding windows, watermarks, and why partitioning by `video_id` matters. Discusses cache invalidation and request coalescing. Comfortable with one approximate algorithm (CMS or Space-Saving) and knows when to apply it. |
 | **Staff+ (E6+/L6+)** | ~40% breadth, 60% depth | Drives the conversation into hyperscale trade-offs unprompted. Compares multiple approximate algorithms, discusses hot-key mitigation, fault tolerance with exactly-once semantics, multi-region aggregation, and tiered storage. Can quantify error bounds and memory footprints. Draws on production experience: "we ran into this at X, here is what broke and why." Minimal interviewer steering; interviewer is mostly probing for gaps. |
+
+---
+
+## 📚 Related Concepts
+
+- [Redis](../CoreConcepts/Redis.md) — sorted sets (`ZADD`/`ZREVRANGE`) for the top-K leaderboard and the short-TTL read cache.
+- [Sharding](../CoreConcepts/Sharding.md) — partitioning by `video_id` at every layer and the MapReduce fan-in for global top-K.
+- [Consistent Hashing](../CoreConcepts/ConsistentHashing.md) — hashing `video_id` so adding or removing shards needs only partial resharding.
+- [Caching](../CoreConcepts/Caching.md) — precomputed top-K arrays, request coalescing, and serving last-known-good on a cold cache.
+- [Kafka](../SystemDesign/DeepDives/Kafka.md) — buffered ingest partitioned by `video_id`, replication (RF=3), and offset replay.
+- [Flink](../SystemDesign/DeepDives/Flink.md) — keyed state, watermarks for late events, checkpoints, and exactly-once sinks.
+- [Data Structures for Big Data](../SystemDesign/DeepDives/DataStructuresForBigData.md) — Count-Min Sketch, Space-Saving, and heavy-hitter summaries in depth.
+- [YouTube Top-K (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/YoutubeTopK.md) — the source breakdown this doc expands on.
+- [Ad Click Aggregator](../SystemDesign/ProblemBreakdowns/AdClickAggregator.md) — a sibling streaming-aggregation problem with the same lambda-shaped pipeline.

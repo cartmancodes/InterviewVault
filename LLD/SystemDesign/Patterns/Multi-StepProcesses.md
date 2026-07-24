@@ -1,10 +1,28 @@
-# Multi-step Processes
+# ⚙️ Multi-step Processes
 
 Learn about multi-step processes and how to handle them in your system design with distributed transactions, sagas, workflow systems, and durable execution.
 
-> ⚙️ Real production systems must survive failures, retries, and long-running operations spanning hours or days. Often they take the form of multi-step processes or sagas which involve the coordination of multiple services and systems. This is a continual source of operational and design challenges for engineers, with a variety of different solutions.
+> **Overview**: Real production systems must survive failures, retries, and long-running operations spanning hours or days. These often take the form of multi-step processes or sagas that coordinate dozens of (flaky) services and systems, and they are a continual source of operational and design challenges for engineers. Workflow systems, event-driven sagas, and durable execution are the solutions to this problem, and they show up constantly in system design interviews.
 
-## The Problem
+## 📋 Table of Contents
+- [Layman's Explanation](#laymans-explanation)
+- [The Problem](#the-problem)
+- [Solutions](#solutions)
+- [When to Use in Interviews](#when-to-use-in-interviews)
+- [Common Deep Dives](#common-deep-dives)
+- [Conclusion](#conclusion)
+- [Key Takeaways](#key-takeaways)
+- [Related Concepts](#related-concepts)
+
+---
+
+## 🧒 Layman's Explanation
+
+Think about placing an online order. Behind that one click, a chain of steps has to happen in order: charge your card, reserve the item from the warehouse, print a shipping label, wait for a worker to physically pick it off the shelf, and email you a confirmation. Any step can fail or stall — the card gets declined, the item is out of stock, or the computer running the whole thing simply crashes halfway through.
+
+Now imagine doing all of this from memory. If you get distracted right after charging the card, you might forget the customer ever paid — and now they're out the money with nothing shipped. A workflow engine is like a meticulous assistant who writes every completed step in a notebook that survives even if the assistant goes home sick. A fresh assistant picks up the same notebook, sees exactly what's done, and continues from there. And if a late step falls through — say the item can't be found — the assistant knows how to walk the checklist *backwards* and undo what already happened: release the reservation, refund the card (these undo-steps are called **compensations**). That "do the steps, remember your place across crashes, and undo cleanly when something breaks" is the whole game.
+
+## ⚠️ The Problem
 
 Building reliable multi-step processes in distributed systems is startlingly hard. While clean systems like databases often get to deal with a single "write" or "read", real applications often need to coordinate dozens of (flaky) services and systems to do the user's bidding, and doing this quickly and reliably is a common challenge.
 
@@ -24,9 +42,23 @@ In this article, we'll cover what they are, how they work, and how to use them i
 
 [Payment System](https://www.hellointerview.com/learn/system-design/problem-breakdowns/payment-system#multi-step-processes)
 
-## Solutions
+## 🛠️ Solutions
 
 To motivate the discussion, let's work through different approaches to building reliable multi-step processes, starting simple and building up to sophisticated workflow systems, with our e-commerce order fulfillment workflow as the running example.
+
+The approaches form a natural evolution, each one absorbing a problem the previous one forced you to hand-roll:
+
+```mermaid
+graph LR
+    S["Single-server<br/>primitives<br/>(a crash loses<br/>all progress)"] -->|"persist state +<br/>add compensations"| SA["Saga pattern<br/>steps + matching<br/>undo actions"]
+    SA -->|"store the stream<br/>of events, not state"| EC["Event-driven<br/>choreography<br/>(durable log · Kafka)"]
+    EC -->|"want central control<br/>+ visibility"| WO["Workflow<br/>orchestration<br/>(Temporal ·<br/>Step Functions)"]
+
+    style S fill:#FFB6C1
+    style SA fill:#FFE4B5
+    style EC fill:#FFE4B5
+    style WO fill:#90EE90
+```
 
 ### Single Server Primitives
 

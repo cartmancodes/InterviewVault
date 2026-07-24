@@ -1,6 +1,25 @@
-# Delivery Framework
+# 🗺️ Delivery Framework
 
-The best way to structure your system design interviews to structure your thoughts and focus on the most important aspects, built by FAANG managers and staff engineers.
+> **Overview**: The Delivery Framework is a fixed sequence of steps and time budgets — Requirements, Core Entities, API/Interface, (optional) Data Flow, High-Level Design, and Deep Dives — for structuring a system design interview. Built by FAANG managers and staff engineers, its purpose is to keep you focused on what your interviewer cares about most and to guarantee you actually deliver a working system instead of getting lost. Failing to deliver is the single most common reason mid-level candidates fail, and it usually hides behind the label "time management."
+
+## 📋 Table of Contents
+- [🧒 Layman's Explanation](#-laymans-explanation)
+- [🎯 Requirements (~5 minutes)](#-requirements-5-minutes)
+- [🔑 Core Entities (~2 minutes)](#-core-entities-2-minutes)
+- [🔌 API or System Interface (~5 minutes)](#-api-or-system-interface-5-minutes)
+- [🔄 [Optional] Data Flow (~5 minutes)](#-optional-data-flow-5-minutes)
+- [🏗️ High Level Design (~10-15 minutes)](#-high-level-design-10-15-minutes)
+- [🔬 Deep Dives (~10 minutes)](#-deep-dives-10-minutes)
+- [🎓 Key Takeaways](#-key-takeaways)
+- [📚 Related Concepts](#-related-concepts)
+
+---
+
+## 🧒 Layman's Explanation
+
+Think of the interview like cooking a full meal for a judge in under an hour. If you dive straight for the fancy sauce, you'll run out of time and serve nothing edible. So instead you follow a recipe with a clock: first agree with the judge on *what dish* you're making and which three flavors matter most (Requirements), then lay out your core ingredients (Core Entities), then decide how it'll be plated and served (API), sketch the cooking steps if it's a multi-stage dish (Data Flow), get a simple version of the whole plate finished and on the table (High-Level Design), and only then go back to refine the trickiest components — sear this better, reduce that sauce (Deep Dives).
+
+The whole point of the recipe isn't rigidity — it's that at every checkpoint you already have *something servable*. If nerves hit or time runs short, you still hand the judge a complete meal instead of a pile of half-prepped ingredients. That guaranteed fallback is exactly what separates candidates who "manage time well" from those who don't.
 
 The easiest way to sabotage your chances of getting an offer in your system design interview is to fail to deliver a working system. This is the most common reason that mid-level candidates fail these interviews and it often manifests as the opaque "time management". This issue isn't (always) that you need to work twice as fast — many times you just need to focus on the right things.
 
@@ -14,7 +33,7 @@ Here's the framework!
 
 ![Recommended system design interview structure](assets/_JOUN9WEOkj5.0u4398u53ksb_.svg)
 
-## Requirements (~5 minutes)
+## 🎯 Requirements (~5 minutes)
 
 The goal of the requirements section is to get a clear understanding of the system that you are being asked to design. To do this, we suggest you break your requirements into two sections.
 
@@ -67,7 +86,7 @@ Our suggestion is to explain to the interviewer that you would like to skip on e
 
 > Regardless of how you end up using it in the interview, learning to estimate relevant quantities quickly will help you quickly reason through design trade-offs in your design. Don't worry if you're not good at mental arithmetic under pressure, most people aren't.
 
-## Core Entities (~2 minutes)
+## 🔑 Core Entities (~2 minutes)
 
 Next you should take a moment to identify and list the core entities of your system. This helps you to define terms, understand the data central to your design, and gives you a foundation to build on. These are the core entities that your API will exchange and that your system will persist in a Data Model. In the actual interview, this is as simple as jotting down a bulleted list and explaining this is your first draft to the interviewer.
 
@@ -86,7 +105,7 @@ A couple useful questions to ask yourself to help identify core entities:
 
 > Aim to choose good names for your entities. While most problems are small enough that you could probably sub in foo and bar for any entity in your system, some interviewers use this as an opportunity to see whether you're any good at one of the hardest problems in computer science .
 
-## API or System Interface (~5 minutes)
+## 🔌 API or System Interface (~5 minutes)
 
 Before you get into the high-level design, you'll want to define the contract between your system and its users. Oftentimes, especially for full product style interviews, this maps directly to the functional requirements you've already identified (but not always!). You will use this contract to guide your high-level design and to ensure that you're meeting the requirements you've identified.
 
@@ -97,6 +116,19 @@ You have a quick decision to make here -- which API protocol should you use?
 **GraphQL**: Allows clients to specify exactly what data they want to receive, avoiding over-fetching and under-fetching. Choose this when you have diverse clients with different data needs.
 
 **RPC (Remote Procedure Call)**: Action-oriented protocol (like gRPC) that's faster than REST for service-to-service communication. Use for internal APIs when performance is critical.
+
+```mermaid
+graph TB
+    Start{Which API<br/>protocol?} -->|Default choice| REST["REST<br/>HTTP verbs + CRUD<br/>on resources"]
+    Start -->|"Diverse clients,<br/>varied data needs"| GQL["GraphQL<br/>client picks fields<br/>avoids over/under-fetch"]
+    Start -->|"Internal, perf-critical<br/>service-to-service"| RPC["RPC / gRPC<br/>action-oriented<br/>faster than REST"]
+    REST -->|"Real-time features"| RT["Add WebSockets<br/>or Server-Sent Events<br/>(design core API first)"]
+
+    style REST fill:#90EE90
+    style GQL fill:#FFE4B5
+    style RPC fill:#FFE4B5
+    style RT fill:#e1f5ff
+```
 
 Don't overthink this. Default to REST unless you have a specific reason not to. For real-time features, you'll also need WebSockets or Server-Sent Events, but design your core API first.
 
@@ -122,7 +154,7 @@ GET /v1/feed -> Tweet[]
 
 > Never rely on sensitive information like user IDs from request bodies when they should come from authentication. Always authenticate requests and derive the current user from the auth token, not from user input.
 
-## [Optional] Data Flow (~5 minutes)
+## 🔄 [Optional] Data Flow (~5 minutes)
 
 For some backend systems, especially data-processing systems, it can be helpful to describe the high level sequence of actions or processes that the system performs on the inputs to produce the desired outputs. If your system doesn't involve a long sequence of actions, skip this!
 
@@ -136,7 +168,7 @@ For a [web crawler](https://www.hellointerview.com/learn/system-design/problem-b
 4. Store data
 5. Repeat
 
-## High Level Design (~10-15 minutes)
+## 🏗️ High Level Design (~10-15 minutes)
 
 Now that you have a clear understanding of the requirements, entities, and API of your system, you can start to design the high-level architecture. This consists of drawing boxes and arrows to represent the different components of your system and how they interact. Components are basic building blocks like servers, databases, caches, etc. This can be done either in person on a whiteboard or virtually using whiteboarding software like [Excalidraw](https://excalidraw.com/). The [Key Technologies](https://www.hellointerview.com/learn/system-design/in-a-hurry/key-technologies) section will give you a good sense of the most common components you'll need to know.
 
@@ -154,7 +186,7 @@ For our simple Twitter example, here is how you might build up your design, one 
 
 ![High Level Design (~10-15 minutes)](assets/w0weLaJiB662.3kq003jbogr99.svg)
 
-## Deep Dives (~10 minutes)
+## 🔬 Deep Dives (~10 minutes)
 
 Astute readers probably noticed that our simple, high-level design of Twitter is going to be woefully inefficient when it comes to fetching users' feeds. No problem! That's exactly the sort of thing you'll iterate on in the deep dives section. Now that you have a high-level design in place you're going to use the remaining 10 or so minutes of the interview to harden your design by:
 
@@ -168,6 +200,24 @@ The degree to which you're proactive in leading deep dives is a function of your
 So for example, one of our non-functional requirements for Twitter was that our system needs to scale to >100M DAU. We could then lead a discussion oriented around horizontal scaling, the introduction of caches, and database sharding -- updating our design as we go. Another was that feeds need to be fetched with low latency. In the case of Twitter, this is actually the most interesting problem. We'd lead a discussion about fanout-on-read vs fanout-on-write and the use of caches.
 
 > A common mistake candidates make is that they try to talk over their interviewer here. There is a lot to talk about, sure, and for senior candidates being proactive is important, however, it's a balance. Make sure you give your interviewer room to ask questions and probe your design. Chances are they have specific signals they want to get from you and you're going to miss it if you're too busy talking. Plus, you'll hurt your evaluation on communication and collaboration.
+
+## 🎓 Key Takeaways
+
+- **Deliver a working system above all else.** Failing to reach a complete design is the top reason mid-level candidates fail; the framework's timed structure exists to guarantee you always have a servable solution to fall back on.
+- **Prioritize ruthlessly in Requirements.** Identify the top ~3 functional requirements and top 3–5 quantified non-functional requirements — a long, unprioritized list hurts you more than it helps.
+- **Skip upfront capacity math unless it changes the design.** Do calculations only when they directly influence a decision (e.g. whether a data structure fits on one instance or must be sharded).
+- **Start small, then layer complexity.** List a minimal set of core entities, default to REST for the API, and build a simple high-level design one endpoint at a time before hardening it in deep dives.
+- **Note complexity, don't build it early.** When you spot a cache or queue during high-level design, make a quick verbal + written callout and move on — layering complexity too early prevents you from finishing.
+- **Balance leadership with listening in deep dives.** Seniority dictates how proactively you drive, but talking over your interviewer costs you communication and collaboration signal.
+
+## 📚 Related Concepts
+
+- [API Design](../CoreConcepts/ApiDesign.md) — REST vs GraphQL vs RPC in depth, and how to design endpoints from core entities.
+- [CAP Theorem](../CoreConcepts/CapTheorem.md) — the consistency-vs-availability trade-off that anchors your non-functional requirements.
+- [Numbers to Know](../CoreConcepts/NumbersToKnow.md) — the reference figures behind quick, decision-driving capacity estimates.
+- [Data Modelling](../../CoreConcepts/DataModelling.md) — turning core entities into the persisted data model you evolve during high-level design.
+- [Key Technologies](KeyTechnologies.md) — the common building blocks (servers, databases, caches, queues) you assemble in the high-level design.
+- [Web Crawler](../ProblemBreakdowns/WebCrawler.md) — a worked example of the optional data-flow step (fetch → parse → extract → store → repeat).
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery)*

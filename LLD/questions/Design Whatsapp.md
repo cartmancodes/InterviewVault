@@ -1,35 +1,41 @@
-# Design WhatsApp
+# 📱 Design WhatsApp
 
 > **Pattern**: Real-time Updates  
 > **Difficulty**: Medium  
 > **Author**: Stefan Mai
 
+> **Summary**: WhatsApp is an encrypted messaging service that must deliver messages to available users with low latency (< 500ms) while guaranteeing deliverability to billions of users. The hard parts are keeping a bi-directional WebSocket open per client, guaranteeing delivery even when recipients are offline (a per-user "Inbox" holds undelivered messages up to 30 days), and routing a message when sender and recipients sit on different chat servers. The mature design fans messages out through a pub/sub layer (Kafka / Redis / SNS) so hundreds of chat servers stay decoupled, persists to DynamoDB with a GSI for reverse lookups, offloads media to S3 via presigned URLs, and evolves the Inbox to be per-client so multiple devices stay in sync.
+
 ---
 
-## Table of Contents
+## 📋 Table of Contents
 
-- [Understanding the Problem](#understanding-the-problem)
+- [🎯 Understanding the Problem](#understanding-the-problem)
   - [What is WhatsApp?](#what-is-whatsapp)
   - [Functional Requirements](#functional-requirements)
   - [Non-Functional Requirements](#non-functional-requirements)
-- [The Set Up](#the-set-up)
+- [🧒 Layman's Explanation](#laymans-explanation)
+- [🔑 The Set Up](#the-set-up)
   - [Planning the Approach](#planning-the-approach)
   - [Defining Core Entities](#defining-core-entities)
   - [API or System Interface](#api-or-system-interface)
-- [High-Level Design](#high-level-design)
+- [🏗️ High-Level Design](#high-level-design)
   - [1. Group Chats with Multiple Participants](#1-users-should-be-able-to-start-group-chats-with-multiple-participants-limit-100)
   - [2. Send/Receive Messages](#2-users-should-be-able-to-sendreceive-messages)
   - [3. Offline Message Delivery](#3-users-should-be-able-to-receive-messages-sent-while-they-are-not-online-up-to-30-days)
   - [4. Media Attachments](#4-users-should-be-able-to-sendreceive-media-in-their-messages)
-- [Potential Deep Dives](#potential-deep-dives)
+- [🔬 Potential Deep Dives](#potential-deep-dives)
   - [1. Handling Billions of Simultaneous Users](#1-how-can-we-handle-billions-of-simultaneous-users)
   - [2. Multiple Clients Per User](#2-what-do-we-do-to-handle-multiple-clients-for-a-given-user)
-- [What is Expected at Each Level](#what-is-expected-at-each-level)
+- [🎓 What is Expected at Each Level](#what-is-expected-at-each-level)
+- [🔄 Complete Message Flow Diagram](#complete-message-flow-diagram)
+- [📝 Summary](#summary)
+- [📚 Related Concepts](#related-concepts)
 - [References](#references)
 
 ---
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 ### What is WhatsApp?
 
@@ -92,7 +98,7 @@ Real WhatsApp serves **2B+ users**, handles **voice and video calls**, **group c
 
 ---
 
-## The Set Up
+## 🔑 The Set Up
 
 ### Planning the Approach
 
@@ -276,7 +282,7 @@ For this interview, we'll just use **WebSockets** although a simple TLS connecti
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
 ### Complete System Architecture
 
@@ -590,6 +596,8 @@ sequenceDiagram
 
 Finally, we'll need to periodically clean up the old messages in the Inbox and messages tables. We can do this with a simple **cron job** which will delete messages older than 30 days.
 
+> ⚠️ **Retention is a requirement, not just housekeeping**: One of our non-functional requirements is that messages are "stored on centralized servers no longer than necessary." The 30-day cleanup cron is what enforces that — without it, the Message and Inbox tables grow unbounded and we hold user data longer than we should.
+
 > ✅ **Progress**: We knocked out some of the durability issues of our initial solution and enabled offline delivery. Our solution still doesn't scale and we've got a lot more work to do, so let's keep moving.
 
 ---
@@ -664,7 +672,7 @@ sequenceDiagram
 
 ---
 
-## Potential Deep Dives
+## 🔬 Potential Deep Dives
 
 With the core functional requirements met, it's time to dig into the non-functional requirements via deep dives and solve some of the issues we've earmarked to this point.
 
@@ -696,9 +704,9 @@ graph TB
     CS1 -.->|How to route?| CS2
     CS1 -.->|How to route?| CS3
     
-    style CS1 fill:#ffe1e1
-    style CS2 fill:#ffe1e1
-    style CS3 fill:#ffe1e1
+    style CS1 fill:#FFB6C1
+    style CS2 fill:#FFB6C1
+    style CS3 fill:#FFB6C1
 ```
 
 **The issue is one of routing**: we're going to need to route messages to the right Chat Servers in order to deliver them.
@@ -722,9 +730,9 @@ graph LR
     CS1 -.->|No routing mechanism| CS2
     CS2 -.->|No routing mechanism| CS3
     
-    style CS1 fill:#ffe1e1
-    style CS2 fill:#ffe1e1
-    style CS3 fill:#ffe1e1
+    style CS1 fill:#FFB6C1
+    style CS2 fill:#FFB6C1
+    style CS3 fill:#FFB6C1
 ```
 
 ##### ⚠️ Bad Solution: Keep a Kafka topic per user
@@ -750,12 +758,12 @@ graph TB
     CS -.->|Unmanageable at scale| T4
     CS -.->|Unmanageable at scale| T5
     
-    style T1 fill:#ffe1e1
-    style T2 fill:#ffe1e1
-    style T3 fill:#ffe1e1
-    style T4 fill:#ffe1e1
-    style T5 fill:#ffe1e1
-    style CS fill:#ffe1e1
+    style T1 fill:#FFB6C1
+    style T2 fill:#FFB6C1
+    style T3 fill:#FFB6C1
+    style T4 fill:#FFB6C1
+    style T5 fill:#FFB6C1
+    style CS fill:#FFB6C1
 ```
 
 ##### ✅ Good Solution: Consistent Hashing of Chat Servers
@@ -977,12 +985,11 @@ sequenceDiagram
     Note over IT: Tablet inbox still has message
 ```
 
-**Best Practice:**
-We'll probably want to introduce some limits (3 clients per account) to avoid blowing up our storage and throughput.
+> 💡 **Best Practice**: We'll probably want to introduce some limits (3 clients per account) to avoid blowing up our storage and throughput. Per-client inboxes multiply every message by the client count, so an unbounded number of devices directly inflates both storage and delivery fan-out.
 
 ---
 
-## What is Expected at Each Level?
+## 🎓 What is Expected at Each Level?
 
 ```mermaid
 graph LR
@@ -1161,7 +1168,7 @@ graph LR
 
 ---
 
-## Complete Message Flow Diagram
+## 🔄 Complete Message Flow Diagram
 
 ```mermaid
 flowchart TB
@@ -1230,7 +1237,7 @@ flowchart TB
     style I fill:#e1f5ff
 ```
 
-## Summary
+## 📝 Summary
 
 This comprehensive WhatsApp system design covers:
 
@@ -1242,6 +1249,22 @@ This comprehensive WhatsApp system design covers:
 6. ✅ **Architecture Patterns**: WebSockets, pub/sub, consistent hashing, object storage
 
 The design evolves from a simple single-host solution to a distributed system capable of handling billions of users while maintaining low latency and high reliability.
+
+---
+
+## 📚 Related Concepts
+
+- [Networking](../CoreConcepts/Networking.md) — WebSockets vs. plain TLS for the bi-directional chat connection, and why an L4 load balancer is required.
+- [Redis](../CoreConcepts/Redis.md) — Redis Pub/Sub as one option for the message-routing fan-out between chat servers.
+- [Consistent Hashing](../CoreConcepts/ConsistentHashing.md) — the "good" routing solution that hashes users onto specific chat servers before we offload to pub/sub.
+- [Sharding](../CoreConcepts/Sharding.md) — spreading hundreds of chat servers and DynamoDB tables to serve billions of connections.
+- [Data Modelling](../CoreConcepts/DataModelling.md) — the Chat / ChatParticipant / Message / Inbox schema and the GSI for reverse chat lookups.
+- [Real-Time Updates](../SystemDesign/Patterns/Real-TimeUpdates.md) — the broader pattern behind persistent connections, pub/sub scaling, and message acks.
+- [Handling Large Blobs](../SystemDesign/Patterns/HandlingLargeBlobs.md) — offloading media to S3 via presigned URLs instead of the chat protocol.
+- [Kafka](../SystemDesign/DeepDives/Kafka.md) — a message-queue option for the pub/sub routing layer at scale.
+- [DynamoDB](../SystemDesign/DeepDives/Dynamodb.md) — the key/value store chosen for chat metadata, participants, messages, and inboxes.
+- [ZooKeeper](../SystemDesign/DeepDives/Zookeeper.md) — the coordination service used to track user→server mapping in the consistent-hashing approach.
+- [WhatsApp (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/Whatsapp.md) — the source breakdown this doc expands on.
 
 ---
 

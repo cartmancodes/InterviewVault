@@ -184,8 +184,8 @@ Key ideas:
 sequenceDiagram
     participant C as Client
     participant M as Media Service
-    participant S3 as Object Storage (S3)
-    participant Q as Queue (SQS/Kafka)
+    participant S3 as Object Storage S3
+    participant Q as Queue SQS/Kafka
     participant W as Encoding Workers
     participant P as Post Service
 
@@ -255,8 +255,8 @@ When a user posts, enqueue a fan-out job. For each follower, prepend `(postId, c
 sequenceDiagram
     participant C as Client
     participant F as Feed Service
-    participant R as Redis (precomputed feed:{userId})
-    participant P as Posts DB (celebrity followees)
+    participant R as Redis precomputed feed list
+    participant P as Posts DB celebrity followees
 
     C->>F: GET /feed?cursor=...
     F->>R: LRANGE feed:{userId} (normal-followee posts)
@@ -272,8 +272,8 @@ At write time the two account classes route differently — normal accounts fan 
 ```mermaid
 graph LR
     Post[New Post] --> Router{high_fanout?<br/>dynamic threshold}
-    Router -->|No: normal account| Fanout[Fan-out on write<br/>prepend to each<br/>follower feed list]
-    Router -->|Yes: celebrity| Skip[No fan-out<br/>pulled on read instead]
+    Router -->|"No: normal account"| Fanout[Fan-out on write<br/>prepend to each<br/>follower feed list]
+    Router -->|"Yes: celebrity"| Skip[No fan-out<br/>pulled on read instead]
     Fanout --> Lists[(Per-follower<br/>Redis feed lists)]
 
     style Fanout fill:#90EE90

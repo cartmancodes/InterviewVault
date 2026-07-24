@@ -1,31 +1,34 @@
-# Design Tinder
+# 🔥 Design Tinder
 
 > **Pattern**: Geo-matching / Feed
 > **Difficulty**: Medium
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/tinder)
 
+> **Summary**: Tinder is a location-aware dating app where users swipe yes/no on a proximity-ranked stack of profiles and get notified the instant two people swipe right on each other. The hard parts sit at the intersection of **strong consistency** (a race must never swallow a mutual match), **freshness** (a swiped profile must never reappear), and **low-latency geo search** at a ~23K swipes/sec firehose. The mature design leans on a Redis + Lua script for single-round-trip atomic match detection, per-user Bloom filters for swipe dedup, an Elasticsearch `geo_point` index feeding precomputed Redis decks, and Kafka-decoupled notification fanout.
+
 ---
 
-## Table of Contents
+## 📋 Table of Contents
 
-1. [Understanding the Problem](#understanding-the-problem)
+1. [Understanding the Problem](#-understanding-the-problem)
    - [Functional Requirements](#functional-requirements)
    - [Non-Functional Requirements](#non-functional-requirements)
-2. [Core Entities](#core-entities)
-3. [API Design](#api-design)
-4. [High-Level Design](#high-level-design)
-5. [Deep Dives](#deep-dives)
+2. [Layman's Explanation](#-laymans-explanation)
+3. [Core Entities](#-core-entities)
+4. [API Design](#-api-design)
+5. [High-Level Design](#-high-level-design)
+6. [Deep Dives](#-deep-dives)
    1. [Atomic Mutual-Match Detection](#1-atomic-mutual-match-detection)
    2. [Swipe Deduplication (Don't Re-Show Profiles)](#2-swipe-deduplication-dont-re-show-profiles)
    3. [Geo-Based Feed Generation](#3-geo-based-feed-generation)
    4. [Match Notification Fanout](#4-match-notification-fanout)
-6. [Scaling Journey: 0 to Infinity](#scaling-journey-0--)
+7. [Scaling Journey: 0 to Infinity](#-scaling-journey-0-to-infinity)
    - [Stage 1: 0–100 Users (MVP)](#stage-1-0100-users-mvp)
    - [Stage 2: 100–1,000 Users](#stage-2-1001000-users)
    - [Stage 3: 1K–100K Users](#stage-3-1k100k-users)
    - [Stage 4: 100K–10M Users](#stage-4-100k10m-users)
    - [Stage 5: 10M+ Users](#stage-5-10m-users)
-7. [Insider Tips and Tricks](#insider-tips-and-tricks)
+8. [Insider Tips and Tricks](#-insider-tips-and-tricks)
    1. [The Swipe Deck Is Precomputed and Bounded](#1-the-swipe-deck-is-precomputed-and-bounded)
    2. [Active-Users-First Dramatically Improves Match Rates](#2-active-users-first-dramatically-improves-match-rates)
    3. [Mutual Match Detection Without Revealing Unmatched Swipes](#3-mutual-match-detection-without-revealing-unmatched-swipes)
@@ -35,11 +38,12 @@
    7. [ELO-Style Desirability Scoring](#7-elo-style-desirability-scoring)
    8. [Swipe Rate Limiting Serves Two Purposes](#8-swipe-rate-limiting-serves-two-purposes)
    9. [The Boost Feature Creates a Thundering Herd on Deck Refresh](#9-the-boost-feature-creates-a-thundering-herd-on-deck-refresh)
-8. [Expected Depth by Level](#expected-depth-by-level)
+9. [Expected Depth by Level](#-expected-depth-by-level)
+10. [Related Concepts](#-related-concepts)
 
 ---
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 Tinder is a location-aware dating application where users view a vertical stack of candidate profiles, swipe right (interested) or left (not interested), and are notified when two users have mutually swiped right on each other. The interesting problems sit at the intersection of **consistency** (never miss a match), **freshness** (never re-show a swiped profile), and **low-latency geo search** at massive write volume.
 
@@ -95,7 +99,7 @@ A real matchmaker is polite and one-at-a-time. Real Tinder uses ML ranking, Elo-
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 | Entity | Purpose | Key Fields |
 |---|---|---|
@@ -106,9 +110,48 @@ A real matchmaker is polite and one-at-a-time. Real Tinder uses ML ranking, Elo-
 
 A **swipe is append-only**; a **match is derived** from a pair of reciprocal YES swipes. The ordering `a < b` on `(user_a_id, user_b_id)` matters — canonicalization lets you dedupe and partition by the pair rather than the swiper.
 
+```mermaid
+erDiagram
+    USER ||--|| PREFERENCES : "sets"
+    USER ||--o{ SWIPE : "makes (swiper)"
+    USER ||--o{ SWIPE : "receives (target)"
+    USER ||--o{ MATCH : "participates in"
+
+    USER {
+        string user_id PK
+        string name
+        date dob
+        string gender
+        float lat_lng
+        string geohash
+        timestamp last_active_at
+    }
+    PREFERENCES {
+        string user_id FK
+        int age_min
+        int age_max
+        int max_distance_km
+        string interested_in
+        string bio
+        string interests
+    }
+    SWIPE {
+        string swiper_id FK
+        string target_id FK
+        string decision "YES or NO"
+        timestamp created_at
+    }
+    MATCH {
+        string match_id PK
+        string user_a_id FK "a lt b"
+        string user_b_id FK "a lt b"
+        timestamp created_at
+    }
+```
+
 ---
 
-## API Design
+## 🔌 API Design
 
 All endpoints assume a signed JWT in `Authorization: Bearer <token>` — the server extracts the `user_id` from it rather than trusting a request-body field.
 
@@ -140,29 +183,52 @@ GET /v1/matches?cursor=...
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
 At a starting architecture:
 
-```
- [Mobile]
-    |
-[API Gateway / Load Balancer]
-    |
-    +---> Profile Service  --->  Profile DB (Postgres)
-    |                             + search index (Elasticsearch)
-    |
-    +---> Feed Service     --->  Feed Cache (Redis, per-user decks)
-    |                             Geo Index (Elasticsearch geo_point / PostGIS)
-    |
-    +---> Swipe Service    --->  Swipe Store (Cassandra)
-                                 +  Match Detector (Redis + Lua)
-                                       |
-                                       v
-                                 Kafka "matches" topic
-                                       |
-                                       v
-                           Notification Service (APNS / FCM)
+```mermaid
+graph TB
+    M[Mobile]
+    GW[API Gateway /<br/>Load Balancer]
+
+    subgraph "Services"
+        PS[Profile Service<br/>read-heavy]
+        FS[Feed Service<br/>latency-sensitive]
+        SS[Swipe Service<br/>write-heavy ~2B/day]
+        NS[Notification Service<br/>APNS / FCM]
+    end
+
+    subgraph "Stores"
+        PDB[(Profile DB<br/>Postgres)]
+        ES[(Search Index<br/>Elasticsearch<br/>geo_point)]
+        DECK[(Feed Cache<br/>Redis per-user decks)]
+        CASS[(Swipe Store<br/>Cassandra)]
+        MD[(Match Detector<br/>Redis + Lua)]
+        KAFKA[[Kafka<br/>matches topic]]
+    end
+
+    M --> GW
+    GW --> PS
+    GW --> FS
+    GW --> SS
+
+    PS --> PDB
+    PS --> ES
+    FS --> DECK
+    FS --> ES
+    SS --> CASS
+    SS --> MD
+    MD -->|match confirmed| KAFKA
+    KAFKA --> NS
+
+    style DECK fill:#e1f5ff
+    style CASS fill:#e1f5ff
+    style PDB fill:#e1f5ff
+    style ES fill:#e1f5ff
+    style MD fill:#90EE90
+    style KAFKA fill:#FFE4B5
+    style NS fill:#f3e5f5
 ```
 
 Why split the services and stores:
@@ -174,7 +240,7 @@ Why split the services and stores:
 
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. Atomic Mutual-Match Detection
 
@@ -204,6 +270,29 @@ return 0
 ```
 
 Lua scripts execute atomically on a single Redis shard — no command from any other client interleaves between the `HSET` and the `HGET`. Consistent hashing on the canonical pair key ensures both swipe directions always land on the same shard. The round trip is sub-millisecond. When the script returns 1, the swipe handler publishes to the Kafka `matches` topic.
+
+```mermaid
+sequenceDiagram
+    participant A as User A App
+    participant SS as Swipe Service
+    participant R as Redis (pair shard)
+    participant C as Cassandra (Swipe Store)
+    participant K as Kafka (matches)
+
+    A->>SS: POST /swipe { target: B, YES }
+    SS->>R: EVAL Lua: HSET swipes:A:B, HGET other
+    Note over R: HSET + HGET run atomically<br/>on the pair's single shard
+    R-->>SS: 0 (B has not swiped yet)
+    SS-)C: async durable write of swipe
+    SS-->>A: { matched: false }
+
+    Note over A,K: ...later, B swipes YES on A...
+    R-->>SS: 1 (reciprocal YES found — match!)
+    SS->>K: publish match event { A, B, match_id }
+    SS-->>A: { matched: true, match_id }
+```
+
+> ⚠️ **Redis is the match arbiter, not the system of record.** The durable Cassandra write can lag the Redis decision without correctness risk, because the match decision is made in Redis. If a Redis node dies before its Cassandra write lands, the pair's state is rebuilt by replaying recent swipes for that pair from Cassandra — a bounded scan, since pair keys are TTL'd out once both users have swiped (or after ~90 days of inactivity).
 
 **Durability and recovery.** Redis is not the system of record. Every swipe is also durably written to Cassandra (the Swipe Store) — this write can be async and slightly behind the Redis write without correctness risk, because the match decision itself is made in Redis. If a Redis node fails before its Cassandra write completes, the pair's match state can be rebuilt from Cassandra by replaying recent swipes for that pair. The rebuild is bounded because pair keys are TTL'd out of Redis once both users have swiped (or after a fixed window, e.g., 90 days of no activity).
 
@@ -245,6 +334,46 @@ The feed needs candidates within the user's `max_distance_km`, matching their ag
 
 **Why both?** Precomputed decks make the p99 feed call ~5ms — you're just doing a Redis sorted-set pop plus a batch key lookup in the profile cache. Elasticsearch handles the tail cases: new users whose decks haven't been built yet, users who just changed their location or preferences (deck is invalidated on profile edit), and deck underruns. The two-path architecture lets you tune each independently: Elasticsearch index freshness is decoupled from deck TTL.
 
+```mermaid
+graph TB
+    FEED[GET /feed]
+    FS[Feed Service]
+    DECK[(Redis deck:user_id<br/>sorted set ~500 IDs)]
+    BLOOM[(Redis bloom:user_id<br/>swipe dedup)]
+    PC[(Profile Cache<br/>hydrate top N)]
+
+    subgraph "Warm path (~5ms p99)"
+        FS -->|"pop top N"| DECK
+        DECK -->|"filter swiped"| BLOOM
+        BLOOM --> PC
+    end
+
+    subgraph "Deck builder (async)"
+        DB[Deck-Builder Job]
+        ES[(Elasticsearch<br/>geo_point + filters)]
+        DB -->|"geo_distance + age/gender<br/>+ recency score"| ES
+        ES -->|"rank ~500 candidates"| DECK
+    end
+
+    FEED --> FS
+    DECK -.->|"below low-water mark"| DB
+
+    subgraph "Index freshness (CDC)"
+        PGE[(Postgres profile edit)]
+        DBZ[Debezium]
+        KFK[[Kafka]]
+        PGE --> DBZ --> KFK -->|"1-2s"| ES
+    end
+
+    style DECK fill:#e1f5ff
+    style BLOOM fill:#e1f5ff
+    style PC fill:#e1f5ff
+    style ES fill:#e1f5ff
+    style PGE fill:#e1f5ff
+    style KFK fill:#FFE4B5
+    style FS fill:#90EE90
+```
+
 **Ranking signals.** The deck-builder scores candidates on: (1) inverse distance — closer users rank higher; (2) activity recency — users active in the last 24 hours rank substantially higher than inactive users; (3) preference match quality — a user whose stated preferences closely match the querying user's profile ranks higher; (4) ELO-style desirability score (see Insider Tips). The exact weighting is tunable and can be A/B tested without changing the architecture.
 
 ---
@@ -258,15 +387,54 @@ When Redis Lua confirms a mutual match, the swipe handler publishes a match even
 3. **Write to each user's matches inbox** — a Redis sorted set `matches:{user_id}` scored by match timestamp, so the matches tab loads in a single `ZREVRANGE` call without hitting Postgres.
 4. **In-app socket notification** (optional, for users currently in the app) — the Notification Service can also push over a WebSocket or SSE connection so the match overlay appears instantly rather than waiting for an APNS/FCM round trip.
 
+```mermaid
+sequenceDiagram
+    participant SS as Swipe Service
+    participant K as Kafka (matches)
+    participant NS as Notification Service
+    participant PG as Postgres (Match)
+    participant RI as Redis inbox
+    participant P as APNS / FCM
+
+    SS->>K: match event { A, B, match_id }
+    Note over SS: swipe already returned<br/>matched:true to client
+    K->>NS: consume (idempotent on match_id)
+    NS->>PG: INSERT Match ON CONFLICT DO NOTHING
+    NS->>RI: ZADD matches:A / matches:B (ts-scored)
+    par Fan out to both users
+        NS->>P: push to A (B's card)
+        NS->>P: push to B (A's card)
+    end
+    Note over NS,P: crash after PG write? Kafka redelivers;<br/>ON CONFLICT dedups, pushes fire on retry
+```
+
 **Decoupling via Kafka is load-bearing here.** The swipe hot path returns `matched: true` to the client as soon as the Lua script confirms the match — before any of the above steps complete. The client shows the overlay immediately. The Kafka consumer handles side effects asynchronously. This means a network partition between the Kafka broker and APNS will delay the push notification but will never stall the swipe response.
 
 **Ordering guarantees.** Because both users' notifications are published from a single Kafka message, they are always processed together by the same consumer instance. There is no risk of user A getting the match notification while user B's write to the Match table is still pending — the consumer writes the Match row first, then notifies both. If the consumer crashes after the Postgres write but before the pushes, Kafka redelivers and the `ON CONFLICT DO NOTHING` on the Match row prevents a duplicate; the push notifications fire on the retry. APNS/FCM deduplication on `apns-collapse-id` / `collapse_key` prevents the user from seeing two notifications.
 
 ---
 
-## Scaling Journey: 0 to infinity
+## 📈 Scaling Journey: 0 to Infinity
 
 Each stage lists **Goal**, **Architecture**, **What you skip**, and the **Failure mode** that forces the next stage.
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0–100<br/>Monolith + Postgres<br/>SERIALIZABLE match"]
+    S2["Stage 2<br/>100–1K<br/>Redis + worker<br/>PostGIS + job queue"]
+    S3["Stage 3<br/>1K–100K<br/>Split services<br/>Cassandra + ES + Kafka"]
+    S4["Stage 4<br/>100K–10M<br/>Redis+Lua match<br/>CDC + rate limits"]
+    S5["Stage 5<br/>10M+<br/>Regional Redis<br/>hot-entity + ML decks"]
+
+    S1 -->|"feed range scan +<br/>inline push stalls"| S2
+    S2 -->|"Postgres IO ceiling<br/>~10K users"| S3
+    S3 -->|"LWT latency + ES sync lag<br/>+ hot partitions"| S4
+    S4 -->|"cross-region RTT +<br/>melting celeb shards"| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0–100 Users (MVP)
 
@@ -382,13 +550,15 @@ Each stage lists **Goal**, **Architecture**, **What you skip**, and the **Failur
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 ### 1. The Swipe Deck Is Precomputed and Bounded
 
 On every session start, a background job generates a deck of approximately 100 candidate profiles for the user and stores it in Redis. When the user swipes, they drain the deck; when the deck falls below a low-water mark (typically 20–30 remaining candidates), the background job asynchronously refills it. This architecture decouples two operations with wildly different latency profiles: swipe UX (Redis pop + profile hydration, ~5ms) and candidate selection (Elasticsearch geo-filter + ranking, ~150–200ms). If deck generation happened synchronously on the swipe path, every swipe would feel slow — users would notice a 200ms stutter after each tap. By precomputing and buffering, the feed feels instant to the user while the expensive query runs invisibly in the background. The deck size cap (100–200 candidates) also bounds memory usage per user in Redis.
 
 ### 2. Active-Users-First Dramatically Improves Match Rates
+
+> 💡 **A match needs *mutual* interest, so a deck of inactive users yields zero matches** — the active user can right-swipe them all and none swipe back. Surfacing users active in the last 24h first makes every right-swipe a realistic match candidate. `last_active_at` is one of the highest-leverage ranking signals in the entire system.
 
 During deck generation, profiles of users who were active within the last 24 hours receive a strong ranking boost over profiles of users who haven't opened the app in weeks or months. This is a business-critical optimization for a non-obvious reason: a match requires **mutual** interest. If the deck is full of inactive users, the active user can right-swipe all of them and receive zero matches — those users are not opening the app to swipe back. This directly destroys the core value proposition. By surfacing active users first, every right-swipe has a realistic chance of producing a match, which drives engagement, which drives retention, which drives subscription conversion. The recency signal (`last_active_at`) is one of the highest-leverage ranking features in the entire system.
 
@@ -425,6 +595,8 @@ Limiting free-tier users to approximately 100 right-swipes per day serves two di
 - **Bot prevention**: Bots and spam accounts auto-swipe right on everyone to maximize matches for phishing or romance scams. A rate limit at the Redis layer (per `user_id`, daily rolling window using `INCR swipes:{user_id}:{date}` with a 24-hour TTL) caps the blast radius of a compromised or bot account.
 - **Monetization**: Tinder Gold and Tinder Platinum remove the swipe limit. The rate limit is a deliberately engineered constraint to create upgrade pressure, not an organic system limitation.
 
+> ⚠️ **Check-then-act ordering is load-bearing.** The rate-limit check must happen **before** the swipe is written — not after. Write-first-then-check lets a client that retries on timeout circumvent the limit (each retry fires the write before the check sees the previous write committed). Correct order: check Redis counter → if under limit, `INCR` and proceed with the swipe write → if over limit, return 429.
+
 The architectural requirement is that the rate limit check must happen **before** the swipe is written to the database — not after. If you write first and check after, a client that retries on timeout will circumvent the limit (each retry fires the write before the check sees the previous write committed). The correct order is: check Redis counter → if under limit, increment counter and proceed with swipe write → if over limit, return 429. This is a subtle but interview-worthy point about check-then-act atomicity.
 
 ### 9. The Boost Feature Creates a Thundering Herd on Deck Refresh
@@ -435,10 +607,32 @@ The correct solution is identical to the social feed fan-out pattern: on Boost a
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Level | Breadth / Depth Split | What "Good" Looks Like on This Problem |
 |---|---|---|
 | **Mid (E4)** | 80 / 20 | Cleanly define the API. Draw a high-level design covering Profile, Feed, Swipe, Match. Identify that geo-filtering and swipe dedup need thought. Knows what a geohash or a Bloom filter is and can name-drop Elasticsearch / Redis without deep mechanics. Does not need to go deep on Cassandra internals or Lua scripting. |
 | **Senior (E5)** | 60 / 40 | Sketches the basic design quickly and pivots into depth. Spends most of the interview on (a) atomic match detection, (b) feed freshness vs. latency trade-offs, (c) how the Elasticsearch index stays in sync. Proactively raises staleness, hot partitions, and the Redis-as-cache-vs-source-of-truth question. Can sketch a Lua script and a Bloom filter API. Mentions precomputed decks, active-user ranking, and the privacy guarantee around unmatched swipes. |
 | **Staff+ (L6+)** | 40 / 60 | Breezes through requirements and high-level in the first 10 minutes, then treats the interviewer as a peer. Drives the deep dives — hot-entity isolation for celebrities, regional sharding for match detection, CDC pipeline correctness under Kafka rebalance, Bloom filter resizing strategy, graceful degradation when ES is down. Argues trade-offs with specifics: "we'd take 1% false-positive rate on the Bloom to keep it under 128KB per user; that's ~200K users per GB and we can fit the active cohort in a single Redis cluster." Raises Boost fan-out, Elo feedback loops, GPS fuzzing, H3 vs. geohash trade-offs, and rate-limit check-then-act ordering without being prompted. |
+
+---
+
+## 📚 Related Concepts
+
+- [Redis](../CoreConcepts/Redis.md) — the Lua-scripted atomic match detector, per-user Bloom filters, precomputed decks, and the `INCR` swipe rate limiter.
+- [Caching](../CoreConcepts/Caching.md) — precomputed decks and profile-row read-through caching on the feed hot path.
+- [Consistent Hashing](../CoreConcepts/ConsistentHashing.md) — routing both swipe directions of a canonical pair key to the same Redis shard.
+- [Sharding](../CoreConcepts/Sharding.md) — Cassandra swipe partitioning by canonical pair and regional Redis clusters for match detection.
+- [Data Indexing](../CoreConcepts/DataIndexing.md) — why lat/lng B-tree range scans degenerate and geo indexes are needed.
+- [Data Modelling](../CoreConcepts/DataModelling.md) — the append-only Swipe and derived-Match schema with pair canonicalization.
+- [Networking](../CoreConcepts/Networking.md) — WebSocket/SSE in-app match push vs APNS/FCM.
+- [Proximity Search](../SystemDesign/DeepDives/ProximitySearch.md) — geohash vs S2 vs H3 for radius queries in depth.
+- [Elasticsearch](../SystemDesign/DeepDives/Elasticsearch.md) — the `geo_point` candidate index behind deck generation.
+- [Cassandra](../SystemDesign/DeepDives/Cassandra.md) — the write-optimized durable Swipe Store and LWT trade-offs.
+- [Kafka](../SystemDesign/DeepDives/Kafka.md) — decoupling match notification fanout and Boost fan-out from the hot path.
+- [Redis (deep dive)](../SystemDesign/DeepDives/Redis.md) — sorted sets for decks and inboxes, Lua atomicity, Bloom filter modules.
+- [Dealing With Contention](../SystemDesign/Patterns/DealingWithContention.md) — the lost-update race in mutual-match detection.
+- [Real-Time Updates](../SystemDesign/Patterns/Real-TimeUpdates.md) — when a match event warrants real-time push vs batch precomputation.
+- [Scaling Reads](../SystemDesign/Patterns/ScalingReads.md) — precomputed decks and read replicas for the feed path.
+- [Scaling Writes](../SystemDesign/Patterns/ScalingWrites.md) — absorbing the ~2B/day swipe firehose.
+- [Tinder (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/Tinder.md) — the source breakdown this doc expands on.

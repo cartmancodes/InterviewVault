@@ -1,6 +1,30 @@
-# Key Technologies
+# 🧰 Key Technologies
 
-The key technologies you need to know for system design interviews, built by FAANG managers and staff engineers.
+> **Overview**: System design is the art of assembling the most effective building blocks to solve a problem. This guide walks through the key categories of technologies that cover roughly 90% of system design problems — core databases, blob storage, search, gateways, load balancers, queues, streams, locks, caches, and CDNs. You don't need to master every option in each category, but you should have at least one you can reach for confidently.
+
+## 📋 Table of Contents
+
+- [🧒 Layman's Explanation](#laymans-explanation)
+- [🗄️ Core Database](#core-database)
+- [📦 Blob Storage](#blob-storage)
+- [🔎 Search Optimized Database](#search-optimized-database)
+- [🚪 API Gateway](#api-gateway)
+- [⚖️ Load Balancer](#load-balancer)
+- [📬 Queue](#queue)
+- [🌊 Streams / Event Sourcing](#streams--event-sourcing)
+- [🔒 Distributed Lock](#distributed-lock)
+- [⚡ Distributed Cache](#distributed-cache)
+- [🌍 CDN](#cdn)
+- [🎓 Key Takeaways](#key-takeaways)
+- [📚 Related Concepts](#related-concepts)
+
+---
+
+## 🧒 Layman's Explanation
+
+Designing a system is like outfitting a professional kitchen before a dinner rush. You don't need to own every gadget on the market, but you'd better have at least one of each essential type: somewhere to keep your ingredients (a **core database**), a big walk-in freezer for the bulky stuff like whole sides of beef (**blob storage**), a labeled recipe card box so you can find any dish instantly (a **search index**), a host at the door directing guests to the right table (an **API gateway**), extra cooks so no single station gets swamped (a **load balancer** spreading work across machines), a ticket rail where orders line up when the rush hits (a **queue**), a running order-history log you can replay to reconstruct the night (a **stream / event sourcing**), a "reserved" sign so two waiters don't sell the same table (a **distributed lock**), a warming tray of popular dishes ready to serve instantly (a **cache**), and satellite pickup counters around the city so nobody drives downtown for takeout (a **CDN**).
+
+An interviewer mostly cares that you have *a* tool for each job — the danger isn't picking the "wrong" freezer, it's not knowing you need a freezer at all.
 
 System design involves assembling the most effective building blocks to solve a problem, so it's crucial to have a good understanding of the most commonly used building blocks. Most interviewers aren't going to care whether you know about a particular (e.g.) queueing solution so long as you have one you can use. However, if you don't know about **any** queueing solutions, you're going to have a hard time designing a system that requires one!
 
@@ -12,7 +36,7 @@ In this section, we're going to walk through the key categories of technologies 
 
 > Keep in mind that the amount of depth your interviewer is likely to probe is proportional to the level you're interviewing at . A mid-level candidate who can roughly describe ElasticSearch as a search index is likely to be fine, but a senior candidate who can't describe the inverted index or reason about its scaling is likely to be a yellow flag. In either case, focus on breadth before depth!
 
-## Core Database
+## 🗄️ Core Database
 
 Almost all system design problems will require you to store some data and you're most likely going to be storing it in a database (or [Blob Storage](#blob-storage)). While there are many different types of databases, the most common are relational databases (e.g. Postgres) and NoSQL databases (e.g. DynamoDB) - we recommend you pick _one_ of these for your interview. If you are taking predominantly product design interviews, we recommend you pick a relational database. If you are taking predominantly infrastructure design interviews, we recommend you pick a NoSQL database.
 
@@ -53,7 +77,7 @@ NoSQL databases are strong candidates for situations where:
 
 The most common NoSQL databases are [DynamoDB](https://www.hellointerview.com/learn/system-design/deep-dives/dynamodb), [Cassandra](https://www.hellointerview.com/learn/system-design/deep-dives/cassandra), and [MongoDB](https://www.mongodb.com/). DynamoDB is one of our favorites due to the breadth of features and how widely accepted it is, you can read our [DynamoDB deep-dive](https://www.hellointerview.com/learn/system-design/deep-dives/dynamodb) to learn more. Cassandra is a good choice for write-heavy workloads due to its append-only storage model, but comes with some tradeoffs in functionality. We have a [Cassandra deep dive](https://www.hellointerview.com/learn/system-design/deep-dives/cassandra) to help you dig in.
 
-## Blob Storage
+## 📦 Blob Storage
 
 Sometimes you'll need to store large, unstructured blobs of data. This could be images, videos, or other files. Storing these large blobs in a traditional database is both expensive and inefficient and should be avoided when possible. Instead, you should use a blob storage service like [Amazon S3](https://aws.amazon.com/pm/serv-s3/) or [Google Cloud Storage](https://cloud.google.com/storage). These platforms are specifically designed for handling large blobs of data, and are much more cost-effective than a traditional database.
 
@@ -83,6 +107,33 @@ To download:
 - The client requests a specific file from the server and are returned a presigned URL.
 - The client uses the presigned URL to download the file via the CDN, which proxies the request to the underlying blob storage.
 
+The two flows unfold over time like this:
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Server
+    participant DB as Database
+    participant B as Blob Storage
+    participant CDN as CDN
+
+    Note over C,B: Upload
+    C->>S: Request presigned URL
+    S->>DB: Record file entry
+    S-->>C: Return presigned URL
+    C->>B: Upload file to presigned URL
+    B->>S: Notify upload complete
+    S->>DB: Update status
+
+    Note over C,CDN: Download
+    C->>S: Request specific file
+    S-->>C: Return presigned URL
+    C->>CDN: Download via presigned URL
+    CDN->>B: Proxy request to blob storage
+    B-->>CDN: Return blob
+    CDN-->>C: Deliver file
+```
+
 1. **Durability**: Blob storage services are designed to be incredibly durable. They use techniques like replication and erasure coding to ensure that your data is safe even if a disk or server fails.
 2. **Scalability**: Hosted blob storage solutions like AWS S3 can be considered infinitely scalable. They can store an unlimited amount of data and can handle an unlimited number of requests (obviously within the limits of your account). As a result, in your interview, you don't need to explicitly consider the scalability of blob storage services -- consider this as a given.
 3. **Cost**: Blob storage services are designed to be cost effective. They are much cheaper than storing large blobs of data in a traditional database. For example, AWS S3 charges $0.023 per GB per month for the first 50 TB of storage. This is much cheaper than storing the same data in a database like DynamoDB, which charges $1.25 per GB per month for the first 10 TB of storage.
@@ -94,7 +145,7 @@ The most popular blob storage services are [Amazon S3](https://aws.amazon.com/s3
 
 If you don't have experience with them, opt for S3 as it's the most popular and widely understood by interviewers - even non-S3 platforms often have an S3-compatible API.
 
-## Search Optimized Database
+## 🔎 Search Optimized Database
 
 Sometimes you're tasked with implementing full-text search as a feature of your design. Full-text search is the ability to search through a large amount of text data and find relevant results. This is different from a traditional database query, which is usually based on exact matches or ranges. Without a search optimized database, you would need to run a query that looks something like this:
 
@@ -128,7 +179,7 @@ The clear leader in this space is [Elasticsearch](https://www.elastic.co/elastic
 
 Other options for search optimized databases include using full-text search capabilities of your database. Postgres has [GIN indexes which support full-text search](https://www.hellointerview.com/learn/system-design/deep-dives/postgres#beyond-basic-indexes) and Redis has a (in my opinion, quite immature and bad) [full-text search capability](https://redis.io/docs/latest/develop/interact/search-and-query/). Using your existing database can be a good idea to reduce the footprint of your design, but knowing about these features are essential!
 
-## API Gateway
+## 🚪 API Gateway
 
 Especially in a microservice architecture, an API gateway sits in front of your system and is responsible for routing incoming requests to the appropriate backend service. For example, if the system receives a request to `GET /users/123`, the API gateway would route that request to the `users` service and return the response to the client. The gateway is also typically responsible for handling cross-cutting concerns like authentication, rate limiting, and logging.
 
@@ -140,7 +191,7 @@ You're free to read more in our [API Gateway deep dive](https://www.hellointervi
 
 The most common API gateways are [AWS API Gateway](https://aws.amazon.com/api-gateway/), [Kong](https://konghq.com/kong/), and [Apigee](https://cloud.google.com/apigee). It's also not uncommon to have an [nginx](https://nginx.org/) or [Apache webserver](https://httpd.apache.org/) as your API gateway (in the early days of Amazon, a gigantic fleet of Apache webservers served this purpose).
 
-## Load Balancer
+## ⚖️ Load Balancer
 
 Most system design problems will require you to design a system that can handle a large amount of traffic. When you have a large amount of traffic, you will need to distribute that traffic across multiple machines (called horizontal scaling) to avoid overloading any single machine or creating a hotspot. This is where a load balancer comes in. For the purposes of an interview, you can assume that your load balancer is a black box that will distribute work across your system.
 
@@ -154,7 +205,7 @@ You can somewhat shortcut this decision with a simple rule of thumb: if you have
 
 The most common load balancers are [AWS Elastic Load Balancer](https://aws.amazon.com/elasticloadbalancing/) (a hosted offering from AWS), [NGINX](https://www.nginx.com/) (an open-source webserver frequently used as a load balancer), and [HAProxy](https://www.haproxy.org/) (a popular open-source load balancer). Note that for problems with extremely high traffic, specialized hardware load balancers will outperform software load balancers you'd host yourself - you'll quickly be pulled into the crazy world of network engineering.
 
-## Queue
+## 📬 Queue
 
 Queues serve as buffers for bursty traffic or as a means of distributing work across a system. A compute resource sends messages to a queue and forgets about them. On the other end, a pool of workers (also compute resources) processes the messages at their own pace. Messages can be anything from a simple string to a complex object.
 
@@ -177,7 +228,7 @@ Let's look at a couple common use cases for queues:
 
 The most common queueing technologies are [Kafka](https://kafka.apache.org/) and [SQS](https://aws.amazon.com/sqs/). Kafka is a distributed streaming platform that can be used as a queue ([we have a deep-dive which goes into significant detail about how to use it](https://www.hellointerview.com/learn/system-design/deep-dives/kafka)), while SQS is a fully managed queue service provided by AWS.
 
-## Streams / Event Sourcing
+## 🌊 Streams / Event Sourcing
 
 Sometimes you'll be asked a question that requires either processing vast amounts of data in real-time or supporting complex processing scenarios, such as event sourcing.
 
@@ -196,7 +247,7 @@ In either case, you'll likely want to use a stream. Unlike message queues, strea
 
 The most common streaming technologies are [Kafka](https://kafka.apache.org/), [Flink](https://flink.apache.org/), and [Kinesis](https://aws.amazon.com/kinesis/). Our [deep-dive on Kafka](https://www.hellointerview.com/learn/system-design/deep-dives/kafka) goes into significant detail about how it can be used in system design questions.
 
-## Distributed Lock
+## 🔒 Distributed Lock
 
 When you're dealing with online systems like Ticketmaster, you might need a way to lock a resource - like a concert ticket - for a short time (~10 minutes in this case). This is so while one user is in the middle of buying a ticket, no one else can grab it. Traditional databases with ACID properties use transaction locks to keep data consistent, which is great for ensuring that while one user is updating a record, no one else can update it, but they're not designed for longer-term locking. This is where distributed locks come in handy.
 
@@ -216,7 +267,7 @@ Here are some common examples of when to use a distributed lock in a system desi
 3. **Locking Granularity**: Distributed locks can be used to lock a single resource or a group of resources. For example, you might want to lock a single ticket in a ticketing system or you might want to lock a group of tickets in a section of a stadium.
 4. **Deadlocks**: Deadlocks can occur when two or more processes are waiting for each other to release a lock. Think about a situation where two processes are trying to acquire two locks at the same time. One process acquires lock A and then tries to acquire lock B, while the other process acquires lock B and then tries to acquire lock A. This can lead to a situation where both processes are waiting for each other to release a lock, causing a deadlock. You should be prepared to discuss how to prevent this - a common mistake is to have locks pulled from far-flung pieces of infrastructure or your code, this makes it hard to recognize and prevent deadlocks.
 
-## Distributed Cache
+## ⚡ Distributed Cache
 
 In most system design interviews you'll be tasked with both scaling your system and lowering system latency. One common way to do this is to use a distributed cache. A cache is just a server, or cluster of servers, that stores data in memory. They're great for storing data that's expensive to compute or retrieve from a database.
 
@@ -240,7 +291,7 @@ You'll want to use a cache to:
 
 The two most common in-memory caches are [Redis](https://www.hellointerview.com/learn/system-design/deep-dives/redis) and [Memcached](https://memcached.org/). Redis is a key-value store that supports many different data structures, including strings, hashes, lists, sets, sorted sets, bitmaps, and hyperloglogs. Memcached is a simple key-value store that supports strings and binary objects.
 
-## CDN
+## 🌍 CDN
 
 Modern systems often serve users globally, which makes it challenging to deliver content quickly to users all over the world. Users (and interviewers) expect fast load times, and delays can lead to a poor user experience and loss of traffic. A content delivery network (CDN) is a type of cache that uses distributed servers to deliver content to users based on their geographic location. CDNs are often used to deliver static content like images, videos, and HTML files, but they can also be used to deliver dynamic content like API responses.
 
@@ -253,6 +304,28 @@ The most common application of a CDN in an interview is to cache static media as
 3. **Eviction policies**. Like other caches, CDNs have eviction policies that determine when cached content is removed. For example, you can set a time-to-live (TTL) for cached content, or you can use a cache invalidation mechanism to remove content from the cache when it changes.
 
 Some of the most popular CDNs are [Cloudflare](https://www.cloudflare.com/), [Akamai](https://www.akamai.com/), and [Amazon CloudFront](https://aws.amazon.com/cloudfront/). These CDNs offer a range of features, including caching, DDoS protection, and web application firewalls. They also have a global network of edge locations, which means that they can deliver content to users around the world with low latency.
+
+## 🎓 Key Takeaways
+
+- **Breadth before depth.** Aim to have at least one technology you can confidently use in each category; not knowing *any* option for a category (e.g. queues) is what actually hurts you in an interview.
+- **Pick a lane on your core database.** Relational (Postgres) leans product-design, NoSQL (DynamoDB/Cassandra) leans infra-design — and avoid the "SQL vs NoSQL" comparison pothole; talk about the specific features that solve your problem instead.
+- **Keep big blobs out of your database.** Store images/videos/files in blob storage like S3 and keep only pointer URLs in your core DB, fronting downloads with a CDN and presigned URLs for direct client access.
+- **Match the tool to the access pattern.** Full-text search wants an inverted-index engine like Elasticsearch; global static/dynamic content wants a CDN edge cache; expensive-to-compute or hot data wants a distributed cache like Redis.
+- **Queues vs. streams.** Queues buffer bursty work and decouple producers/consumers (watch out for backpressure and added latency in synchronous paths); streams retain data for replay, support multiple consumer groups, and enable event sourcing.
+- **Locks and caches carry sharp edges.** Distributed locks (Redis/Redlock, ZooKeeper) need expiry to survive crashes and careful design to avoid deadlocks; caches need explicit eviction, invalidation, and write strategies — and be specific about the data structure you're storing.
+
+## 📚 Related Concepts
+
+- [Caching](../../CoreConcepts/Caching.md) — eviction policies, write strategies, and invalidation behind the distributed cache and CDN sections.
+- [Consistent Hashing](../../CoreConcepts/ConsistentHashing.md) — how NoSQL stores and caches distribute data across nodes.
+- [Sharding](../../CoreConcepts/Sharding.md) — splitting data across servers for search, queues, and streams.
+- [Data Indexing](../../CoreConcepts/DataIndexing.md) — B-tree and hash indexes that speed up relational and NoSQL queries.
+- [Distributed Locking](../../CoreConcepts/DistributedLocking.md) — the mechanics behind the distributed lock section.
+- [Redis](../../CoreConcepts/Redis.md) — the in-memory store powering caches and distributed locks.
+- [Elasticsearch](../DeepDives/Elasticsearch.md) — the leading search-optimized database and its inverted index.
+- [Kafka](../DeepDives/Kafka.md) — the go-to technology for both queues and streams.
+- [DynamoDB](../DeepDives/Dynamodb.md) · [Cassandra](../DeepDives/Cassandra.md) · [Postgresql](../DeepDives/Postgresql.md) — deep dives on the core database options.
+- [API Gateway](../DeepDives/ApiGateway.md) — routing, auth, and rate limiting at the edge of your system.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/in-a-hurry/key-technologies](https://www.hellointerview.com/learn/system-design/in-a-hurry/key-technologies)*

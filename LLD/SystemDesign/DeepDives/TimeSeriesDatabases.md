@@ -1,6 +1,22 @@
-# Time Series Databases
+# ⏱️ Time Series Databases
 
-Learn the concepts behind time-series databases like LSM trees, append-only storage, and delta encoding.
+> **Overview**: Time-series databases like InfluxDB, TimescaleDB, and Prometheus are purpose-built for workloads that write billions of timestamped data points per day and query them by time range. They achieve 10-100x better performance than a general-purpose database by combining a handful of simple ideas — append-only storage, LSM trees, delta encoding, time-based partitioning, Bloom filters, and rollups — each of which has broad applicability across distributed systems. The magic isn't in any single technique; it's in how they compose, and in the data assumptions they exploit.
+
+## 📋 Table of Contents
+- [Layman's Explanation](#laymans-explanation)
+- [The Building Blocks](#the-building-blocks)
+- [Putting It Together: A Time-Series Storage Engine](#putting-it-together-a-time-series-storage-engine)
+- [Summary](#summary)
+- [Key Takeaways](#key-takeaways)
+- [Related Concepts](#related-concepts)
+
+---
+
+## 🧒 Layman's Explanation
+
+Imagine you're keeping a weather journal, writing down the temperature every 10 seconds. A normal database is like a filing cabinet where, to add a reading, you find the right folder, pull it out, edit it, and put it back — slow when you're doing it thousands of times a second. A time-series database instead treats your journal like a notebook you only ever **add to the bottom of** (append-only storage): no flipping around, just keep writing at the end.
+
+To save paper, instead of writing "45.2, 45.3, 45.1" in full, you note only how much each reading **changed** from the last one — "+0.1, -0.2" (delta encoding). Because you take readings on a perfectly regular schedule, you barely need to write the times down at all. You start a **fresh page each day** (time-based partitioning), so finding "yesterday afternoon" means grabbing one page instead of skimming the whole book — and throwing away old data is just tearing out old pages. Finally, you put little **tab stickers** on things you'll want to search by, like which room the reading came from (tags) — but you'd never put a sticker on something with millions of unique values (like every visitor's name), or you'd drown in stickers (the cardinality problem).
 
 Watch the author walk through the problem step-by-step
 
@@ -12,7 +28,7 @@ In this deep dive we're going to cover the patterns that enable high-throughput 
 
 Let's dive in to how time series databases work.
 
-### A Motivating Example
+### 🎯 A Motivating Example
 
 Imagine you're designing a monitoring system for a cloud provider. You've got 100,000 servers, each emitting 5 metrics every 10 seconds: CPU usage, memory, disk I/O, network traffic. That's 50,000 metrics per second, or 4.3 billion data points per day. And users want to query this data to see dashboards, set up alerts, and debug issues from the past week.
 
@@ -33,11 +49,11 @@ We can do a _lot_ better.
 
 Time-series databases like InfluxDB, TimescaleDB, and Prometheus are built specifically for this workload. So how do they work?
 
-## The Building Blocks
+## 🏗️ The Building Blocks
 
 Let's talk about all of the pieces that make a time series database hum. Time series databases typically involve so much data that disk-based storage is the only viable option. So let's start with what we'll need there.
 
-### Append-Only Storage
+### 📝 Append-Only Storage
 
 The first insight is deceptively simple: **if you're writing a lot of data, don't update data in place**. Instead, always append new data to the end of a file.
 
@@ -68,7 +84,7 @@ Append-only storage flips this around. Every new data point gets written to the 
 
 But wait - if we only append, how do organize the data for reading? This is where the next piece comes in.
 
-### LSM Trees (Log-Structured Merge Trees)
+### 🌲 LSM Trees (Log-Structured Merge Trees)
 
 LSM trees are the secret sauce behind many high-write-throughput databases, including InfluxDB, Cassandra, and LevelDB. You may recall this idea from our [Cassandra deep dive](https://www.hellointerview.com/learn/system-design/deep-dives/cassandra) or [DB Indexing core concept](https://www.hellointerview.com/learn/system-design/core-concepts/db-indexing) - the core idea is to transform expensive random writes into cheap sequential writes, then periodically reorganize the data in the background to make reads more efficient.
 
@@ -93,7 +109,7 @@ The beauty of this approach is that writes never block on reads. The memtable ha
 
 Ok with append-only storage and LSM trees, we're starting to look like [Cassandra](https://www.hellointerview.com/learn/system-design/deep-dives/cassandra). Let's add a few more pieces to the puzzle.
 
-### Delta Encoding and Compression
+### 🗜️ Delta Encoding and Compression
 
 Time-series data has a unique property: adjacent values are often similar. If you're recording CPU usage every second, the values might be 45.2%, 45.3%, 45.1%, 45.4%. Storing the full value each time wastes space.
 
@@ -133,7 +149,7 @@ By storing only the position of the first differing bit and the meaningful bits 
 
 > Most interviews aren't going to get into this level of detail, so don't try to memorize "1.37 bytes per value". The core idea is that we can achieve strong compression on data at rest that has a lot of redundancy in it — and time series data is a great example of this.
 
-### Time-Based Partitioning (Sharding by Time)
+### 📅 Time-Based Partitioning (Sharding by Time)
 
 Another key concept is organizing data by time. Time-series databases group data into partitions based on time windows - for example, one partition per day or per week. These partitions don't _necessarily_ live on different machines, but they absolutely can if necessary for scaling.
 
@@ -161,7 +177,7 @@ This time-partitioning strategy is nearly universal in time-series databases. Yo
 
 So far we've focused on write optimization. But what about reads?
 
-### Bloom Filters for Read Optimization
+### 🔎 Bloom Filters for Read Optimization
 
 Remember how LSM trees work: data gets written to multiple SSTables over time. To find a value, you might need to check several of these files. Each check means a potential disk read. The worst case scenario is a long query which might cover many partitions but is only seeking a single value, or a small number of values (like gathering the time series for a single host over a long period of time).
 
@@ -180,7 +196,7 @@ SSTable-4 Bloom filter: "not here"     → skip (no disk read)
 
 In practice, a well-tuned Bloom filter uses about 10 bits per key and achieves a 1% false positive rate. For a database with millions of series spread across dozens of SSTables, this turns what could be dozens of disk reads into just one or two.
 
-### Downsampling and Rollups
+### 📉 Downsampling and Rollups
 
 Bloom filters help with point lookups, but what about aggregate queries over large time ranges? Raw metrics at 10-second resolution are great for debugging recent issues, but nobody needs that granularity when looking at last year's data. Downsampling automatically reduces the resolution of older data, trading precision for storage efficiency.
 
@@ -203,17 +219,17 @@ This is a form of pre-computation that trades storage and write amplification fo
 
 > Downsampling and rollups frequently show up in interviews as a negotiation in requirements. Your interviewer says "we need to store 10s samples for 1 year", and you say "that's a ton of data, I think we probably only need the fine resolution for a week, and can downsample to 5 minute averages for a month ... does this work?" The key is (a) you anticipating a future problem, (b) explaining the challenge, and (c) offering an alternative. Even if the interviewer says no, they're marking down your ability to think outside of the rigid requirements that were given to you — a hallmark of a staff+ candidate.
 
-### Block-Level Metadata
+### 🧱 Block-Level Metadata
 
 Our last optimization is a twist on the query planning ideas we covered in our [Elasticsearch deep dive](https://www.hellointerview.com/learn/system-design/deep-dives/elasticsearch). When scanning data files, time-series databases maintain metadata about each block's contents - particularly min/max timestamps and sometimes min/max values. This enables block pruning during queries.
 
 If a query asks for CPU usage above 10%, and a block's metadata shows it only contains data from 0-5%, the database skips that entire block without reading it. Combined with time-based partitioning (which already limits which partitions to check), this provides another layer of filtering that keeps queries fast even as data volumes grow.
 
-## Putting It Together: A Time-Series Storage Engine
+## 🔬 Putting It Together: A Time-Series Storage Engine
 
 Now that we understand the building blocks, let's see how they combine in a typical time-series database architecture.
 
-### The Data Model
+### 🔑 The Data Model
 
 Time-series databases typically organize data into:
 
@@ -234,7 +250,7 @@ Tags are crucial because they're indexed. Queries filtering by tags are fast. Fi
 
 > The distinction between tags and fields trips people up. Use tags for metadata you'll filter by (host, region, service). Use fields for the actual values you're measuring. Getting this wrong leads to either poor query performance or the cardinality explosion problem we'll discuss later.
 
-### The Storage Engine
+### 🏗️ The Storage Engine
 
 A typical time-series storage engine combines the patterns we've discussed:
 
@@ -266,7 +282,7 @@ File Structure:
 
 Each file contains an index at the end that maps series keys (measurement + tag combinations) to the blocks containing their data. This means looking up data for a specific series is a seek to the index, then a seek to the data - two disk operations regardless of how much data is in the file.
 
-### Query Execution
+### 🔎 Query Execution
 
 When you query a time-series database:
 
@@ -284,9 +300,25 @@ The query engine:
 3. **Reads from buffer and disk files.** The buffer has the most recent data; disk files have older data. Results are merged.
 4. **Applies aggregations** as data is read. This is a streaming operation - the database doesn't need to load all data into memory before computing the mean.
 
+```mermaid
+graph LR
+    Q["Query<br/>time range + tag filter"] --> P["1 · Identify partitions<br/>by time filter"]
+    P --> S["2 · Locate series<br/>via in-memory tag index"]
+    S --> R["3 · Read + merge<br/>buffer (recent) + disk files (older)"]
+    R --> A["4 · Apply aggregations<br/>streaming, no full load"]
+    A --> Res["Result"]
+
+    style Q fill:#e1f5ff
+    style P fill:#FFE4B5
+    style S fill:#FFE4B5
+    style R fill:#e1f5ff
+    style A fill:#FFE4B5
+    style Res fill:#90EE90
+```
+
 The key insight is that time-series databases exploit both time locality (recent data is in memory or recent files) and series locality (related data points are stored together) to minimize disk access.
 
-### Worked Example: Multi-Tag Query
+### 🧮 Worked Example: Multi-Tag Query
 
 Let's trace through a complete example to see how data flows from ingestion to query results.
 
@@ -428,7 +460,7 @@ Even with indexes on region and env, Postgres would need to:
 
 With millions of rows, those scattered disk reads kill performance. The columnar, series-oriented storage in a time-series database means the data you need is physically co-located. Our writes are optimized to assist our reads!
 
-### Where Things Break
+### ⚠️ Where Things Break
 
 These advantages are not without their challenges. A particularly poignant example is the cardinality problem.
 
@@ -438,7 +470,7 @@ Why is this a problem? Time-series databases maintain an in-memory index of all 
 
 This is why user IDs, request IDs, or any high-cardinality value can only be stored as fields, not tags. In essence, we can write them but we lose all the performance benefits of the time-series database in reading them.
 
-## Summary
+## 📝 Summary
 
 The cardinality problem puts a fine point on the lesson of time-series databases: if we can make some strong assumptions about our data (low-cardinality tags, highly regular data, low deltas between points), we can build a system which exploits each of these properties to achieve a massive improvement in performance. But as soon as our assumptions are violated, we lose all of the benefits and our system becomes worse than a general-purpose database for the task.
 
@@ -459,6 +491,26 @@ In doing so, we achieve some practical performance benefits that order 10-100x b
 So the next time you see a system handling millions of events per second, you'll know it's not magic. It's append-only logs, LSM trees, clever compression, Bloom filters, rollups, and careful data modeling.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **The wins come from composition, not a single trick.** Append-only storage (random → sequential I/O), LSM trees, delta/XOR compression, time partitioning, Bloom filters, rollups, and block metadata each help, but they multiply together to reach 10-100x over a general-purpose database.
+- **Writes are optimized to assist reads.** Data is stored columnar and co-located by series, so a tag-filtered query reads only the matching blocks — the tag index (an inverted index) identifies series without scanning any data.
+- **Tags vs. fields is the modeling decision that matters.** Tags are indexed metadata you filter by (host, region); fields are the raw measured values. Getting this wrong causes poor query performance or the cardinality explosion.
+- **Cardinality is the cliff.** A time-series DB keeps an in-memory index of every unique tag combination; high-cardinality tags (user_id, request_id) blow up memory and slow queries — store those as fields, not tags.
+- **Downsampling is both a storage technique and an interview move.** Rolling old data to coarser resolution (min/max/sum/count) slashes read cost, and proactively negotiating retention/resolution signals staff+ thinking.
+- **Don't reach for a TSDB reflexively.** When your data violates the assumptions (low cardinality, regular intervals, small deltas), a general-purpose store like Postgres or DynamoDB is often the better fit — stretch it until you hit a true bottleneck.
+
+## 📚 Related Concepts
+
+- [Data Indexing](../../CoreConcepts/DataIndexing.md) — the B-tree/LSM indexing foundations that make tag lookups and point queries fast.
+- [Sharding](../../CoreConcepts/Sharding.md) — time-based partitioning is sharding by time; the same trade-offs apply.
+- [Cassandra](Cassandra.md) — an LSM-tree, append-only store; this deep dive notes TSDBs "start to look like Cassandra."
+- [Elasticsearch](Elasticsearch.md) — the inverted index behind the tag index and the block-pruning query-planning ideas.
+- [Data Structures for Big Data](DataStructuresForBigData.md) — Bloom filters and other probabilistic structures used for read optimization.
+- [PostgreSQL](Postgresql.md) — the general-purpose baseline this doc contrasts against for time-series workloads.
+- [Metrics Monitoring](../ProblemBreakdowns/MetricsMonitoring.md) — a full problem breakdown built on time-series storage.
+- [Ad Click Aggregator](../ProblemBreakdowns/AdClickAggregator.md) — downsampling and rollups applied to billions of events in a problem context.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/deep-dives/time-series-databases](https://www.hellointerview.com/learn/system-design/deep-dives/time-series-databases)*

@@ -1,23 +1,27 @@
-# Design Web Crawler
+# 🕷️ Design Web Crawler
 
 > **Pattern**: Distributed Queue / BFS
 > **Difficulty**: Medium
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/web-crawler)
 
-## Table of Contents
+> **Summary**: A web crawler is a fault-tolerant, breadth-first traversal of the web graph: seed URLs feed a durable **URL frontier**, stateless **fetcher workers** download HTML under strict per-domain politeness, and **parser workers** extract text and discover new links that loop back into the frontier. The hard parts are keeping the frontier durable at ~1 TB / 10B URLs, deduplicating URLs (Bloom filter) and content (SimHash) at web scale, respecting `robots.txt`, surviving spider traps, and beating the DNS bottleneck at ~23,000 pages/sec.
+
+## 📋 Table of Contents
 
 1. [Understanding the Problem](#understanding-the-problem)
-2. [Core Entities](#core-entities)
-3. [API Design](#api-design)
-4. [High-Level Design](#high-level-design)
-5. [Deep Dives](#deep-dives)
-6. [Scaling Journey: 0 to Infinity](#scaling-journey-0--)
-7. [Insider Tips and Tricks](#insider-tips-and-tricks)
-8. [Expected Depth by Level](#expected-depth-by-level)
+2. [Layman's Explanation](#laymans-explanation)
+3. [Core Entities](#core-entities)
+4. [API Design](#api-design)
+5. [High-Level Design](#high-level-design)
+6. [Deep Dives](#deep-dives)
+7. [Scaling Journey: 0 to Infinity](#scaling-journey-0-to-infinity)
+8. [Insider Tips and Tricks](#insider-tips-and-tricks)
+9. [Expected Depth by Level](#expected-depth-by-level)
+10. [Related Concepts](#related-concepts)
 
 ---
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 A web crawler starts from a set of seed URLs, fetches each page, stores the HTML, extracts text content, discovers new outbound links, and repeats the process. It is essentially a breadth-first traversal of the web graph with hard constraints on politeness, scale, and fault tolerance.
 
@@ -69,7 +73,7 @@ A real Googlebot crawls trillions of pages, deals with JavaScript-heavy sites th
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 | Entity | Purpose | Typical Store |
 |---|---|---|
@@ -82,7 +86,7 @@ A real Googlebot crawls trillions of pages, deals with JavaScript-heavy sites th
 
 ---
 
-## API Design
+## 🔌 API Design
 
 A crawler is a pipeline, not a request-response service, so the "API" is really its inputs and outputs plus a small operator-facing control plane.
 
@@ -99,32 +103,47 @@ No public user-facing API - the consumers are other internal systems (ML trainin
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
-```
-  Seed URLs
-      |
-      v
-+------------+      +-------------+      +----------------+
-| URL        | ---> | Fetcher     | ---> | Blob Store     |
-| Frontier   |      | Workers     |      | (raw HTML, S3) |
-| (queue)    |      +-------------+      +----------------+
-+------------+             |                    |
-      ^                    v                    v
-      |             +-------------+      +----------------+
-      |             | DNS Cache   |      | Parser Workers |
-      |             +-------------+      +----------------+
-      |                                         |
-      |                                         v
-      |                                  +----------------+
-      |                                  | Text Store (S3)|
-      |                                  +----------------+
-      |                                         |
-      |<----------- new URLs --------------------+
-      
-  Side channels used by every stage:
-    - Metadata DB (DynamoDB): per-URL / per-domain state
-    - Redis: seen-set, domain politeness counters, robots cache
+```mermaid
+graph TB
+    SEED[Seed URLs]
+
+    subgraph Pipeline
+        FRONTIER[[URL Frontier<br/>durable queue]]
+        FETCH[Fetcher Workers<br/>network-bound<br/>HTTP GET]
+        PARSE[Parser Workers<br/>extract text<br/>+ outbound links]
+        DNS[(DNS Cache)]
+    end
+
+    subgraph Storage
+        BLOB[(Blob Store<br/>raw HTML · S3)]
+        TEXT[(Text Store<br/>extracted text · S3)]
+    end
+
+    subgraph "Shared State"
+        META[(Metadata DB<br/>DynamoDB<br/>per-URL / per-domain)]
+        REDIS[(Redis<br/>seen-set · politeness<br/>robots cache)]
+    end
+
+    SEED --> FRONTIER
+    FRONTIER --> FETCH
+    FETCH -->|resolve host| DNS
+    FETCH -->|raw HTML| BLOB
+    FETCH -->|status · hash · fetched_at| META
+    FETCH --> PARSE
+    PARSE -->|extracted text| TEXT
+    PARSE -->|normalize + dedup| REDIS
+    PARSE -->|new URLs| FRONTIER
+
+    style FRONTIER fill:#FFE4B5
+    style FETCH fill:#90EE90
+    style PARSE fill:#90EE90
+    style BLOB fill:#e1f5ff
+    style TEXT fill:#e1f5ff
+    style META fill:#e1f5ff
+    style REDIS fill:#e1f5ff
+    style DNS fill:#e1f5ff
 ```
 
 **Flow:**
@@ -135,9 +154,39 @@ No public user-facing API - the consumers are other internal systems (ML trainin
 5. Each discovered URL is normalized, checked against the **seen set**, and if new, pushed back into the frontier.
 6. The frontier is drained over and over until it is empty or a depth/budget limit is reached.
 
+The end-to-end crawl loop for a single URL, including the two side-channel checks every fetch performs:
+
+```mermaid
+sequenceDiagram
+    participant F as URL Frontier
+    participant FW as Fetcher Worker
+    participant R as Redis (robots + politeness)
+    participant D as DNS Cache
+    participant B as Blob Store (S3)
+    participant PW as Parser Worker
+    participant M as Metadata DB
+
+    F->>FW: pop URL
+    FW->>R: robots allowed? next_fetch_time reached?
+    alt disallowed or too soon
+        R-->>FW: block / not yet
+        FW->>F: drop or re-queue with delay
+    else allowed
+        R-->>FW: OK
+        FW->>D: resolve host → IP
+        FW->>FW: HTTP GET page
+        FW->>B: write raw HTML
+        FW->>M: record status · hash · fetched_at
+        FW->>PW: hand off HTML
+        PW->>PW: extract text + outbound <a href>
+        PW->>R: normalize + seen-set check each link
+        PW->>F: push NEW (unseen) URLs
+    end
+```
+
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. URL Frontier
 
@@ -148,9 +197,47 @@ The frontier is more than a single FIFO queue. A naive queue fails politeness be
 
 A router moves URLs from front to back queues while a separate scheduler assigns back queues to fetcher threads, respecting per-domain crawl delay. This guarantees politeness without starving high-priority URLs.
 
+```mermaid
+graph TB
+    IN[Incoming URLs<br/>with priority signals]
+
+    subgraph "Front Queues (by priority)"
+        P1[Priority 1<br/>high PageRank / fresh]
+        P2[Priority 2]
+        P3[Priority N<br/>deep / low quality]
+    end
+
+    ROUTER{Router<br/>front → back}
+
+    subgraph "Back Queues (one per domain)"
+        B1[domain-a.com]
+        B2[domain-b.com]
+        B3[domain-c.com]
+    end
+
+    SCHED{Scheduler<br/>respect crawl-delay}
+    FT[Fetcher Threads]
+
+    IN --> P1 & P2 & P3
+    P1 & P2 & P3 --> ROUTER
+    ROUTER --> B1 & B2 & B3
+    B1 & B2 & B3 --> SCHED
+    SCHED --> FT
+
+    style ROUTER fill:#90EE90
+    style SCHED fill:#90EE90
+    style B1 fill:#e1f5ff
+    style B2 fill:#e1f5ff
+    style B3 fill:#e1f5ff
+```
+
+Priority selection (front queues) and politeness (back queues) are decoupled: the front side decides *what* to crawl next, the back side decides *when* it is polite to crawl it.
+
 **Durability is non-negotiable.** The frontier must survive crashes. Use SQS, Kafka, or a Redis list with AOF persistence so that an in-flight URL is either acked after successful fetch or re-delivered after a visibility timeout. At 10B URLs you cannot rebuild the frontier from scratch — treat it as a durable append-only log backed by disk-persistent storage (Kafka topic compaction or RocksDB). An in-memory frontier is a single-point-of-failure that invalidates the entire fault-tolerance goal.
 
 **Frontier sizing:** At 10B URLs averaging ~100 bytes per URL record (URL string + metadata), the frontier itself is ~1 TB of durable storage. This rules out Redis-only approaches for large crawls — Kafka or a purpose-built disk-backed queue is required.
+
+> ⚠️ **An in-memory frontier is a single point of failure that invalidates the entire fault-tolerance goal.** At 10B URLs you cannot rebuild from scratch in reasonable time. Treat the frontier as a durable append-only log (Kafka topic compaction or RocksDB): an in-flight URL is acked only after a successful fetch, or re-delivered after a visibility timeout.
 
 ### 2. Politeness and Rate Limiting
 
@@ -162,6 +249,8 @@ Politeness is not a courtesy; it is a technical and legal requirement.
 - Add **jitter** on retries (exponential backoff with ±20% jitter) to avoid synchronized thundering herds against the same host after a 429 or 503 response.
 - Treat `Retry-After` headers as authoritative. A server telling you to wait 60 seconds means your `next_fetch_time[domain]` should be `now + 60s`, not `now + crawl_delay`.
 - Log per-domain error rates. A domain returning >10% 5xx in a rolling window should have its crawl rate halved automatically. Persistent 4xx (404, 410) should trigger URL removal from the frontier, not retry.
+
+> ⚠️ **Domain affinity is a correctness requirement, not an optimization.** Route every URL of a domain to the same fetcher shard via `hash(domain) % N`. If two shards can pull the same domain's back-queue at once, you need a distributed lock on `next_fetch_time[domain]` on the hot path — expensive and fragile. Affinity keeps politeness state local to one shard and eliminates cross-shard coordination entirely.
 
 ### 3. Deduplication via Bloom Filter
 
@@ -177,6 +266,31 @@ Two distinct deduplication problems must be solved independently:
 - Exact dedup (SHA-256 of full HTML) catches verbatim duplicates but misses near-duplicates: mobile vs. desktop versions, paginated versions of the same article, session-ID-parameterized pages, CDN mirrors.
 - **SimHash** produces a 64-bit fingerprint where similar documents have small Hamming distances. Two documents with Hamming distance ≤ 3 are treated as near-duplicates. Store all SimHashes; a new page within distance 3 of an existing one is marked as near-duplicate and not re-indexed.
 - Use a two-stage pipeline: exact hash first (cheap, handles verbatim duplicates), SimHash second (handles near-duplicates). Only novel content reaches the text store.
+
+The two dedup problems compose into a single funnel — normalize the URL, ask the Bloom filter, then check content novelty before anything is written:
+
+```mermaid
+graph LR
+    U[Discovered URL] --> N[Normalize<br/>lowercase host · sort params<br/>strip fragment + trackers]
+    N --> BF{Bloom filter<br/>seen?}
+    BF -->|definitely new| Q[Enqueue to frontier]
+    BF -->|maybe seen| EX{DynamoDB<br/>exact check}
+    EX -->|new| Q
+    EX -->|seen| DROP1[Drop URL]
+
+    Q -.fetched + parsed.-> H{SHA-256<br/>exact match?}
+    H -->|duplicate| DROP2[Skip · record crawl]
+    H -->|novel| SH{SimHash<br/>Hamming ≤ 3?}
+    SH -->|near-duplicate| DROP2
+    SH -->|novel| STORE[Write to text store]
+
+    style Q fill:#FFE4B5
+    style STORE fill:#90EE90
+    style DROP1 fill:#FFB6C1
+    style DROP2 fill:#FFB6C1
+    style BF fill:#e1f5ff
+    style EX fill:#e1f5ff
+```
 
 ### 4. robots.txt and Crawler Ethics
 
@@ -211,6 +325,28 @@ Defenses must operate at multiple levels:
 **Back-pressure:**
 If blob storage or the text store slows down, parser consumers lag, queue depth grows, and auto-scaling adds parsers. Fetchers do not need to slow down unless the frontier itself backs up. Monitor queue lag metrics (not just queue depth) to distinguish "growing because we're producing fast" from "growing because downstream is slow."
 
+Pulling the drop/retry/removal rules scattered across the deep dives into one view, a single URL moves through this lifecycle:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Discovered
+    Discovered --> Dropped: seen (dedup) / depth > N / domain cap hit
+    Discovered --> Disallowed: robots.txt / nofollow
+    Discovered --> Enqueued: new + allowed
+    Enqueued --> InFlight: fetcher pops (crawl-delay met)
+    InFlight --> Fetched: 2xx
+    InFlight --> Retry: 5xx / timeout
+    Retry --> Enqueued: backoff + jitter
+    InFlight --> Removed: persistent 4xx (404 / 410)
+    Fetched --> Stored: novel content
+    Fetched --> Skipped: exact / SimHash duplicate
+    Disallowed --> [*]
+    Dropped --> [*]
+    Removed --> [*]
+    Skipped --> [*]
+    Stored --> [*]
+```
+
 ### 6. DNS Resolution at Scale
 
 DNS is one of the most commonly overlooked bottlenecks in crawler design. At 23,000 pages/second, you need 23,000 DNS lookups/second. The OS DNS resolver (`/etc/resolv.conf`) is a single-threaded blocking stub resolver — it is not built for this load.
@@ -233,9 +369,27 @@ Solutions, in order of increasing scale:
 
 ---
 
-## Scaling Journey: 0 to Infinity
+## 📈 Scaling Journey: 0 to Infinity
 
 Each stage builds on the previous. The goal is to understand the failure mode that forces the next step, not to design the final architecture on day one.
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>1K/day · MVP<br/>in-mem deque + set<br/>local disk"]
+    S2["Stage 2<br/>100K/day<br/>Redis list + set<br/>async fetchers · S3"]
+    S3["Stage 3<br/>10M/day<br/>Kafka frontier<br/>RedisBloom · DynamoDB"]
+    S4["Stage 4<br/>1B/day<br/>domain-partitioned fleets<br/>recrawl scheduler · SimHash"]
+    S5["Stage 5<br/>10B+/day<br/>geo-distributed fleets<br/>adaptive politeness · compliance"]
+
+    S1 -->|"~100K URLs: RAM full / crash loses all"| S2
+    S2 -->|"~10M URLs: Redis set + 1 host cap out"| S3
+    S3 -->|"100M+/day: DNS + egress bottleneck"| S4
+    S4 -->|"transoceanic latency + regional blocks"| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 1K Pages/day (MVP)
 
@@ -330,7 +484,7 @@ Each stage builds on the previous. The goal is to understand the failure mode th
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 ### Ignoring robots.txt Has Legal Consequences, Not Just Reputational Ones
 The Hierarchical Exemption From Compliance (HEFC) principle in robots.txt is advisory, but courts in the US and EU have treated ignoring it as a basis for trespass-to-chattels or Computer Fraud and Abuse Act claims. Beyond legality, aggressive crawling results in your IP ranges being permanently blacklisted by major sites. Respect `Crawl-delay` directives and the `Disallow` paths, or your crawler will have a shrinking addressable web.
@@ -364,10 +518,24 @@ About 30% of the modern web requires JavaScript execution to render meaningful c
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Level | Breadth / Depth | What the interviewer looks for | Red flags |
 |---|---|---|---|
 | **Mid (E4)** | 80 / 20 | Describes the pipeline: frontier -> fetcher -> parser -> store. Knows `robots.txt` exists and must be respected. Produces a rough back-of-envelope estimate. Picks a reasonable queue (SQS). | Cannot explain why duplicates happen. Forgets `robots.txt`. Uses a relational DB as the frontier. |
 | **Senior (E5)** | 60 / 40 | Two-level frontier with domain back-queues. Explains Bloom filter trade-off for the seen set. Articulates politeness as both rate limit and `Crawl-Delay`. Identifies DNS as a bottleneck. Justifies blob-storage for HTML vs DB. | Hand-waves politeness. Ignores fault tolerance on fetcher crash. Picks Bloom filter without mentioning false positives. |
 | **Staff+ (E6+)** | 40 / 60 | Deep mastery of 3+ areas. Designs domain-partitioned fetcher fleets with per-node back-queues. Discusses recrawl scheduling separately from discovery. Reasons about near-duplicate detection (SimHash) vs exact dedup. Addresses geo-distribution and regional compliance. Offers a concrete plan to reach 10B pages in 5 days with numerical justification. | Only describes a single-region design. Ignores recrawl. No plan for crawler traps or malicious domains. |
+
+---
+
+## 📚 Related Concepts
+
+- [Sharding](../CoreConcepts/Sharding.md) — partitioning the frontier and fetcher fleets by domain so each shard owns a disjoint slice.
+- [Consistent Hashing](../CoreConcepts/ConsistentHashing.md) — `hash(domain) % N` routing that gives domain affinity and keeps politeness state local.
+- [Redis](../CoreConcepts/Redis.md) — the seen-set / Bloom filter, per-domain `next_fetch_time`, and 24h robots cache.
+- [Caching](../CoreConcepts/Caching.md) — DNS and `robots.txt` caching with TTLs on the fetch hot path.
+- [Networking](../CoreConcepts/Networking.md) — DNS resolution at 23K lookups/sec and the HTTP fetch layer.
+- [Kafka](../SystemDesign/DeepDives/Kafka.md) — the durable, partitioned frontier and the `pages.extracted` downstream event stream.
+- [Data Structures for Big Data](../SystemDesign/DeepDives/DataStructuresForBigData.md) — Bloom filters for URL dedup and SimHash for near-duplicate content.
+- [DynamoDB](../SystemDesign/DeepDives/Dynamodb.md) — the Metadata DB (`url_hash` partition key, `domain` GSI) and exact-check fallback.
+- [Web Crawler (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/WebCrawler.md) — the source breakdown this doc expands on.

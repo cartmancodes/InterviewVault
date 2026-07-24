@@ -169,7 +169,7 @@ sequenceDiagram
     API->>J: persist job row (nextRunAt)
     API-->>C: { jobId, nextRunAt }
     loop every ~1s tick
-        D->>J: SELECT due rows (nextRunAt <= now + lookahead)
+        D->>J: SELECT due rows (nextRunAt ≤ now + lookahead)
         J-->>D: due jobs
         D->>R: write Run (DISPATCHED, idempotencyKey)
         D->>J: recompute nextRunAt (recurring) / mark done (one-shot)
@@ -220,7 +220,7 @@ The four dispatch strategies form an evolution as firing rate climbs:
 
 ```mermaid
 graph LR
-    A["Naive poll<br/>SELECT WHERE nextRunAt <= now<br/>O(total jobs) full scan"]
+    A["Naive poll<br/>SELECT WHERE nextRunAt ≤ now<br/>O(total jobs) full scan"]
     B["Indexed lookahead<br/>B-tree + 30s window<br/>FOR UPDATE SKIP LOCKED"]
     C["Time-bucketed tables<br/>partition by minute<br/>touch recent partition only"]
     D["In-memory heap<br/>min-heap on nextRunAt<br/>DB only on load + write"]
@@ -256,10 +256,10 @@ sequenceDiagram
     B->>L: acquire lease (token=42)
     L-->>B: granted, token=42
     B->>Q: enqueue run (token=42)
-    Q-->>B: accepted (42 >= highest seen)
+    Q-->>B: accepted (42 is highest seen)
     Note over A: resumes, still thinks it holds lease
     A->>Q: enqueue run (token=41)
-    Q-->>A: REJECTED (41 < 42, stale token)
+    Q-->>A: REJECTED (41 below 42, stale token)
 ```
 
 **Sharded leaders.** Partition jobs by `hash(jobId) % N`. Each shard has its own lease, and leadership for different shards can live on different hosts. A six-shard layout can be served by three physical dispatchers, each holding two leases. Adding a dispatcher host means redistributing leases, not vertical scaling. This scales linearly until the coordination service itself becomes the bottleneck, which is usually well past a hundred shards.
@@ -323,9 +323,9 @@ stateDiagram-v2
     DISPATCHED --> RUNNING: worker CAS claim
     RUNNING --> SUCCEEDED
     RUNNING --> FAILED
-    FAILED --> DISPATCHED: RETRY_TRANSIENT / RATE_LIMITED<br/>backoff + jitter, attempt < maxRetries
-    FAILED --> DEAD_LETTER: FAIL_PERMANENT<br/>or retries exhausted
-    RUNNING --> DEAD_LETTER: broker force-DLQ<br/>after N redeliveries
+    FAILED --> DISPATCHED: retry (backoff+jitter, attempt under maxRetries)
+    FAILED --> DEAD_LETTER: FAIL_PERMANENT or retries exhausted
+    RUNNING --> DEAD_LETTER: broker force-DLQ after N redeliveries
     SUCCEEDED --> [*]
     DEAD_LETTER --> [*]
 ```
@@ -510,3 +510,21 @@ Job metadata (schedule, status, last_run_at, next_run_at) belongs in the schedul
 | **Mid** | Breadth with a correct happy-path. | Names the jobs table, a dispatcher loop, a queue, a worker. Articulates why the queue is there (decoupling, retries). Understands at-least-once delivery and that the handler needs idempotency. Recognises that two dispatchers running naively will double-fire and proposes a lock, even if the locking story is hand-wavy. |
 | **Senior** | Depth on dispatch and idempotency. | Picks a leader-election substrate (etcd/ZooKeeper) and can defend it over a naive Redis lock (fencing tokens). Shards by `hash(jobId)` and explains per-shard leases. Chooses an indexed-poll with a near-future lookahead window plus time-bucketed tables as the dispatcher strategy and can reason about the DB query under load. Draws the idempotency-key contract between scheduler and handler, and explains the CAS claim. Handles retries with exponential backoff plus jitter and names a DLQ. Knows that exactly-once is composed from at-least-once plus handler idempotency and says so explicitly. Names the missed-job policy problem and proposes at least two options. |
 | **Staff** | Depth plus operability, cost, and failure-mode analysis. | Moves to in-memory priority queues per shard for hot-window dispatch and can defend the DB-as-cold-store pattern. Introduces hierarchical / per-tenant dispatch fleets and weighted fair queuing to solve noisy-neighbour problems, including age-based priority boost for starvation prevention. Treats the transactional outbox as a first-class pattern both at the dispatcher and at the handler. Reasons about clock skew and DST as correctness concerns, not operational ones — calls out the spring-forward/fall-back edge cases and advocates for a tz-aware library. Discusses the fencing token requirement for distributed locks and the zombie-leader failure mode. Explains why job output belongs in object storage rather than the metadata DB and ties it back to dispatcher scan performance. Connects missed-job policy to job semantics and makes it a per-job configuration attribute. Discusses multi-region active-active and what breaks during regional failover (hot-heap rebuild cost, coordination-service election tails). Connects capacity planning to known schedules (pre-provisioning ahead of top-of-minute fan-in). Talks about observability metrics that matter: per-shard dispatch lag, DLQ depth trend, per-handler success rate, coordination-service election latency. Surfaces the ecosystem nature of exactly-once and is clear about what the scheduler cannot guarantee on its own. |
+
+---
+
+## 📚 Related Concepts
+
+- [Distributed Locking](../CoreConcepts/DistributedLocking.md) — leader-election leases, fencing tokens, and the zombie-leader failure mode that force single-active-dispatcher-per-shard.
+- [Sharding](../CoreConcepts/Sharding.md) — partitioning jobs by `hash(jobId) % N` so each shard owns its own dispatcher lease.
+- [Consistent Hashing](../CoreConcepts/ConsistentHashing.md) — distributing job shards and leases across dispatcher hosts.
+- [Data Indexing](../CoreConcepts/DataIndexing.md) — the B-tree on `next_run_at` that turns the due-query from a full scan into a bounded lookahead.
+- [Redis](../CoreConcepts/Redis.md) — lease/lock substrate, the worker registry, and the `SETNX` lock whose weaknesses motivate fencing.
+- [PostgreSQL](../SystemDesign/DeepDives/Postgresql.md) — the jobs/runs store, `FOR UPDATE SKIP LOCKED` cooperative polling, and advisory-lock leader election.
+- [Kafka](../SystemDesign/DeepDives/Kafka.md) — the durable work queue with partitions aligned to job shards.
+- [ZooKeeper](../SystemDesign/DeepDives/Zookeeper.md) — coordination service providing native fencing tokens (zxid) for leader election.
+- [Managing Long-Running Tasks](../SystemDesign/Patterns/ManagingLongRunningTasks.md) — the queue + worker-pool + retry pattern behind execution.
+- [Dealing With Contention](../SystemDesign/Patterns/DealingWithContention.md) — CAS claims, locks, and single-writer coordination under racing dispatchers.
+- [Handling Large Blobs](../SystemDesign/Patterns/HandlingLargeBlobs.md) — offloading job output/logs to object storage with a reference key.
+- [Job Scheduler (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/JobScheduler.md) — the source breakdown this doc expands on.
+- [How Slack Put Kafka in Front of Its Redis Job Queue](../SystemDesign/IntheWild/HowSlackPutKafkaInFrontOfItsRedisJobQueue.md) — a real-world job-queue durability evolution.

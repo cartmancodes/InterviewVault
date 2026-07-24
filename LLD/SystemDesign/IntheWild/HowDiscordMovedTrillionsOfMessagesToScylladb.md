@@ -1,8 +1,30 @@
-# How Discord Moved Trillions of Messages to ScyllaDB
+# 🗄️ How Discord Moved Trillions of Messages to ScyllaDB
 
 Originally published by Discord Engineering on March 6, 2023
 
-## The TLDR
+> **Overview**: Discord's trillions of messages had outgrown a 177-node Cassandra cluster whose hot partitions, compaction backlogs, and JVM garbage-collection pauses made reads slow and the cluster fragile to operate. Discord fixed this with two independent moves: replacing Cassandra with ScyllaDB (a C++ reimplementation that removed the GC pauses and made the storage layer faster) and putting Rust data services in front of the database to coalesce duplicate reads for the same channel. The result was 72 nodes instead of 177, and p99 reads falling from a range of 40–125 ms to a steady 15 ms.
+
+## 📋 Table of Contents
+
+- [🧒 Layman's Explanation](#laymans-explanation)
+- [🎯 The TLDR](#the-tldr)
+- [⚠️ The Problem](#the-problem)
+- [🛠️ The Solution](#the-solution)
+- [📝 Conclusion](#conclusion)
+- [🎓 Key Takeaways](#key-takeaways)
+- [📚 Related Concepts](#related-concepts)
+
+---
+
+## 🧒 Layman's Explanation
+
+Picture a huge library where every request for books in a given room always goes to the same three clerks. Most readers want the newest arrivals in the most *popular* room, so those three clerks get mobbed while clerks in quiet rooms sit idle. And because every request waits for at least two of the three clerks to agree before answering (that's **quorum**), one mobbed clerk drags down unrelated requests that also happen to need them.
+
+Discord fixed this in two ways. First, they swapped the clerks for faster ones who never take unpredictable breaks — ScyllaDB is written in C++, so it avoids the JVM's garbage collector that used to freeze Cassandra's work at random moments. Second, they added a **front desk** before the clerks: when a thousand people ask for the exact same book at the same instant, the front desk sends *one* person to fetch it and hands the same copy to everyone waiting, instead of making a thousand identical trips. This is **request coalescing**. And because all requests about the same room are always routed to the same front desk (via **consistent hashing** on the channel ID), the duplicate requests actually meet in one place where they can be combined.
+
+The key insight: a faster clerk and fewer trips solve *different* problems. ScyllaDB made each trip cheaper; coalescing reduced how many trips happened at all.
+
+## 🎯 The TLDR
 
 At the start of 2022, Discord was storing trillions of messages across 177 [Cassandra](https://www.hellointerview.com/learn/system-design/deep-dives/cassandra) nodes. Cassandra was a strong fit for Discord’s write-heavy workload. But the problem was reads, as a popular channel could send thousands of requests to the same partition, overwhelming the nodes and slowing unrelated queries on those same machines. On top of this, compaction backlogs and JVM garbage-collection pauses made the cluster increasingly difficult to operate.
 
@@ -14,7 +36,7 @@ The new cluster runs 72 nodes instead of 177, and p99 reads fell from a range of
 
 We picked this post because it cleanly separates two problems that are easy to conflate. ScyllaDB made the storage layer faster and easier to operate, while request coalescing reduced how many reads reached it in the first place.
 
-## The problem
+## ⚠️ The Problem
 
 ### How Discord stored messages
 
@@ -69,7 +91,7 @@ To catch up, engineers performed what Discord called the “gossip dance.” The
 
 Cassandra also runs on the JVM, whose garbage collector periodically pauses application work while reclaiming memory. Those pauses appeared as latency spikes, and the worst lasted long enough that operators had to reboot nodes and nurse them back into the cluster. Together, the compaction backlog and garbage-collection pauses made the cluster fragile. Engineers were spending too much time manually keeping it healthy, even before accounting for the hot partitions caused by Discord’s traffic.
 
-## The solution
+## 🛠️ The Solution
 
 ### Replacing Cassandra with ScyllaDB
 
@@ -90,6 +112,40 @@ To pull this off, Discord added a fleet of Rust data services between its API an
 ![Request coalescing](assets/cll5gEqrrI33.39gmt4c-dpwhs.svg)
 
 First, they had to make sure requests for the same data reached the same service instance. They used [consistent hashing](https://www.hellointerview.com/learn/system-design/patterns/realtime-updates#pushing-via-consistent-hashes) with the `channel_id` as the routing key, so requests for a given channel were sent to the same instance even as instances were added or removed.
+
+*The request path with the new routing layer — business logic stays in the API, while consistent hashing on `channel_id` funnels all requests for one channel into a single data-service instance where duplicates can meet:*
+
+```mermaid
+graph TB
+    subgraph "Client tier"
+        C[Thousands of clients<br/>opening the same channel]
+    end
+    subgraph "API tier"
+        API[API<br/>business logic]
+    end
+    subgraph "Rust data services"
+        R{Consistent hash<br/>routing key = channel_id}
+        I1[Data service instance A<br/>request coalescing]
+        I2[Data service instance B<br/>request coalescing]
+    end
+    subgraph "Storage"
+        DB[(ScyllaDB<br/>shard-per-core<br/>72 nodes)]
+    end
+
+    C --> API
+    API --> R
+    R -->|channel X| I1
+    R -->|channel Y| I2
+    I1 -->|one merged query| DB
+    I2 -->|one merged query| DB
+
+    style C fill:#FFB6C1
+    style API fill:#f3e5f5
+    style R fill:#FFE4B5
+    style I1 fill:#90EE90
+    style I2 fill:#90EE90
+    style DB fill:#e1f5ff
+```
 
 Once the requests met in the same process, the data service could apply [request coalescing](https://www.hellointerview.com/learn/system-design/patterns/scaling-reads#how-do-you-handle-millions-of-concurrent-reads-for-the-same-cached-data).
 
@@ -114,7 +170,7 @@ Why not just cache the messages? A cache would absorb requests arriving after th
 
 Discord shipped the data services while Cassandra was still the primary store. They didn't eliminate hot partitions entirely, but they wen't a long way towards sharply reducing the duplicate reads hitting them. That made latency incidents less frequent and kept Cassandra manageable while the team finished testing and tuning ScyllaDB.
 
-## Conclusion
+## 📝 Conclusion
 
 Hot partitions are fundamentally a traffic problem. A popular channel concentrates thousands of reads on whichever partition holds its newest messages. Replacing the database can make each of those reads faster, but it can't stop them from arriving.
 
@@ -124,7 +180,45 @@ By routing requests for the same channel to the same service instance, they crea
 
 The broader lesson is that a faster database and less database work solve different problems. ScyllaDB made each read cheaper. Consistent hashing and request coalescing reduced how many reads Discord needed to perform at all. Together, they brought the cluster from 177 nodes to 72 and reduced p99 read latency from a range of 40 to 125 milliseconds to a steady 15.
 
+*The two independent changes and their combined outcome:*
+
+```mermaid
+graph LR
+    B["Before<br/>177 Cassandra nodes<br/>hot partitions · quorum stalls<br/>compaction debt · JVM GC pauses<br/>p99 40–125 ms"]
+    S["Replace the database<br/>ScyllaDB in C++<br/>no GC pauses · shard-per-core<br/>each read cheaper"]
+    D["Reduce the reads<br/>Rust data services<br/>consistent hashing on channel_id<br/>request coalescing"]
+    A["After<br/>72 nodes<br/>p99 steady 15 ms"]
+
+    B --> S
+    B --> D
+    S --> A
+    D --> A
+
+    style B fill:#FFB6C1
+    style S fill:#FFE4B5
+    style D fill:#FFE4B5
+    style A fill:#90EE90
+```
+
 [Read the original at Discord Engineering](https://discord.com/blog/how-discord-stores-trillions-of-messages)
+
+## 🎓 Key Takeaways
+
+- **Hot partitions are a traffic problem, not a schema problem.** A popular channel concentrates thousands of reads on the three replicas holding its newest bucket — adding more buckets only complicates the primary "read a channel in order" query without removing the underlying demand.
+- **A faster database and less database work solve different problems.** ScyllaDB made each read cheaper; consistent hashing plus request coalescing reduced how many reads reached the database at all. Discord needed both.
+- **ScyllaDB removed the JVM tax.** Being a C++ reimplementation of Cassandra's data model and query language, it kept Discord's existing schema while eliminating the garbage-collection pauses behind so many latency spikes, and its shard-per-core design cut operational firefighting.
+- **Request coalescing bounds duplicate reads to N.** Routing every request for a channel to the same instance (consistent hashing on `channel_id`) lets identical in-flight requests share one query — so millions of simultaneous readers collapse to at most one database read per service instance.
+- **Coalescing was chosen over caching to keep consistency simple.** Unlike a cache, coalescing never serves a stale result and needs no expiration or invalidation; it only lets requests that overlap in time share work the database is already doing.
+- **The two changes were decoupled.** The data services shipped while Cassandra was still the primary store, reducing hot-partition incidents before the ScyllaDB migration was even complete — and took the cluster from 177 nodes to 72.
+
+## 📚 Related Concepts
+
+- [Cassandra](../DeepDives/Cassandra.md) — the LSM/SSTable/memtable storage model, compaction, and the partition-key + clustering-key scheme this post builds on.
+- [Scaling Reads](../Patterns/ScalingReads.md) — request coalescing and other techniques for handling many concurrent reads of the same data.
+- [Real-Time Updates](../Patterns/Real-TimeUpdates.md) — pushing/routing via consistent hashing so related requests land on the same instance.
+- [Consistent Hashing](../../CoreConcepts/ConsistentHashing.md) — the routing scheme that keeps a channel pinned to one data-service instance as instances scale.
+- [Sharding](../../CoreConcepts/Sharding.md) — partitioning data across nodes and why hot partitions arise from skewed traffic.
+- [Data Modeling](../CoreConcepts/DataModeling.md) — partition keys vs. clustering keys and time-bucketing to bound partition growth.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/in-the-wild/discord-messages-scylladb](https://www.hellointerview.com/learn/system-design/in-the-wild/discord-messages-scylladb)*
