@@ -1,36 +1,38 @@
-# Design Instagram
+# 📸 Design Instagram
 
 > **Pattern**: Media + Feed
 > **Difficulty**: Medium
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/instagram)
 
----
+> **Summary**: Instagram is a photo/video-sharing social network that fuses two hard problems into one app: a **large-object media pipeline** (direct-to-S3 upload, async multi-resolution encoding, CDN delivery) and **fan-out feed aggregation** at social-network scale (~500M DAU, ~100M posts/day, read-heavy). The mature design serves EXIF-stripped derived variants from a CDN — never the original bytes — and generates feeds with a **hybrid push/pull** model: normal accounts fan out on write into per-user Redis feed lists, while celebrities are pulled on read and merged in memory, so both write and read amplification stay bounded. Cursor pagination on a composite `(createdAt, postId)` key keeps the scroll session stable as new posts land at the top.
 
-## Table of Contents
+## 📋 Table of Contents
 
-- [Understanding the Problem](#understanding-the-problem)
+- [Understanding the Problem](#-understanding-the-problem)
   - [Functional Requirements](#functional-requirements)
   - [Non-Functional Requirements](#non-functional-requirements)
-- [Core Entities](#core-entities)
-- [API Design](#api-design)
-- [High-Level Design](#high-level-design)
-- [Deep Dives](#deep-dives)
+- [Layman's Explanation](#-laymans-explanation)
+- [Core Entities](#-core-entities)
+- [API Design](#-api-design)
+- [High-Level Design](#-high-level-design)
+- [Deep Dives](#-deep-dives)
   - [1. Photo Upload, Processing and CDN Delivery](#1-photo-upload-processing-and-cdn-delivery)
   - [2. Feed Generation: Pull vs Push vs Hybrid](#2-feed-generation-pull-vs-push-vs-hybrid)
   - [3. Stories and 24-Hour Ephemeral Storage](#3-stories-and-24-hour-ephemeral-storage)
   - [4. Consistent Feed Rendering and Pagination](#4-consistent-feed-rendering-and-pagination)
-- [Scaling Journey: 0 → ∞](#scaling-journey-0--)
+- [Scaling Journey: 0 → ∞](#-scaling-journey-0--)
   - [Stage 1: 0 – 100 Users](#stage-1-0--100-users)
   - [Stage 2: 100 – 1,000 Users](#stage-2-100--1000-users)
   - [Stage 3: 1K – 100K Users](#stage-3-1k--100k-users)
   - [Stage 4: 100K – 10M Users](#stage-4-100k--10m-users)
   - [Stage 5: 10M+ Users](#stage-5-10m-users)
-- [Insider Tips and Tricks](#insider-tips-and-tricks)
-- [Expected Depth by Level](#expected-depth-by-level)
+- [Insider Tips and Tricks](#-insider-tips-and-tricks)
+- [Expected Depth by Level](#-expected-depth-by-level)
+- [Related Concepts](#-related-concepts)
 
 ---
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 Instagram is a photo- and video-sharing social network. A user uploads rich media with a caption, follows other users, and opens the app to a reverse-chronological feed of posts from everyone they follow. The design challenge blends two hard problems: **large-object media pipelines** (upload, encode, deliver via CDN) and **fan-out feed aggregation** at social-network scale, where follower counts range from zero to hundreds of millions.
 
@@ -73,7 +75,7 @@ The yearbook metaphor falls apart fast at real scale. Instagram has roughly **50
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 | Entity | Description |
 |---|---|
@@ -86,7 +88,7 @@ The yearbook metaphor falls apart fast at real scale. Instagram has roughly **50
 
 ---
 
-## API Design
+## 🔌 API Design
 
 ```
 POST   /posts
@@ -110,33 +112,60 @@ Feed pagination is **cursor-based** using the oldest post's timestamp (or an opa
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
-```
-  Mobile / Web Client
-          │
-          ▼
-     API Gateway  ── AuthN/AuthZ, rate limit
-          │
-   ┌──────┼─────────────────────────────────────┐
-   ▼      ▼            ▼            ▼           ▼
- Post    User/        Feed       Media       Follow
- Svc     Profile      Svc        Svc         Svc
-   │       │            │          │           │
-   │       │            │          │           │
-   ▼       ▼            ▼          ▼           ▼
- Posts   Users        Feed       Object      Graph
-  DB      DB          Cache     Storage       DB
-                    (Redis)      (S3)    (sharded by user)
-                                  │
-                                  ▼
-                            Encoding Pipeline
-                            (resolution variants,
-                             transcoding)
-                                  │
-                                  ▼
-                                 CDN
-                              (edge POPs)
+```mermaid
+graph TB
+    Client[Mobile / Web Client]
+    GW[API Gateway<br/>AuthN/AuthZ · rate limit]
+
+    subgraph "Services"
+        PostSvc[Post Service]
+        UserSvc[User / Profile Service]
+        FeedSvc[Feed Service<br/>hot read path]
+        MediaSvc[Media Service<br/>presigned URLs]
+        FollowSvc[Follow Service]
+    end
+
+    subgraph "Data Stores"
+        PostsDB[(Posts DB<br/>caption · mediaId · authorId)]
+        UsersDB[(Users DB)]
+        FeedCache[(Feed Cache<br/>Redis · per-user lists)]
+        S3[(Object Storage<br/>S3 · original + variants)]
+        GraphDB[(Graph DB<br/>sharded by user)]
+    end
+
+    subgraph "Media Path"
+        Encode[Encoding Pipeline<br/>resolution variants<br/>transcoding]
+        CDN[CDN<br/>edge POPs]
+    end
+
+    Client --> GW
+    GW --> PostSvc
+    GW --> UserSvc
+    GW --> FeedSvc
+    GW --> MediaSvc
+    GW --> FollowSvc
+
+    PostSvc --> PostsDB
+    UserSvc --> UsersDB
+    FeedSvc --> FeedCache
+    MediaSvc --> S3
+    FollowSvc --> GraphDB
+
+    S3 -->|ObjectCreated event| Encode
+    Encode -->|write variants| S3
+    S3 --> CDN
+    CDN -.serve variants.-> Client
+
+    style FeedCache fill:#e1f5ff
+    style S3 fill:#e1f5ff
+    style PostsDB fill:#e1f5ff
+    style UsersDB fill:#e1f5ff
+    style GraphDB fill:#e1f5ff
+    style Encode fill:#FFE4B5
+    style CDN fill:#f3e5f5
+    style FeedSvc fill:#90EE90
 ```
 
 Key ideas:
@@ -147,9 +176,43 @@ Key ideas:
 
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. Photo Upload, Processing and CDN Delivery
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant M as Media Service
+    participant S3 as Object Storage (S3)
+    participant Q as Queue (SQS/Kafka)
+    participant W as Encoding Workers
+    participant P as Post Service
+
+    C->>M: POST /media/upload-url { contentType, sizeBytes }
+    M-->>C: { mediaId, presigned PUT URL }
+    C->>S3: PUT bytes directly (app tier never sees body)
+    S3->>Q: ObjectCreated event
+    Q->>W: consume event
+    W->>W: strip EXIF · re-encode variants<br/>(150/320/640/1080 · HLS 480/720/1080)
+    W->>S3: write variants at deterministic keys
+    W->>M: mark media status = ready
+    C->>P: POST /posts { caption, mediaIds }
+    P->>M: verify media is ready
+    P-->>C: { postId }
+```
+
+The `media` row moves through a small lifecycle before a post referencing it can go live:
+
+```mermaid
+stateDiagram-v2
+    [*] --> uploading: presigned URL issued
+    uploading --> processing: ObjectCreated event fired
+    processing --> partial_ready: first 10s of video encoded (sync)
+    processing --> ready: all variants written
+    partial_ready --> ready: full ladder finishes (async)
+    ready --> [*]: post accepted / made visible
+```
 
 **Flow:**
 1. Client calls `POST /media/upload-url` with content type and size. The Media Service generates a `mediaId`, builds an S3 object key like `media/{userId}/{mediaId}/original.jpg`, and returns a short-lived presigned `PUT` URL.
@@ -160,6 +223,8 @@ Key ideas:
    - Videos: HLS segments at 480p / 720p / 1080p, plus a poster frame. To reduce perceived processing delay, the first 10 seconds of video are encoded synchronously at the lowest bitrate (~1–2s of encoding time), emitting a `partial_ready` status so the client can begin streaming immediately. Full-ladder encoding for all bitrates continues asynchronously in the background.
 5. Variants are written back under **deterministic S3 keys** (e.g. `media/{userId}/{mediaId}/1080.webp`). Deterministic naming is essential for CDN cache predictability: a CDN edge node can cache a variant indefinitely by URL, and there is no cache-invalidation thundering herd if the same key is re-requested. The `media` row is updated to `status=ready`.
 6. The client then calls `POST /posts` with `mediaIds`. The Post Service refuses to accept media not in `ready` state, or writes the post but hides it until ready.
+
+> 💡 **Never serve the original upload bytes.** The original carries unstripped EXIF metadata (GPS, device serials, timestamps) and is 8–20 MB. All user-facing traffic flows only through CDN-cached, EXIF-stripped derived variants; the original stays in cold storage for DRM/DMCA workflows.
 
 **Delivery:** reads go through the CDN (CloudFront / Akamai). The CDN caches each variant at edge POPs keyed by object URL. URLs are versioned so that replacing a variant invalidates cleanly. The client picks a variant based on device pixel density and viewport — critically, the original upload bytes are **never served to end users**. Serving the original would expose unstripped EXIF metadata and impose 8–20 MB payloads on mobile clients; all user-facing traffic flows through CDN-cached derived variants only.
 
@@ -185,6 +250,37 @@ When a user posts, enqueue a fan-out job. For each follower, prepend `(postId, c
   1. Reads the precomputed list (captures posts from normal followees).
   2. Separately queries recent posts from the user's celebrity followees (a small set — typically dozens, not millions).
   3. Merges the two lists in memory, sorts, returns.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant F as Feed Service
+    participant R as Redis (precomputed feed:{userId})
+    participant P as Posts DB (celebrity followees)
+
+    C->>F: GET /feed?cursor=...
+    F->>R: LRANGE feed:{userId} (normal-followee posts)
+    R-->>F: precomputed entries
+    F->>P: query recent posts from celebrity followees
+    P-->>F: celebrity posts (window snapped at page 0)
+    F->>F: merge + sort by (createdAt, postId)<br/>skip entries whose author is unfollowed
+    F-->>C: { posts, nextCursor }
+```
+
+At write time the two account classes route differently — normal accounts fan out, celebrities do not:
+
+```mermaid
+graph LR
+    Post[New Post] --> Router{high_fanout?<br/>dynamic threshold}
+    Router -->|No: normal account| Fanout[Fan-out on write<br/>prepend to each<br/>follower feed list]
+    Router -->|Yes: celebrity| Skip[No fan-out<br/>pulled on read instead]
+    Fanout --> Lists[(Per-follower<br/>Redis feed lists)]
+
+    style Fanout fill:#90EE90
+    style Skip fill:#FFE4B5
+    style Lists fill:#e1f5ff
+    style Router fill:#FFB6C1
+```
 
 This bounds the worst case on both sides: write amplification is capped by the threshold, and read amplification is capped by how many celebrities any one user follows. The feed list is cached in Redis with a bounded length (e.g. latest 1000 entries) and backed by durable storage for rebuilds.
 
@@ -212,6 +308,8 @@ Stories are short-lived media that expire 24 hours after posting. They have very
 
 ### 4. Consistent Feed Rendering and Pagination
 
+> ⚠️ **`LIMIT/OFFSET` pagination breaks a live feed.** As new posts arrive at the top, offsets shift down — a scrolling user sees duplicates or skips whole posts. The fix is a cursor keyed on the content, not a positional offset.
+
 Naive pagination (`LIMIT 20 OFFSET N`) breaks as new posts arrive at the top: items shift down, a user scrolls, and they see duplicates or skips. Instagram-style feeds use **cursor-based pagination**:
 
 - The server returns a `nextCursor` that encodes the composite `(createdAt, postId)` of the oldest item on the page. Using both fields matters: `createdAt` alone is not unique (two posts can share the same millisecond timestamp), so `postId` serves as a tiebreaker to make the cursor fully deterministic.
@@ -224,9 +322,27 @@ Naive pagination (`LIMIT 20 OFFSET N`) breaks as new posts arrive at the top: it
 
 ---
 
-## Scaling Journey: 0 → ∞
+## 📈 Scaling Journey: 0 → ∞
 
 This section is an original walkthrough of how an Instagram-shaped system is realistically built up as the user base grows. The key tension throughout is the dual axis: **media bytes** (storage and bandwidth) and **feed reads** (latency under fan-out).
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0–100<br/>Monolith + Postgres<br/>serve original.jpg"]
+    S2["Stage 2<br/>100–1K<br/>Presigned S3 + CDN<br/>1 async encoder"]
+    S3["Stage 3<br/>1K–100K<br/>Split services + Redis<br/>push fan-out < 10K"]
+    S4["Stage 4<br/>100K–10M<br/>Hybrid feed · sharded<br/>Posts DB + stories"]
+    S5["Stage 5<br/>10M+<br/>Multi-region active-active<br/>tiered + geo storage"]
+
+    S1 -->|"app-server bandwidth chokes on 8MB"| S2
+    S2 -->|"feed SQL creeps past 300ms"| S3
+    S3 -->|"celebrity fan-out floods the queue"| S4
+    S4 -->|"CDN egress + single-region S3 explode"| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0 – 100 Users
 
@@ -309,7 +425,7 @@ This section is an original walkthrough of how an Instagram-shaped system is rea
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 ### Never Serve the Original Upload Bytes to End Users
 
@@ -345,7 +461,7 @@ A simple SHA-256 of the media bytes will not catch a re-upload of the same photo
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Area | Mid-Level (IC4) | Senior (IC5) | Staff (IC6+) |
 |---|---|---|---|
@@ -356,3 +472,20 @@ A simple SHA-256 of the media bytes will not catch a re-upload of the same photo
 | **Stories** | Mentions TTL. | Separate storage path, per-user active-stories sorted set, S3 lifecycle for physical deletion. | Distinguishes story access pattern from feed, justifies why stories are *not* fanned out, reasons about the bursty read curve. |
 | **Scaling** | Handwaves "we'd shard it." | Picks shard keys (authorId for posts, followerId for follows), sizes Redis. | Describes a realistic 0 → hyperscale evolution with explicit triggers, trade-offs, and what is deliberately deferred at each stage. |
 | **Operations** | — | Mentions metrics, p99 latency. | Capacity planning, regional failover, chaos testing, cost model, on-call ergonomics. |
+
+---
+
+## 📚 Related Concepts
+
+- [Caching](../CoreConcepts/Caching.md) — the Redis feed cache, bounded feed lists, and CDN edge caching of media variants.
+- [Sharding](../CoreConcepts/Sharding.md) — sharding the Posts DB by `authorId` and the follow graph by `followerId`.
+- [Consistent Hashing](../CoreConcepts/ConsistentHashing.md) — distributing sharded posts and the Redis feed cluster across nodes.
+- [Redis](../CoreConcepts/Redis.md) — per-user feed lists (`LRANGE`) and the stories sorted set (`ZRANGEBYSCORE`).
+- [Data Modelling](../CoreConcepts/DataModelling.md) — separating small Post metadata from large media in object storage.
+- [Scaling Reads](../SystemDesign/Patterns/ScalingReads.md) — the read-heavy feed path and precomputed per-user timelines.
+- [Scaling Writes](../SystemDesign/Patterns/ScalingWrites.md) — fan-out-on-write and its write-amplification limits for celebrities.
+- [Handling Large Blobs](../SystemDesign/Patterns/HandlingLargeBlobs.md) — direct-to-S3 presigned uploads keeping bytes off the app tier.
+- [Managing Long Running Tasks](../SystemDesign/Patterns/ManagingLongRunningTasks.md) — the async encoding pipeline triggered off an S3 event queue.
+- [Kafka](../SystemDesign/DeepDives/Kafka.md) — the `ObjectCreated` event queue and fan-out job stream.
+- [FB News Feed (breakdown)](../SystemDesign/ProblemBreakdowns/FbNewsFeed.md) — the pull/push/hybrid feed generation problem in depth.
+- [Instagram (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/Instagram.md) — the source breakdown this doc expands on.

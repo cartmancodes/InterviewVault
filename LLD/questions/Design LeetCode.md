@@ -1,31 +1,31 @@
-# Design LeetCode
+# 🧩 Design LeetCode
 
 > **Pattern**: Sandboxed Execution / Queue-based Workers
 > **Difficulty**: Medium
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/leetcode)
 
+> **Summary**: LeetCode runs arbitrary, adversarial user code on our own infrastructure and must do so safely, fairly, and at burst scale. The defining challenge is not the CRUD around problems but a secure execution sandbox — hardened Docker with seccomp-bpf as a floor, Firecracker/gVisor microVMs for multi-tenant safety — fed by a queue that decouples bursty submissions (tens of thousands in a 60-second contest window) from slow execution. Verdicts return via an async submit-then-poll flow, while a Redis sorted set delivers O(log N) live contest ranks and an offline pipeline catches cheating without ever touching the synchronous submit path.
+
+## 📋 Table of Contents
+
+- [Understanding the Problem](#understanding-the-problem)
+- [Layman's Explanation](#laymans-explanation)
+- [Core Entities](#core-entities)
+- [API Design](#api-design)
+- [High-Level Design](#high-level-design)
+- [Deep Dives](#deep-dives)
+  - [1. Secure Code Execution Sandbox](#1-secure-code-execution-sandbox)
+  - [2. Queue-Based Asynchronous Execution](#2-queue-based-asynchronous-execution)
+  - [3. Contest Leaderboards](#3-contest-leaderboards)
+  - [4. Cheating Detection](#4-cheating-detection)
+- [Scaling Journey: 0 to Infinity](#scaling-journey-0-to-infinity)
+- [Insider Tips and Tricks](#insider-tips-and-tricks)
+- [Expected Depth by Level](#expected-depth-by-level)
+- [Related Concepts](#related-concepts)
+
 ---
 
-## Table of Contents
-
-1. [Understanding the Problem](#understanding-the-problem)
-   - [Functional Requirements](#functional-requirements)
-   - [Non-Functional Requirements](#non-functional-requirements)
-2. [Core Entities](#core-entities)
-3. [API Design](#api-design)
-4. [High-Level Design](#high-level-design)
-5. [Deep Dives](#deep-dives)
-   - [1. Secure Code Execution Sandbox](#1-secure-code-execution-sandbox)
-   - [2. Queue-Based Asynchronous Execution](#2-queue-based-asynchronous-execution)
-   - [3. Contest Leaderboards](#3-contest-leaderboards)
-   - [4. Cheating Detection](#4-cheating-detection)
-6. [Scaling Journey: 0 to Infinity](#scaling-journey-0-to-infinity)
-7. [Insider Tips and Tricks](#insider-tips-and-tricks)
-8. [Expected Depth by Level](#expected-depth-by-level)
-
----
-
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 LeetCode is a platform where engineers practice algorithmic problems by writing solutions in their preferred language, submitting code against a hidden test-case suite, and competing on live contest leaderboards. The interesting part of the design is not the CRUD around problems, but the fact that we are running arbitrary user-supplied code on our own infrastructure and must do so safely and at burst scale.
 
@@ -72,7 +72,7 @@ A real chemistry classroom handles maybe one experiment at a time, in one langua
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 | Entity | Key Fields | Notes |
 |---|---|---|
@@ -84,7 +84,7 @@ A real chemistry classroom handles maybe one experiment at a time, in one langua
 
 ---
 
-## API Design
+## 🔌 API Design
 
 All endpoints live behind an authenticated gateway; `userId` comes from the session token, never the payload.
 
@@ -114,31 +114,43 @@ Notes:
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
-```
-                 +---------------+
-     Browser --->| API Gateway   |---> Auth / JWT
-                 +-------+-------+
-                         |
-                         v
-                 +---------------+         +------------------+
-                 | Submission    |-------->| Submission Queue |
-                 | Service       |         | (SQS / Kafka)    |
-                 +-------+-------+         +---------+--------+
-                         |                           |
-                         |                           v
-                         |                 +-------------------+
-                         |                 | Worker Pool       |
-                         |                 |  (containerised   |
-                         |                 |   sandboxes)      |
-                         |                 +----+--------+-----+
-                         |                      |        |
-                         v                      v        v
-                 +---------------+     +-----------+  +------------+
-                 | Problem Store |     | Submission|  | Leaderboard|
-                 | (DynamoDB)    |     | Store     |  | (Redis ZSET)|
-                 +---------------+     +-----------+  +------------+
+```mermaid
+graph TB
+    subgraph Clients
+        BR[Browser]
+    end
+
+    GW[API Gateway<br/>Auth / JWT]
+
+    subgraph Services
+        SS[Submission Service]
+        WP[Worker Pool<br/>containerised sandboxes]
+    end
+
+    subgraph Stores
+        Q[[Submission Queue<br/>SQS / Kafka]]
+        PS[(Problem Store<br/>DynamoDB)]
+        SUB[(Submission Store)]
+        LB[(Leaderboard<br/>Redis ZSET)]
+    end
+
+    BR --> GW
+    GW --> SS
+    SS -->|write QUEUED row| SUB
+    SS -->|publish job| Q
+    Q --> WP
+    WP -->|pull test cases| PS
+    WP -->|write verdict| SUB
+    WP -->|ZADD on ACCEPTED| LB
+    BR -.poll GET /submissions/id.-> GW
+
+    style WP fill:#90EE90
+    style Q fill:#FFE4B5
+    style PS fill:#e1f5ff
+    style SUB fill:#e1f5ff
+    style LB fill:#e1f5ff
 ```
 
 Request flow for a submission:
@@ -148,6 +160,56 @@ Request flow for a submission:
 3. On completion the worker writes the verdict back to the submission store and, if the submission is part of a live contest, performs a `ZADD` on the contest's sorted set in Redis.
 4. The client has been polling `GET /submissions/{id}` the whole time and now sees the terminal state.
 
+The same flow over time, from submit to terminal verdict:
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant SS as Submission Service
+    participant Q as Submission Queue
+    participant W as Worker (Sandbox)
+    participant SUB as Submission Store
+    participant LB as Redis ZSET
+
+    C->>SS: POST /submit { language, code }
+    SS->>SUB: write QUEUED row
+    SS->>Q: publish job { submissionId, problemId, language, codeRef }
+    SS-->>C: { submissionId, status: QUEUED }
+    Q->>W: worker picks up job
+    W->>SUB: transition to RUNNING
+    W->>W: run code in sandbox, per test case
+    alt All test cases pass
+        W->>SUB: write ACCEPTED verdict
+        W->>LB: ZADD contest sorted set
+    else A test case fails
+        W->>SUB: write WRONG_ANSWER / TLE / MLE + failedCaseIdx
+    end
+    loop ~1 Hz polling
+        C->>SS: GET /submissions/{id}
+        SS-->>C: 202 while RUNNING, 200 on terminal state
+    end
+```
+
+A submission moves through a small lifecycle whose terminal states are exactly the verdicts in the Core Entities table:
+
+```mermaid
+stateDiagram-v2
+    [*] --> QUEUED
+    QUEUED --> RUNNING: worker picks up job
+    RUNNING --> ACCEPTED: all test cases pass
+    RUNNING --> WRONG_ANSWER: output mismatch
+    RUNNING --> TLE: wall-clock / CPU limit exceeded
+    RUNNING --> MLE: cgroup memory limit hit
+    RUNNING --> RUNTIME_ERROR: crash / exception
+    RUNNING --> COMPILE_ERROR: fails to build
+    ACCEPTED --> [*]
+    WRONG_ANSWER --> [*]
+    TLE --> [*]
+    MLE --> [*]
+    RUNTIME_ERROR --> [*]
+    COMPILE_ERROR --> [*]
+```
+
 Why these components:
 - **Queue** decouples bursty submissions from slow execution, so the API stays responsive even when workers are saturated.
 - **Redis sorted set** is a natural fit for rank queries: `ZRANGE` and `ZREVRANGE` are O(log N + M).
@@ -155,13 +217,31 @@ Why these components:
 
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. Secure Code Execution Sandbox
 
 Running untrusted code is the defining challenge of this design. A naive implementation is disqualifying and each layer of hardening addresses a specific attack surface.
 
+The isolation model evolves through three tiers, each closing an attack surface the previous one leaves open:
+
+```mermaid
+graph LR
+    N["Naive<br/>run in API process<br/>rm -rf /, exfiltrate creds,<br/>fork-bomb the host"]
+    D["Baseline<br/>Docker + hardened profile<br/>read-only FS, cgroups,<br/>--network=none, cap-drop,<br/>seccomp-bpf whitelist"]
+    V["Hardened<br/>gVisor / Firecracker microVM<br/>second kernel boundary<br/>~125ms cold start"]
+
+    N -->|shares host, no isolation| D
+    D -->|shared kernel: CVE = cross-tenant escape| V
+
+    style N fill:#FFB6C1
+    style D fill:#FFE4B5
+    style V fill:#90EE90
+```
+
 **Naive: run in the API process.** Immediately disqualifying. A malicious submission can `rm -rf /`, exfiltrate environment variables (including database credentials and cloud IAM tokens), launch outbound network connections from the API server's identity, or fork-bomb the host. There is no recovery path from this design.
+
+> ⚠️ **Never run user code in the API process — and never in a thread pool.** User-submitted code is adversarial by default. A thread is a scheduling unit inside the same address space, not an isolation boundary; the minimum acceptable floor is one process per submission, and one fresh container (or microVM) per submission is the production standard.
 
 **Baseline: Docker containers with a hardened profile.** Each submission runs in a fresh container built from a per-language base image. The container must be configured with all of the following:
 - Read-only root filesystem with a small writable `tmpfs` for compiler output and scratch space, capped at a few MB.
@@ -194,6 +274,8 @@ A contest can produce ~10k submissions in the first minute. If a submission runs
 - Pre-warming a pool of idle containers or microVMs reduces cold-start latency to under 100ms, which is essential for meeting the five-second end-to-end SLA.
 
 **Contest burst handling.** When a contest with 10K participants starts simultaneously, spinning up 10K containers on demand would take minutes. The solution is to pre-warm a pool of idle containers five to ten minutes before the contest start time. When the contest opens, incoming submissions draw immediately from the warm pool. Auto-scaling refills the pool asynchronously so it never runs dry. The contest schedule feeds directly into the capacity planner; burst readiness is a proactive operation, not a reactive one.
+
+> 💡 **Pre-warm from the contest schedule; never scale reactively into a burst.** Container startup takes seconds, VM startup tens of seconds, and new EC2 instances minutes — by the time reactive autoscaling delivers capacity, the burst has already blown the five-second SLA. The schedule is known in advance, so the capacity planner boots N idle sandboxes before the gun and lets autoscaling merely refill the drain.
 
 **Trade-off:** the price of decoupling is that the client experience becomes "submit, then poll." The ~1 Hz polling cadence is the accepted UX cost. An optional SSE or WebSocket layer can push verdict events instead, but polling is simpler to operate and sufficient for most users.
 

@@ -1,25 +1,29 @@
-## Design FB Post Search
+# 🔍 Design FB Post Search
 
 > **Pattern**: Inverted Index / Search
 > **Difficulty**: Medium
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/fb-post-search)
 
----
-
-## Table of Contents
-
-1. [Understanding the Problem](#understanding-the-problem)
-2. [Core Entities](#core-entities)
-3. [API Design](#api-design)
-4. [High-Level Design](#high-level-design)
-5. [Deep Dives](#deep-dives)
-6. [Scaling Journey: 0 to Infinity](#scaling-journey-0-to-infinity)
-7. [Insider Tips and Tricks](#insider-tips-and-tricks)
-8. [Expected Depth by Level](#expected-depth-by-level)
+> **Summary**: FB Post Search lets a user type a keyword and get back matching posts sorted by recency or by like count, over a large, continuously growing corpus with a one-minute freshness bar. The load-bearing choice is an inverted index that maps each token to two precomputed posting lists — a Redis list ordered by recency and a Redis sorted set ordered by like count — so the hot path is an O(log N + page_size) read instead of a scan-and-sort. Writes are decoupled from the index via a Postgres → Debezium CDC → Kafka pipeline, likes are folded into the index only at milestone thresholds to tame write amplification, and the index is sharded by token with hot-key mitigation for celebrity terms.
 
 ---
 
-## Understanding the Problem
+## 📋 Table of Contents
+
+- [Understanding the Problem](#understanding-the-problem)
+- [Layman's Explanation](#laymans-explanation)
+- [Core Entities](#core-entities)
+- [API Design](#api-design)
+- [High-Level Design](#high-level-design)
+- [Deep Dives](#deep-dives)
+- [Scaling Journey: 0 to Infinity](#scaling-journey-0-to-infinity)
+- [Insider Tips and Tricks](#insider-tips-and-tricks)
+- [Expected Depth by Level](#expected-depth-by-level)
+- [Related Concepts](#related-concepts)
+
+---
+
+## 🎯 Understanding the Problem
 
 Facebook Post Search lets a user type a keyword and retrieve relevant posts, sorted by either the newest first or by number of likes. Unlike a general web search, the corpus here is large, continuously growing, and the freshness bar is tight: a post created now must be findable within a minute.
 
@@ -75,15 +79,36 @@ A real Facebook search has to handle **typos** ("becycle" should still find "bic
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 - **User** - creator of posts and author of likes.
 - **Post** - the searchable unit. Holds the text content, creation timestamp, author, and a denormalized like count.
 - **Like** - association between a user and a post. In the index, likes matter primarily as an aggregate count rather than a per-user record.
 
+```mermaid
+erDiagram
+    USER ||--o{ POST : creates
+    USER ||--o{ LIKE : authors
+    POST ||--o{ LIKE : receives
+    USER {
+        string userId
+    }
+    POST {
+        string postId
+        string content
+        timestamp createdAt
+        string author
+        int likeCount
+    }
+    LIKE {
+        string userId
+        string postId
+    }
+```
+
 ---
 
-## API Design
+## 🔌 API Design
 
 ```
 POST /posts
@@ -104,7 +129,7 @@ The search endpoint uses a cursor instead of page numbers because the index shif
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
 At a glance, the system has three subsystems:
 
@@ -112,26 +137,47 @@ At a glance, the system has three subsystems:
 2. **Indexing pipeline** - Consumers of the event bus tokenize content and apply updates to an inverted index keyed by token.
 3. **Read path (search)** - A Search service takes a query, looks up posting lists in the inverted index, merges and ranks, then hydrates post bodies from the Post service.
 
-```
-[Client]
-   |
-   v
-[API Gateway]
-   |
-   +--> [Post Service]  --> [Post DB] --+
-   |                                    |
-   +--> [Like Service]  --> [Like DB] --+--> [Kafka: post-events, like-events]
-   |                                                    |
-   |                                                    v
-   |                                      [Indexing Workers]
-   |                                                    |
-   |                                                    v
-   |                                     [Inverted Index: Redis cluster]
-   |                                                    ^
-   +--> [Search Service] --------------------------------+
-                |
-                v
-         [Post Service] for hydration
+```mermaid
+graph TB
+    Client[Client]
+    GW[API Gateway]
+
+    subgraph "Write Path"
+        PS[Post Service]
+        LS[Like Service]
+        PDB[(Post DB<br/>Postgres)]
+        LDB[(Like DB)]
+    end
+
+    subgraph "Indexing Pipeline"
+        KAFKA[[Kafka<br/>post-events · like-events]]
+        IW[Indexing Workers<br/>tokenize + apply]
+    end
+
+    subgraph "Index / Read Path"
+        IDX[(Inverted Index<br/>Redis cluster)]
+        SS[Search Service<br/>lookup · merge · rank]
+    end
+
+    Client --> GW
+    GW --> PS
+    GW --> LS
+    GW --> SS
+    PS --> PDB
+    LS --> LDB
+    PDB --> KAFKA
+    LDB --> KAFKA
+    KAFKA --> IW
+    IW --> IDX
+    SS -->|posting-list lookup| IDX
+    SS -->|hydrate bodies| PS
+
+    style IDX fill:#e1f5ff
+    style PDB fill:#e1f5ff
+    style LDB fill:#e1f5ff
+    style KAFKA fill:#FFE4B5
+    style IW fill:#FFE4B5
+    style SS fill:#90EE90
 ```
 
 The inverted index itself is the load-bearing design choice. Each token (word in a post) maps to a posting list of post IDs. Two parallel structures are kept per token:
@@ -139,11 +185,25 @@ The inverted index itself is the load-bearing design choice. Each token (word in
 - A **recency list** ordered by creation time - implemented as a Redis list (or sorted set keyed on timestamp) so the latest posts for a token can be read from the head cheaply.
 - A **likes list** ordered by like count - implemented as a Redis sorted set where the score is the post's like count, allowing `ZREVRANGE` to pull the top-N popular posts for the token.
 
+```mermaid
+graph LR
+    TOK["token<br/>e.g. cat"]
+    subgraph "Per-token posting structures"
+        REC["idx:recency:cat<br/>Redis list<br/>ordered by createdAt<br/>LPUSH + LTRIM, head = newest"]
+        LIK["idx:likes:cat<br/>Redis sorted set<br/>score = like count<br/>ZREVRANGE = top-N"]
+    end
+    TOK --> REC
+    TOK --> LIK
+
+    style REC fill:#e1f5ff
+    style LIK fill:#e1f5ff
+```
+
 Maintaining both structures avoids expensive request-time sorting: if you only stored post IDs unordered, a query for a popular keyword might require pulling tens of millions of IDs, hydrating them, and sorting in memory, blowing the 500ms budget.
 
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. Inverted Index Design
 
@@ -156,6 +216,21 @@ An inverted index flips the relationship "post contains words" into "word appear
 - `idx:likes:<token>` - Redis sorted set, score = current like count. `ZREVRANGE` returns top-N in O(log N + page_size) time.
 
 **Read pattern.** For `GET /search?keyword=cat&sort_by=likes&limit=20`, the Search service runs `ZREVRANGE idx:likes:cat 0 19 WITHSCORES`, gets 20 post IDs, then calls the Post service (or a cache) to hydrate bodies. For recency, it runs `LRANGE idx:recency:cat 0 19`.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant SS as Search Service
+    participant IDX as Redis Inverted Index
+    participant PS as Post Service
+
+    C->>SS: GET /search?keyword=cat&sort_by=likes&limit=20
+    SS->>IDX: ZREVRANGE idx:likes:cat 0 19 WITHSCORES
+    IDX-->>SS: 20 post IDs + scores
+    SS->>PS: hydrate post bodies
+    PS-->>SS: content + author + createdAt + likeCount
+    SS-->>C: results + nextCursor
+```
 
 **Multi-word queries.** For `"cat mat"`, intersect the posting lists of both tokens. A naive intersection on two large sorted sets is expensive. Mitigations:
 - Pull a bounded window (top-1k) from each and intersect in-memory at the service layer — acceptable when posting lists are capped.
@@ -190,6 +265,8 @@ The problem statement allows only two sort orders: recency and likes. This keeps
 
 **Why not sort at query time?** Sorting at query time means materializing the entire posting list, pulling like counts for every ID, and sorting, which for a popular keyword with 10M posts is catastrophic. A single `ZREVRANGE` returning the precomputed top-20 replaces what would otherwise be millions of reads and an N log N sort. Precomputing sort order in the index turns the hot path into an O(log N + page_size) operation — this is the core insight worth articulating clearly in an interview.
 
+> 💡 **Precompute the sort order; never sort at read time.** A single `ZREVRANGE` for the precomputed top-20 replaces materializing a 10M-entry posting list and running an N log N sort — collapsing the hot path from millions of reads to an O(log N + page_size) operation. This is the sentence to say out loud in the interview.
+
 **Why BM25 alone is wrong for social search.** BM25 (the industry-standard text relevance formula used by Elasticsearch) ranks by term frequency, inverse document frequency, and field length normalization. In a social context this is insufficient. A post with lower BM25 score from a close friend is almost always more relevant to the searcher than a high-scoring post from a stranger. Social signals — social graph distance, whether the author is a followed public figure, prior engagement history with the author — outweigh text relevance. The two-sort-order simplification is acceptable for this problem scope, but naming this gap in a senior interview demonstrates awareness of production social search.
 
 **Relevance nuance.** Real-world search layers in BM25 or a learned ranker (CTR, engagement, freshness decay). The problem treats this as below the line, so the two-index approach is enough. If asked to extend, name the signals: freshness penalty (score decays by sqrt(age)), engagement boost (comments, shares), author authority, and personalization (searcher's graph distance to the author).
@@ -203,6 +280,28 @@ The pipeline has to absorb creates and likes with very different volumes and rel
 2. Rather than having the application publish to Kafka directly (which creates a dual-write problem — Postgres write succeeds but Kafka publish fails), use Debezium CDC on the Postgres WAL. Debezium captures every committed row change and publishes a `post-created` event to the `post-events` Kafka topic atomically with the database commit.
 3. Indexing workers consume from `post-events`, tokenize the post content, and for each token issue an `LPUSH idx:recency:<token> <postId>` and `ZADD idx:likes:<token> 0 <postId>`. Workers batch writes (Redis pipelining) to amortize network overhead.
 4. Kafka's consumer group model handles worker failures automatically — if a worker crashes, another picks up the uncommitted partition offset.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant PS as Post Service
+    participant PG as Postgres
+    participant CDC as Debezium CDC
+    participant K as Kafka
+    participant IW as Indexing Worker
+    participant IDX as Redis Inverted Index
+
+    C->>PS: POST /posts { content }
+    PS->>PG: INSERT post (commit)
+    PG->>CDC: WAL row change
+    CDC->>K: publish post-created to post-events
+    K->>IW: consume post-created
+    IW->>IW: tokenize content
+    loop for each token
+        IW->>IDX: LPUSH idx:recency:token postId
+        IW->>IDX: ZADD idx:likes:token 0 postId
+    end
+```
 
 **Like flow.** Every like ideally updates the `idx:likes:<token>` score for every token in the liked post. But likes happen far more frequently than creates (a viral post can attract thousands of likes per second), and updating N tokens per like can saturate Redis.
 
@@ -221,6 +320,8 @@ Keeping the index fresh within a minute for creates is straightforward; keeping 
 **Freshness for creates.** Kafka end-to-end latency plus indexing time typically lands well under a minute. If a worker lags, the consumer group rebalances and another worker picks up the partition. Monitoring consumer lag (via Kafka consumer group offsets) surfaces freshness degradation before users notice it.
 
 **Like count updates — the naive approach.** Update `idx:likes:<token>` for every token on every like. For a post with 20 tokens and 1000 likes per second, that is 20,000 Redis writes per second per post — and a viral post receiving 50k likes/second generates 1 million Redis writes per second directed at the same set of token shards. This melts the cluster.
+
+> ⚠️ **Updating the index on every like melts the cluster.** 20 tokens × 1000 likes/s = 20,000 Redis writes/s for one post; a viral post at 50k likes/s drives ~1M writes/s at the same token shards. Fold likes into the index only at milestone thresholds — the authoritative counter stays in Postgres, the index score is an approximation sufficient for sort order.
 
 **Milestone updates in practice.** The Like service maintains an authoritative counter in Postgres (or a sharded counter store using Redis `INCR`). A Kafka consumer compares the current count against the last indexed milestone and emits an index-update event only on boundary crossings. The consumer is stateful (it must know the last indexed milestone), so its state is checkpointed to the same Postgres row or a dedicated table.
 
@@ -242,9 +343,27 @@ Keeping the index fresh within a minute for creates is straightforward; keeping 
 
 ---
 
-## Scaling Journey: 0 to Infinity
+## 📈 Scaling Journey: 0 to Infinity
 
 This section is my own analysis of how a post-search system evolves from a weekend project into a Facebook-scale index. Each stage picks the simplest thing that works at that volume and names the bottleneck that forces the next step.
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0–100 users<br/>Postgres ILIKE<br/>recency only"]
+    S2["Stage 2<br/>100–1K<br/>Postgres FTS<br/>GIN + tsvector"]
+    S3["Stage 3<br/>1K–100K<br/>Elasticsearch<br/>Postgres→CDC→Kafka"]
+    S4["Stage 4<br/>100K–10M<br/>Sharded ES + Redis<br/>milestone likes"]
+    S5["Stage 5<br/>10M+<br/>Hot/cold tiering<br/>regional replicas"]
+
+    S1 -->|"leading-wildcard scan is fatal"| S2
+    S2 -->|"GIN chokes past 50–100M rows"| S3
+    S3 -->|"single ES node caps ~50–100GB"| S4
+    S4 -->|"long-tail + cross-region latency"| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0-100 Users
 
@@ -349,7 +468,7 @@ Replace the application-level Kafka publish with CDC on the Postgres WAL (Debezi
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 ### LIKE '%query%' Is a Table Scan — Never Use It
 
@@ -405,10 +524,26 @@ The practical implication: aggressive result caching with Redis provides a large
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Level | Breadth vs Depth | What to nail | What to drive proactively |
 |---|---|---|---|
 | Mid | ~80% breadth, ~20% depth | Clear APIs, correct data model, both write and read paths present, basic awareness of caching and TTLs. Accept interviewer nudges toward optimizations without being thrown off. | Get to a working end-to-end design. One deep dive (usually the inverted index itself) is enough. |
 | Senior | ~60% breadth, ~40% depth | Move through the initial design quickly, then focus the conversation on the critical path: the inverted index structure, how writes fan out, how reads stay under 500ms. Name trade-offs explicitly (memory vs latency, freshness vs write amplification). Articulate why LIKE '%query%' fails and why Elasticsearch uses document sharding rather than term sharding. | Proactively surface the hot-key problem, the like-update volume, the need for sharding, and the CDC pipeline as the correct write-decoupling pattern before being asked. |
 | Staff+ | ~40% breadth, ~60% depth | Multiple deep dives with concrete configuration choices (Redis sorted set vs list, shard count, milestone thresholds, CDC vs app-level events, ES refresh interval tuning, ILM policy configuration). Draw on real operational experience: segment merges, hot shard mitigation, regional consistency, privacy enforcement at query time vs index time. Articulate why social signals dominate text relevance in production. | Identify non-obvious issues before the interviewer (duplicate event delivery, index drift after a replay, sort-order skew from milestone approximation, long-tail query cache hit rate assumptions, typeahead as a distinct system) and propose concrete mitigations with novel angles. |
+
+---
+
+## 📚 Related Concepts
+
+- [Data Indexing](../CoreConcepts/DataIndexing.md) — inverted index fundamentals, tokenization, and posting lists behind this design.
+- [Sharding](../CoreConcepts/Sharding.md) — token-based partitioning of the index and the document-vs-term sharding trade-off.
+- [Consistent Hashing](../CoreConcepts/ConsistentHashing.md) — how Redis Cluster distributes token keys and minimizes migration when shards are added.
+- [Redis](../CoreConcepts/Redis.md) — the lists (`LPUSH`/`LTRIM`) and sorted sets (`ZADD`/`ZREVRANGE`) backing the two posting structures.
+- [Caching](../CoreConcepts/Caching.md) — result caching, CDN edge caching, and the long-tail query problem.
+- [Data Modelling](../CoreConcepts/DataModelling.md) — the Post/Like schema and denormalized like count.
+- [Elasticsearch](../SystemDesign/DeepDives/Elasticsearch.md) — document sharding, scatter-gather, refresh interval, and ILM hot/warm/cold tiering.
+- [Kafka](../SystemDesign/DeepDives/Kafka.md) — the CDC event bus, consumer groups, and lag-based autoscaling of indexers.
+- [Data Structures For Big Data](../SystemDesign/DeepDives/DataStructuresForBigData.md) — inverted indexes and posting-list structures at scale.
+- [FB Post Search (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/FbPostSearch.md) — the source breakdown this doc expands on.
+- [FB News Feed](../SystemDesign/ProblemBreakdowns/FbNewsFeed.md) — a related social system with overlapping fan-out and freshness concerns.

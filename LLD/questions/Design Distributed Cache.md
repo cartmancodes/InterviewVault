@@ -1,16 +1,17 @@
-# Design Distributed Cache
+# 💾 Design Distributed Cache
 
 > **Pattern**: Consistent Hashing / In-memory Store
 > **Difficulty**: Medium
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/distributed-cache)
 
----
+> **Summary**: A distributed cache stores key-value pairs in memory across a sharded cluster, serving `GET`/`SET`/`DELETE` in single-digit milliseconds to shield a slower durable store from read pressure and traffic spikes. The hard parts are keeping keys evenly spread as nodes join and leave (consistent hashing with virtual nodes), reclaiming memory intelligently when it fills (LRU eviction running alongside TTL expiry), surviving node failures without losing availability (replication with async / quorum / chain trade-offs), and taming hot keys and cache stampedes. Everything runs under eventual consistency between replicas, with multi-tier (L1 + L2) and multi-region topologies emerging as scale climbs from 1K to 1M+ RPS.
 
-## Table of Contents
+## 📋 Table of Contents
 
 - [Understanding the Problem](#understanding-the-problem)
   - [Functional Requirements](#functional-requirements)
   - [Non-Functional Requirements](#non-functional-requirements)
+- [Layman's Explanation](#laymans-explanation)
 - [Core Entities](#core-entities)
 - [API Design](#api-design)
 - [High-Level Design](#high-level-design)
@@ -28,10 +29,11 @@
   - [Stage 5: 1M+ RPS (Hyperscale)](#stage-5-1m-rps-hyperscale)
 - [Insider Tips and Tricks](#insider-tips-and-tricks)
 - [Expected Depth by Level](#expected-depth-by-level)
+- [Related Concepts](#related-concepts)
 
 ---
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 A distributed cache stores key-value pairs in memory across many machines, serving reads and writes in single-digit milliseconds. It is the classic performance layer that sits between application servers and the primary data store, reducing read pressure on slower durable systems while absorbing traffic spikes. The core tensions are keeping keys evenly spread across nodes as the cluster grows and shrinks, evicting data intelligently when memory is full, and surviving node failures without losing availability.
 
@@ -82,7 +84,7 @@ Real Memcached and Redis clusters serve **millions of operations per second**, n
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 A distributed cache has a small but carefully chosen set of entities. They exist to make partitioning, lookup, and replication cheap.
 
@@ -99,7 +101,7 @@ The **Ring** is the central abstraction. Keys hash to ring positions and are own
 
 ---
 
-## API Design
+## 🔌 API Design
 
 The external API is intentionally narrow. Anything fancier belongs in the application, not the cache.
 
@@ -118,7 +120,7 @@ Admin/ops APIs (`ADD_NODE`, `REMOVE_NODE`, `STATS`) exist but are out of the req
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
 At 100K RPS and 1 TB of data, a single machine cannot hold everything in memory, so the cache must be sharded across a cluster. The flow:
 
@@ -128,17 +130,38 @@ At 100K RPS and 1 TB of data, a single machine cannot hold everything in memory,
 4. **Replicas** — each key lives on the primary plus `R-1` clockwise neighbors on the ring. Writes fan out to replicas asynchronously (or quorum-synchronously).
 5. **Gossip / Membership Service** (or a configuration service like Zookeeper/etcd) keeps ring membership consistent so clients agree on who owns what.
 
-```
-   +----------+      +-----------------------+      +-----------+
-   |  App     | ---> | Client Library        | ---> | Node A    |
-   |          |      | (ring + vnodes)       |      | Node B    |
-   +----------+      +-----------------------+      | Node C    |
-                              |                     +-----------+
-                              v
-                    +---------------------+
-                    | Membership service  |
-                    | (gossip / etcd)     |
-                    +---------------------+
+```mermaid
+graph TB
+    subgraph Client["Application Tier"]
+        APP[App Server]
+        CL[Client Library<br/>ring + vnodes<br/>hash + route]
+    end
+
+    subgraph Cluster["Sharded Cache Cluster"]
+        NA[(Node A<br/>primary shard)]
+        NB[(Node B<br/>primary + replica)]
+        NC[(Node C<br/>primary + replica)]
+    end
+
+    MEM[Membership Service<br/>gossip / etcd / Zookeeper]
+
+    APP --> CL
+    CL -->|"GET/SET owning vnode"| NA
+    CL -->|"GET/SET owning vnode"| NB
+    CL -->|"GET/SET owning vnode"| NC
+    NA -.async / quorum replicate.-> NB
+    NB -.async / quorum replicate.-> NC
+    NC -.async / quorum replicate.-> NA
+    MEM -->|ring topology| CL
+    NA -.heartbeat.-> MEM
+    NB -.heartbeat.-> MEM
+    NC -.heartbeat.-> MEM
+
+    style NA fill:#e1f5ff
+    style NB fill:#e1f5ff
+    style NC fill:#e1f5ff
+    style CL fill:#90EE90
+    style MEM fill:#FFE4B5
 ```
 
 Key design calls:
@@ -148,7 +171,7 @@ Key design calls:
 
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. Consistent Hashing and the Ring
 
@@ -161,6 +184,27 @@ Key design calls:
 **Implementation.** Each client stores a sorted array of `{ring_position, node_id}` tuples. A `GET` does a binary search (`O(log(N*V))`) for the first position ≥ `hash(key)`, wrapping around if needed. With 10 nodes and 150 vnodes each, the sorted array holds 1,500 entries — the binary search completes in ~11 comparisons.
 
 **Rebalancing.** When a node joins, only keys in its new arc need to migrate. Background handoff streams these keys from the previous owner to the new node. During handoff, reads can be routed to either the previous owner or the new owner by marking the arc with a "join in progress" state. Both nodes serve reads for that arc until the handoff completes, preventing misses during the transition window. Once confirmed complete, the previous owner releases the arc.
+
+```mermaid
+sequenceDiagram
+    participant CL as Client Library
+    participant NEW as New Node X
+    participant OLD as Previous Owner
+    participant MEM as Membership Service
+
+    NEW->>MEM: announce join (claims arc)
+    MEM->>CL: ring update, arc = "join in progress"
+    Note over CL,OLD: transition window — both serve reads for the arc
+    OLD->>NEW: background handoff (stream arc keys)
+    alt Read during handoff
+        CL->>OLD: GET key in migrating arc
+        OLD-->>CL: value (no miss)
+    end
+    NEW->>OLD: handoff complete (confirmed)
+    OLD->>MEM: release arc
+    MEM->>CL: ring update, X owns arc
+    CL->>NEW: subsequent GET/SET route to X
+```
 
 ### 2. Eviction Policies: LRU, LFU, TTL, FIFO
 
@@ -180,7 +224,42 @@ Memory is finite; something has to go. The policy choice matters because it shap
 
 **TTL handling** is orthogonal to eviction: lazy expiration checks TTL on access; active expiration samples a few keys per tick and evicts expired ones (Redis does both). A pure expiry heap is correct but costs O(log N) per insert and doesn't scale to many keys. Importantly, TTL expiry and LRU eviction are independent mechanisms — a key can be LRU-evicted before its TTL expires (memory pressure), or it can sit in memory past its TTL until it is lazily reclaimed on next access.
 
+The lifecycle of a single entry makes the two independent reclamation paths explicit — a `GET` miss can mean never-set, TTL-expired, or LRU-evicted:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Absent: never SET
+    Absent --> Present: SET (with optional TTL)
+    Present --> Present: GET (move to LRU head)
+    Present --> ExpiredLazy: TTL elapsed (still in memory)
+    ExpiredLazy --> Absent: lazy reclaim on GET / active sampler
+    Present --> Absent: LRU eviction (TTL not elapsed)
+    Present --> Absent: explicit DELETE
+    Absent --> [*]
+```
+
 **Cache stampede prevention.** When a heavily read cache entry expires, all concurrent readers simultaneously miss and hammer the origin — the classic thundering herd. Request coalescing (single-flight) is the standard solution: one thread fetches from origin while the rest wait on its result. A lesser-known alternative is XFetch / probabilistic early expiration: as an entry approaches its TTL, a small random fraction of reads are artificially treated as misses and trigger a background refresh. The probability of an early refresh increases as the remaining TTL shrinks. This amortizes the refresh cost over time and avoids the synchronized expiry spike without requiring explicit lock coordination, making it especially useful in distributed environments where coordinating a single-flight lock across processes is complex.
+
+> 💡 **Single-flight collapses a miss storm into one origin call.** If 1,000 clients miss the same expired key in the same millisecond, only the first loader touches the origin; the rest block on its result and are served the freshly loaded value.
+
+```mermaid
+sequenceDiagram
+    participant C1 as Client 1
+    participant C2 as Clients 2..1000
+    participant CACHE as Cache Node
+    participant DB as Origin (Source of Truth)
+
+    C1->>CACHE: GET key
+    CACHE-->>C1: MISS (expired)
+    C2->>CACHE: GET key (concurrent)
+    CACHE-->>C2: MISS (expired)
+    Note over CACHE: single-flight — one loader wins the key
+    C1->>DB: load from origin
+    C2->>CACHE: wait on in-flight loader
+    DB-->>C1: value
+    C1->>CACHE: SET key (fresh)
+    CACHE-->>C2: served fresh value (no origin hit)
+```
 
 **Scan resistance.** A single full-table scan can blow out pure LRU. Variants like LRU-K (track the K most recent accesses per key, evict the key with the oldest K-th access), 2Q (a probationary queue for new entries before they enter the main LRU), and ARC (adaptive replacement cache that balances recency and frequency dynamically) all provide better protection for workloads that mix sequential scans with a stable working set.
 
@@ -196,6 +275,29 @@ A single-copy cache loses data (and serves misses under load) the moment a node 
 - **Async (leader/follower).** Primary acks the write immediately; propagates to replicas in the background. Low latency, but replicas can lag. A crash after ack but before replication loses that write.
 - **Sync quorum.** Write returns after `W` of `R` replicas ack; reads query `R` of `R` and pick the latest. With `W + R > N`, you get read-your-writes. Higher latency, stronger guarantees.
 - **Chain replication.** Writes flow head-to-tail through an ordered chain; only the tail acks the client. Reads hit the tail exclusively. This provides strong consistency (reads always see the latest committed write) and simplifies failure handling, but tail latency is determined by the slowest node in the chain. A slow or flapping middle node stalls all writes behind it, making chain replication less suitable for latency-sensitive caches unless the chain is kept short (2–3 nodes).
+
+The sync-quorum write shows why `W + R > N` yields read-your-writes — a later read of `R` replicas is guaranteed to overlap the `W` that acked the write and picks the latest version:
+
+```mermaid
+sequenceDiagram
+    participant CL as Client
+    participant P as Primary (replica 1)
+    participant R2 as Replica 2
+    participant R3 as Replica 3
+
+    Note over CL,R3: SET with N=3, W=2 (quorum)
+    CL->>P: SET key = v2
+    P->>R2: replicate v2
+    P->>R3: replicate v2
+    R2-->>P: ack
+    Note over P: W=2 reached (primary + R2)
+    P-->>CL: SET OK
+    Note over R3: R3 may still lag briefly
+    CL->>P: GET key (reads R of R, picks latest)
+    P->>R2: read
+    P->>R3: read
+    P-->>CL: v2 (quorum overlap guarantees latest)
+```
 
 **Failure detection.** Nodes gossip heartbeats; after `T` missed beats a node is marked down and its arc of the ring is reassigned to replicas until it returns or is replaced. Tuning `T` trades false positives (flapping) vs. detection latency.
 
@@ -228,6 +330,23 @@ The cache and the source of truth can drift. Which direction drift is allowed ma
 - **Write-behind.** App writes cache only; cache asynchronously flushes to DB. Fast, but durability risk if cache dies before flush.
 - **Read-through.** Cache handles misses itself by loading from DB. Centralizes logic but couples cache to DB schema.
 
+> ⚠️ **Cache-aside has a subtle stale-write race.** A reader that fetched the old DB value before an invalidation can re-populate the cache *after* the `DELETE`, leaving a stale entry that survives until TTL despite an explicit invalidation. This is subtle but real under high concurrency.
+
+```mermaid
+sequenceDiagram
+    participant A as Thread A (reader)
+    participant DB as Database
+    participant CACHE as Cache
+    participant B as Thread B (writer)
+
+    A->>DB: read key (gets old value)
+    Note over A: A is slow to write cache
+    B->>DB: write new value
+    B->>CACHE: DELETE key (invalidate)
+    A->>CACHE: SET key = old value
+    Note over CACHE: stale entry now survives until TTL
+```
+
 **Invalidation.** "There are only two hard things in computer science: cache invalidation and naming things." Options:
 - TTL — simple, always eventually correct, but bounded staleness.
 - Explicit `DELETE` on write — correct if the app is disciplined, but still racy under cache-aside: even with a `DELETE` after every DB write, a concurrent reader that fetched the old value before the `DELETE` will re-populate the cache with stale data immediately after the `DELETE` completes.
@@ -239,9 +358,27 @@ The cache and the source of truth can drift. Which direction drift is allowed ma
 
 ---
 
-## Scaling Journey: 0 to Infinity
+## 📈 Scaling Journey: 0 to Infinity
 
 The cache's scaling story is driven by two axes: **memory footprint** (forcing sharding) and **request rate** (forcing replication, tiering, and geo-distribution). Each stage fixes the previous stage's dominant failure mode.
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0–1K RPS<br/>Single Redis<br/>cache-aside + TTL"]
+    S2["Stage 2<br/>1K–10K RPS<br/>Primary + read replica<br/>client-side failover"]
+    S3["Stage 3<br/>10K–100K RPS<br/>Consistent-hash cluster<br/>vnodes + gossip"]
+    S4["Stage 4<br/>100K–1M RPS<br/>L1 + L2 multi-tier<br/>hot-key + CDC invalidation"]
+    S5["Stage 5<br/>1M+ RPS<br/>Cluster per region<br/>edge CDN + global plane"]
+
+    S1 -->|"RAM ceiling / deploy herd"| S2
+    S2 -->|"working set outgrows one box"| S3
+    S3 -->|"hot keys saturate one shard"| S4
+    S4 -->|"traffic + data span regions"| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0–1K RPS (MVP)
 
@@ -291,7 +428,7 @@ The cache's scaling story is driven by two axes: **memory footprint** (forcing s
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 ### Redis Does Not Implement Exact LRU — It Uses Approximation
 
@@ -327,10 +464,25 @@ An in-process L1 cache (a small LRU map in the application server, ~50–500MB, 
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Level | Expectation |
 |---|---|
 | **Mid** | Knows cache-aside vs. write-through, LRU mechanics (hash map + DLL), and can draw a single-region Redis cluster with replicas. Can discuss TTL-based invalidation. May handwave sharding. |
 | **Senior** | Can derive consistent hashing from first principles, explain why virtual nodes matter, reason about replication factor vs. quorum, and articulate hot-key trade-offs (replication, client-local caching, request coalescing). Knows when to pick LRU vs LFU vs TTL. Discusses failure detection and graceful degradation. |
 | **Staff** | Designs multi-tier (L1 in-process + L2 distributed) and multi-region topologies; reasons precisely about consistency models (eventual, quorum, CAS, CRDTs); discusses CDC-based invalidation vs. TTL trade-offs; quantifies hit rate, memory budget, and NIC/CPU saturation per node; addresses operational concerns like rolling upgrades, key migration during scale-out, and chaos testing. Can name concrete systems (Dynamo, Cassandra, Redis Cluster, mcrouter, Twemproxy) and articulate why each made the choices it did. |
+
+---
+
+## 📚 Related Concepts
+
+- [Caching](../CoreConcepts/Caching.md) — cache-aside, write-through/behind, read-through patterns and invalidation strategies.
+- [Consistent Hashing](../CoreConcepts/ConsistentHashing.md) — the ring, virtual nodes, and `1/N` key movement on node add/remove.
+- [Redis](../CoreConcepts/Redis.md) — approximate LRU, `maxmemory-samples`, lazy vs active TTL expiry, single-threaded event loop.
+- [Sharding](../CoreConcepts/Sharding.md) — partitioning the keyspace across cache nodes.
+- [Networking](../CoreConcepts/Networking.md) — smart client vs proxy hop, NIC saturation under write amplification.
+- [Caching (deep dive)](../SystemDesign/CoreConcepts/Caching.md) — eviction policies and hit-rate trade-offs in depth.
+- [Redis (deep dive)](../SystemDesign/DeepDives/Redis.md) — data structures, replication, and cluster mode internals.
+- [Distributed Cache (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/DistributedCache.md) — the source breakdown this doc expands on.
+- [Scaling Reads](../SystemDesign/Patterns/ScalingReads.md) — caching tiers and read-replica strategies for read-heavy workloads.
+- [Dealing With Contention](../SystemDesign/Patterns/DealingWithContention.md) — single-flight, locks, and coalescing to tame hot keys and stampedes.

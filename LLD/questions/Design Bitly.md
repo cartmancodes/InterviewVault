@@ -1,20 +1,23 @@
-# Design Bitly (URL Shortener)
+# 🔗 Design Bitly (URL Shortener)
 
 > **Pattern**: Read-Heavy / Hash-based Lookup
 > **Difficulty**: Easy
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/bitly)
 
+> **Summary**: Bitly turns long URLs into compact short codes and redirects visitors back to the original. The functional surface is tiny — a single lookup table — but the workload is brutally asymmetric: ~1000 reads per write, ~600k RPS at peak, sub-100ms redirects, and a hard guarantee that every short code maps to exactly one URL. The mature design mints codes with a monotonic Redis counter + Base62 (no collisions by construction, with a DB `UNIQUE` constraint as the final net), serves reads through a layered cache (CDN edge → Redis → replicated Postgres) that exploits a Zipfian access pattern, and enforces expirations lazily at read time. Global low latency comes from partitioning the counter space per region and pushing 302s to the edge.
+
 ---
 
-## Table of Contents
+## 📋 Table of Contents
 
-1. [Understanding the Problem](#understanding-the-problem)
+1. [🎯 Understanding the Problem](#understanding-the-problem)
    - [Functional Requirements](#functional-requirements)
    - [Non-Functional Requirements](#non-functional-requirements)
-2. [Core Entities](#core-entities)
-3. [API Design](#api-design)
-4. [High-Level Design](#high-level-design)
-5. [Deep Dives](#deep-dives)
+2. [🧒 Layman's Explanation](#laymans-explanation)
+3. [🔑 Core Entities](#core-entities)
+4. [🔌 API Design](#api-design)
+5. [🏗️ High-Level Design](#high-level-design)
+6. [🔬 Deep Dives](#deep-dives)
    - [1. Short Code Generation](#1-short-code-generation)
    - [2. Collision Handling](#2-collision-handling)
    - [3. Scaling Reads to 600k QPS](#3-scaling-reads-to-600k-qps)
@@ -22,13 +25,14 @@
    - [5. Counter Coordination & Batching](#5-counter-coordination--batching)
    - [6. Custom Aliases and Expirations](#6-custom-aliases-and-expirations)
    - [7. Multi-Region Deployment](#7-multi-region-deployment)
-6. [Scaling Journey: 0 to infinity](#scaling-journey-0--)
-7. [Insider Tips and Tricks](#insider-tips-and-tricks)
-8. [Expected Depth by Level](#expected-depth-by-level)
+7. [📈 Scaling Journey: 0 → ∞](#scaling-journey-0--)
+8. [💡 Insider Tips and Tricks](#insider-tips-and-tricks)
+9. [🎓 Expected Depth by Level](#expected-depth-by-level)
+10. [📚 Related Concepts](#related-concepts)
 
 ---
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 Bitly converts long URLs into compact short codes that redirect back to the originals. The core challenge is not functional complexity but operating a tiny lookup table under an extreme read-heavy load (roughly 1000 reads per write) with sub-100ms redirect latency and guaranteed short-code uniqueness.
 
@@ -76,7 +80,7 @@ Real Bitly serves billions of clicks per day, must survive bots, scrapers, and m
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 | Entity | Fields | Notes |
 |---|---|---|
@@ -86,7 +90,7 @@ Real Bitly serves billions of clicks per day, must survive bots, scrapers, and m
 
 ---
 
-## API Design
+## 🔌 API Design
 
 ```http
 # Create a short URL
@@ -117,34 +121,77 @@ Location: https://example.com/some/very/long/path?x=1
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
-```
-                   WRITE PATH (~1 QPS)
- Client --POST /urls--> API Gateway --> Write Service
-                                           |
-                                           +--> Redis counter (INCR / batch)
-                                           +--> DB insert (UNIQUE on short_code)
-                                           +--> warm cache (optional)
+```mermaid
+graph TB
+    subgraph Clients
+        WC[Client<br/>POST /urls]
+        RC[Client<br/>GET /:code]
+    end
 
-                    READ PATH (~600k QPS peak)
- Client --GET /{code}--> CDN/Edge --> API Gateway --> Read Service
-                                                        |
-                                                        +--> Redis cache (L1)
-                                                        |       hit -> 302
-                                                        +--> DB lookup (B-tree on short_code)
-                                                                miss -> fill cache -> 302
+    CDN[CDN / Edge<br/>serves hot 302s]
+    GW[API Gateway]
+
+    subgraph Services
+        WS[Write Service<br/>~1 QPS]
+        RS[Read Service<br/>~600k QPS peak]
+    end
+
+    subgraph Stores
+        COUNTER[(Redis Counter<br/>INCR / batch)]
+        CACHE[(Redis Cache L1<br/>short_code -> long_url)]
+        DB[(Postgres<br/>UNIQUE on short_code<br/>B-tree lookup)]
+    end
+
+    WC --> GW
+    RC --> CDN
+    CDN -->|miss| GW
+    GW --> WS
+    GW --> RS
+
+    WS -->|INCR / INCRBY| COUNTER
+    WS -->|insert UNIQUE| DB
+    WS -.warm cache.-> CACHE
+
+    RS -->|1 . lookup| CACHE
+    CACHE -->|hit -> 302| RS
+    RS -->|2 . miss| DB
+    DB -->|fill cache -> 302| CACHE
+
+    style CDN fill:#f3e5f5
+    style COUNTER fill:#e1f5ff
+    style CACHE fill:#e1f5ff
+    style DB fill:#e1f5ff
+    style RS fill:#90EE90
+    style WS fill:#FFE4B5
 ```
 
 **Writes** are rare and can do extra work: generate a short code (counter INCR or hash), persist with a UNIQUE constraint as the final correctness guarantee, and optionally pre-populate the cache. **Reads** must be cheap — ideally a single memory lookup before returning 302. The two sides are scaled independently (different service fleets) because their QPS profiles differ by three orders of magnitude.
 
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. Short Code Generation
 
 **Problem:** Map arbitrary long URLs to a short, unique, ~6-8 character code without collisions and with minimal coordination.
+
+```mermaid
+graph LR
+    N["Naive prefix<br/>of long URL<br/>example.com/a vs /b<br/>collide instantly"]
+    H["Hash + Base62<br/>SHA-256 -> first 8 chars<br/>deterministic dedup<br/>birthday-collision risk"]
+    C["Counter + Base62<br/>Redis INCR -> 6-7 chars<br/>unique by construction<br/>guessable in sequence"]
+
+    N -->|reject| H
+    H -->|prefer| C
+    C -->|XOR w/ 64-bit secret| SAFE["Codes stay unique<br/>but look random<br/>defeats enumeration"]
+
+    style N fill:#FFB6C1
+    style H fill:#FFE4B5
+    style C fill:#90EE90
+    style SAFE fill:#90EE90
+```
 
 **Solution:** Three candidates, evaluated in order.
 
@@ -162,7 +209,27 @@ Location: https://example.com/some/very/long/path?x=1
 
 **Solution:** The DB's `UNIQUE` constraint on `short_code` is the source of truth regardless of generation strategy. On an insert conflict due to a hash collision, the write service appends a small per-URL nonce (start at 0, increment on each conflict) to the input before re-hashing, and retries. The birthday-paradox math keeps collision rates negligible: `62^8 ≈ 218T` codes, so at 1B stored URLs the probability that any given new URL collides is `1B / 218T ≈ 0.00046%`. After 3-5 retries the odds of consecutive collisions are astronomically small (roughly `(0.00046%)^5`); a hard failure surfaced to the client at that point is acceptable.
 
+```mermaid
+sequenceDiagram
+    participant W as Write Service
+    participant DB as Postgres (UNIQUE short_code)
+
+    W->>W: generate code (hash / counter)
+    W->>DB: INSERT short_code, long_url
+    alt No conflict (99.9995% of writes)
+        DB-->>W: OK
+        W-->>W: return short_url
+    else UNIQUE violation (collision)
+        DB-->>W: constraint error
+        W->>W: append nonce, re-hash (retry 1..5)
+        W->>DB: INSERT retried code
+        DB-->>W: OK
+    end
+```
+
 **Common interview mistake:** performing a read-before-write on every insert to check if the code exists before inserting. This adds a DB round-trip to every write and creates a TOCTOU race. The correct pattern is optimistic insert: generate, attempt insert, catch the unique constraint violation, regenerate, retry. Let the database enforce uniqueness — it is doing that work anyway via the index.
+
+> ⚠️ **Never read-before-write to check for collisions.** It adds a round-trip to every write and opens a time-of-check/time-of-use race. Insert optimistically and let the `UNIQUE` index — which is already doing the uniqueness work — reject the rare conflict.
 
 ### 3. Scaling Reads to 600k QPS
 
@@ -170,8 +237,32 @@ Location: https://example.com/some/very/long/path?x=1
 
 **Solution:** A layered read path.
 
+```mermaid
+graph TB
+    REQ["Redirect request<br/>~600k RPS peak"]
+    EDGE[CDN / Edge cache<br/>hot set served here]
+    L1[(Redis Cache L1<br/>~95%+ hit rate<br/>Zipfian hot set)]
+    REP[(Postgres Read Replicas<br/>~30k QPS residual<br/>B-tree on short_code)]
+    PRIM[(Postgres Primary<br/>writes only)]
+
+    REQ --> EDGE
+    EDGE -->|miss| L1
+    L1 -->|hit -> 302| REQ
+    L1 -->|~5% miss| REP
+    REP -->|fill cache -> 302| L1
+    PRIM -.async replication.-> REP
+
+    style EDGE fill:#f3e5f5
+    style L1 fill:#90EE90
+    style REP fill:#e1f5ff
+    style PRIM fill:#e1f5ff
+    style REQ fill:#FFE4B5
+```
+
 1. **B-tree index on `short_code`** (free if it's the PK) — O(log n) lookup; at 1B rows this is ~30 comparisons even before any caching. Required baseline; costs nothing beyond making `short_code` the primary key.
 2. **In-memory cache (Redis / Memcached)** in front of the DB. Memory access is ~100ns vs ~100µs for an SSD read (roughly 1,000x difference), and a single Redis 7.x node sustains 100k-300k ops/sec on commodity hardware. The key insight is traffic distribution: URL access follows a heavy-tailed Zipfian distribution where the top 1% of links receive ~80% of clicks. A hot-set cache of even a few million entries achieves 95%+ hit rates in practice, which drops DB QPS from 600k to ~30k — well within comfortable range for a replicated Postgres cluster.
+
+> 💡 **The Zipfian access pattern is what makes caching viable.** Because the top 1% of links draw ~80% of clicks, a modest hot-set cache converts a 600k-RPS wall into ~30k QPS of cache-miss traffic the replicas can comfortably absorb. Size the cache for the hot set, not the whole corpus.
 3. **Eviction and TTL:** Use LRU eviction. The cache TTL must be set to `min(cache_default_ttl, url.expiration_date - now)` so that an expired URL cannot be served from a stale cache entry. A fixed 24-hour TTL with no expiration awareness is a correctness bug.
 4. **Read replicas:** DB read replicas absorb the residual cache-miss traffic. Write traffic (creating short codes) goes to the primary. With a 95% cache hit rate, each replica only needs to handle ~30k QPS / number-of-replicas.
 5. **Cache stampede protection:** if a hugely popular link's cache entry expires, thousands of concurrent requests simultaneously miss and all hit the DB. Mitigate with probabilistic early expiration (refresh the cache entry slightly before it expires based on a stochastic check) or a mutex/lock-on-miss pattern where only one request fetches from DB while others wait.
@@ -210,6 +301,25 @@ Location: https://example.com/some/very/long/path?x=1
 
 **Solution for expirations:** Never delete expired rows eagerly on the write path. Instead, store `expires_at` in the row and check it at read time: if `expires_at IS NOT NULL AND expires_at < now()`, return `410 Gone` and evict the entry from cache. This moves the cost from a latency-sensitive write operation to the read path where it is a cheap timestamp comparison. A background job (a cron or scheduled worker) runs periodically — every few hours, or nightly during low-traffic windows — and hard-deletes rows where `expires_at < now() - grace_period`. The grace period (e.g., 7 days) prevents races between the background delete and edge caches still serving the entry.
 
+```mermaid
+stateDiagram-v2
+    [*] --> Active: create (optional expires_at)
+    Active --> Active: read -> 302 redirect
+    Active --> Expired: read after expires_at
+    Expired --> Expired: read -> 410 Gone + evict cache
+    Expired --> HardDeleted: background job (expires_at + grace_period)
+    HardDeleted --> [*]
+
+    note right of Expired
+        Lazy check: row stays in place,
+        expiry enforced at read time
+    end note
+    note right of HardDeleted
+        Grace period (e.g. 7 days)
+        lets edge caches drain
+    end note
+```
+
 ### 7. Multi-Region Deployment
 
 **Problem:** A single global Redis counter forces every write to cross regions (adding 100-200ms latency per write for distant regions), and a single primary DB cannot serve global reads at low latency. Active-passive failover gives durability but not low-latency reads.
@@ -222,7 +332,25 @@ Location: https://example.com/some/very/long/path?x=1
 
 ---
 
-## Scaling Journey: 0 → ∞
+## 📈 Scaling Journey: 0 → ∞
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0–100 users<br/>Single server + Postgres<br/>BIGSERIAL codes"]
+    S2["Stage 2<br/>100–1K<br/>Redis cache + read replica<br/>CDN for static"]
+    S3["Stage 3<br/>1K–100K<br/>Read/Write split<br/>Redis counter + batch INCR"]
+    S4["Stage 4<br/>100K–10M<br/>CDN edge redirects<br/>multi-region, partitioned counter"]
+    S5["Stage 5<br/>10M+<br/>Sharded table + Redis Cluster<br/>tiered cache + cold storage"]
+
+    S1 -->|"viral link saturates PG page cache"| S2
+    S2 -->|"single app process caps @10k RPS"| S3
+    S3 -->|"global users see 200-400ms redirects"| S4
+    S4 -->|"corpus crosses 10B, index off-memory"| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0-100 Users (MVP)
 
@@ -290,7 +418,7 @@ Beyond this point, scaling is mostly operational and cost engineering rather tha
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 ### 301 vs 302 Redirect Has Massive Caching Implications
 
@@ -341,7 +469,7 @@ Deduplication by using the destination URL as a primary key — so that two requ
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Area | Mid | Senior | Staff+ |
 |---|---|---|---|
@@ -353,3 +481,16 @@ Deduplication by using the destination URL as a primary key — so that two requ
 | **Geo / CDN** | Not expected. | Mentions CDN for static; recognizes edge as an option. | Designs active-active regions with partitioned counter ranges and edge-executed redirects; discusses replication lag window. |
 | **Failure modes** | Names "DB down." | Walks through cache miss storms, Redis failover, write retries. | Chaos-tests the plan: region loss, counter-range exhaustion, cache stampedes, replication lag. |
 | **Product thinking** | Handles custom alias as a field. | Designs alias collision path and expiration enforcement. | Treats abuse, cold storage tiering, eventually-consistent analytics, and cost-per-click as first-class concerns. |
+
+---
+
+## 📚 Related Concepts
+
+- [Caching](../CoreConcepts/Caching.md) — the L1 Redis cache, Zipfian hit-rate reasoning, TTL vs. URL expiration, and stampede protection on the hot read path.
+- [Redis](../CoreConcepts/Redis.md) — the monotonic counter (`INCR` / batched `INCRBY`), the L1 cache, and Sentinel / Cluster for counter HA.
+- [Sharding](../CoreConcepts/Sharding.md) — sharding the URL table by `hash(short_code)` and partitioning the counter space into disjoint per-region ranges.
+- [Data Indexing](../CoreConcepts/DataIndexing.md) — the B-tree primary index on `short_code` and the separate `url_hash` index used for deduplication.
+- [Consistent Hashing](../CoreConcepts/ConsistentHashing.md) — aligning cache and DB shards on the same key so skewed routing produces no hot nodes.
+- [Networking](../CoreConcepts/Networking.md) — CDN/edge redirects and the 301-vs-302 browser-caching semantics that dictate the redirect type.
+- [Scaling Reads](../SystemDesign/Patterns/ScalingReads.md) — the cache + read-replica pattern that absorbs the 1000:1 read-heavy load.
+- [Bitly (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/Bitly.md) — the source breakdown this doc expands on.

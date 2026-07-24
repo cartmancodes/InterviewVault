@@ -1,35 +1,37 @@
-# Design Dropbox
+# 📦 Design Dropbox
 
 > **Pattern**: File Storage / Sync
 > **Difficulty**: Medium
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/dropbox)
 
+> **Summary**: Dropbox is a file hosting and sync service where large blobs (up to 50 GB) must never be lost once acknowledged, and many devices must converge on the same state within seconds without a central editor. The design splits a thin **control plane** (metadata, signed URLs, change feed) from a fat **data plane** where clients transfer bytes directly to S3 via presigned URLs and read back through a CDN — the application tier never touches file bytes. Content-defined chunking makes delta sync cheap, fingerprint-based dedup plus resumable S3 multipart uploads handle scale and flaky networks, a WebSocket-push / cursor-pull hybrid keeps devices in sync, and conflict *forking* (never last-write-wins) guarantees no user edit is silently lost.
+
+## 📋 Table of Contents
+
+- [Understanding the Problem](#understanding-the-problem)
+  - [Functional Requirements](#functional-requirements)
+  - [Non-Functional Requirements](#non-functional-requirements)
+- [Layman's Explanation](#laymans-explanation)
+- [Core Entities](#core-entities)
+- [API Design](#api-design)
+- [High-Level Design](#high-level-design)
+- [Deep Dives](#deep-dives)
+  - [DD1: Supporting Very Large Files (up to 50 GB)](#dd1-supporting-very-large-files-up-to-50-gb)
+  - [DD2: Resumable Uploads and Deduplication](#dd2-resumable-uploads-and-deduplication)
+  - [DD3: Fast Downloads via CDN and Range Requests](#dd3-fast-downloads-via-cdn-and-range-requests)
+  - [DD4: Cross-Device Sync (Push + Pull Hybrid)](#dd4-cross-device-sync-push--pull-hybrid)
+  - [DD5: Delta Sync via Content-Defined Chunking](#dd5-delta-sync-via-content-defined-chunking)
+  - [DD6: Conflict Resolution](#dd6-conflict-resolution)
+  - [DD7: Security, Signed URLs, and Access Control](#dd7-security-signed-urls-and-access-control)
+  - [DD8: Compression and Encryption Ordering](#dd8-compression-and-encryption-ordering)
+- [Scaling Journey: 0 to Infinity](#scaling-journey-0-to-infinity)
+- [Insider Tips and Tricks](#insider-tips-and-tricks)
+- [Expected Depth by Level](#expected-depth-by-level)
+- [Related Concepts](#related-concepts)
+
 ---
 
-## Table of Contents
-
-1. [Understanding the Problem](#understanding-the-problem)
-   - [Functional Requirements](#functional-requirements)
-   - [Non-Functional Requirements](#non-functional-requirements)
-2. [Core Entities](#core-entities)
-3. [API Design](#api-design)
-4. [High-Level Design](#high-level-design)
-5. [Deep Dives](#deep-dives)
-   - [DD1: Supporting Very Large Files (up to 50 GB)](#dd1-supporting-very-large-files-up-to-50-gb)
-   - [DD2: Resumable Uploads and Deduplication](#dd2-resumable-uploads-and-deduplication)
-   - [DD3: Fast Downloads via CDN and Range Requests](#dd3-fast-downloads-via-cdn-and-range-requests)
-   - [DD4: Cross-Device Sync (Push + Pull Hybrid)](#dd4-cross-device-sync-push--pull-hybrid)
-   - [DD5: Delta Sync via Content-Defined Chunking](#dd5-delta-sync-via-content-defined-chunking)
-   - [DD6: Conflict Resolution](#dd6-conflict-resolution)
-   - [DD7: Security, Signed URLs, and Access Control](#dd7-security-signed-urls-and-access-control)
-   - [DD8: Compression and Encryption Ordering](#dd8-compression-and-encryption-ordering)
-6. [Scaling Journey: 0 to Infinity](#scaling-journey-0-to-infinity)
-7. [Insider Tips and Tricks](#insider-tips-and-tricks)
-8. [Expected Depth by Level](#expected-depth-by-level)
-
----
-
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 Dropbox is a file hosting and synchronization service. Users upload files from any device, download them from any other device, share them with other users, and expect changes to propagate automatically. The interesting engineering problems live at the intersection of "large blobs that must not be lost" and "many clients that must stay in sync without a central editor."
 
@@ -84,7 +86,7 @@ Real Dropbox is far stranger than a magic closet. It encrypts every chunk so eve
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 Three entities are enough to reason about everything else:
 
@@ -94,9 +96,41 @@ Three entities are enough to reason about everything else:
 
 A fourth table, **SharedFiles**, maps `(userId, fileId, permission)` and answers "which files can this user see?" It is deliberately separate from `FileMetadata` so that granting access does not require rewriting the file record.
 
+```mermaid
+erDiagram
+    USER ||--o{ FILEMETADATA : owns
+    USER ||--o{ SHAREDFILES : "granted access via"
+    FILEMETADATA ||--o{ SHAREDFILES : "shared through"
+    FILEMETADATA ||--|| FILE : "points to blob"
+    USER {
+        string userId PK
+        string authCredentials
+        list devices
+    }
+    FILEMETADATA {
+        string fileId PK
+        string ownerId FK
+        string name
+        int size
+        string mimeType
+        string fingerprint "SHA-256 of contents"
+        list chunks "id, offset, hash, status, ETag"
+        string status "uploading or uploaded"
+    }
+    FILE {
+        string s3Key "content-addressed"
+        bytes rawBytes "in blob store"
+    }
+    SHAREDFILES {
+        string userId FK
+        string fileId FK
+        string permission
+    }
+```
+
 ---
 
-## API Design
+## 🔌 API Design
 
 The API is deliberately thin because the heaviest byte transfers happen directly between the client and the blob store via presigned URLs, bypassing the application servers.
 
@@ -134,9 +168,48 @@ Critical detail: the presigned-URL endpoint does not call S3. Presigning is a lo
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
 The architecture is a classic "control plane vs data plane" split.
+
+```mermaid
+graph TB
+    subgraph Client
+        UP[Uploader<br/>watches FS events<br/>chunks + hashes]
+        DN[Downloader<br/>listens for changes<br/>pulls chunks + reassembles]
+    end
+
+    subgraph "Edge / API"
+        LB[Load Balancer<br/>+ API Gateway<br/>TLS · auth · rate limit]
+        FS[File Service<br/>signs URLs · chunk state<br/>verifies vs S3 · change feed]
+        NS[Notification Service<br/>WebSocket / SSE per device]
+    end
+
+    subgraph Storage
+        META[(Metadata DB<br/>DynamoDB / Postgres<br/>FileMetadata · SharedFiles · Users)]
+        S3[(Blob Store S3<br/>raw chunks<br/>source of truth)]
+        CDN[CDN / CloudFront<br/>fronts S3 for reads]
+        BROKER[[Kafka<br/>change events<br/>partitioned by ownerId]]
+    end
+
+    UP -->|POST presigned-url<br/>PATCH chunks| LB
+    DN -->|GET presigned-url<br/>GET changes| LB
+    LB --> FS
+    UP -->|PUT chunk bytes direct| S3
+    FS --> META
+    FS -->|Create/Complete<br/>MultipartUpload · ListParts| S3
+    FS -->|change event| BROKER
+    BROKER --> NS
+    NS -.push event.-> DN
+    DN -->|GET chunk bytes| CDN
+    CDN -->|cache miss| S3
+
+    style S3 fill:#e1f5ff
+    style META fill:#e1f5ff
+    style CDN fill:#f3e5f5
+    style BROKER fill:#FFE4B5
+    style FS fill:#90EE90
+```
 
 **Client layer:**
 - **Uploader** - Watches the local filesystem via OS events (FSEvents on macOS, ReadDirectoryChangesW on Windows, inotify on Linux), chunks changed files, computes hashes, drives uploads.
@@ -170,7 +243,7 @@ The architecture is a classic "control plane vs data plane" split.
 
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### DD1: Supporting Very Large Files (up to 50 GB)
 
@@ -183,6 +256,33 @@ The architecture is a classic "control plane vs data plane" split.
 - **S3 Multipart Upload lifecycle.** The file service calls `CreateMultipartUpload` (on behalf of the client) and receives a server-side `uploadId`. The client receives one presigned URL per part. Each PUT to S3 returns an `ETag` (MD5 of the part bytes, as computed by S3). After all parts land, the server calls `CompleteMultipartUpload` with the ordered list of `(partNumber, ETag)` pairs; S3 atomically assembles the object and discards the intermediate parts. Until `CompleteMultipartUpload` is called, no partial object is visible via GET.
 - **Parallel uploads.** The client can PUT multiple parts concurrently (typically 4-8 connections). On a 100 Mbps uplink with 8 parallel streams and 8 MB parts, a 50 GB file completes in roughly 55 minutes. Sequential uploading of the same file would take the same clock time but wastes all the TCP throughput gained from parallel streams.
 - **App tier never touches bytes.** The presigning step is a cryptographic operation on the server using the AWS IAM credentials—it generates a time-limited, HMAC-signed URL without making any S3 API call. The application servers only process small JSON payloads. A single application instance can therefore orchestrate thousands of concurrent 50 GB transfers.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant FS as File Service
+    participant S3 as S3 (Blob Store)
+
+    C->>C: chunk file, SHA-256 per chunk + whole-file fingerprint
+    C->>FS: POST /files/presigned-url { name, size, fingerprint }
+    FS->>S3: CreateMultipartUpload
+    S3-->>FS: uploadId
+    FS-->>C: fileId, uploadId, presignedUrls[]
+    par Parallel part uploads (4-8 streams)
+        C->>S3: PUT part 1 (5-10 MB, direct)
+        S3-->>C: ETag 1
+        C->>S3: PUT part N (direct)
+        S3-->>C: ETag N
+    end
+    C->>FS: PATCH /chunks { chunkId, ETag, status }
+    FS->>S3: ListParts (verify ETag matches)
+    S3-->>FS: part ETags
+    FS->>FS: mark chunk uploaded (server-verified)
+    C->>FS: POST /files/{fileId}/complete
+    FS->>S3: CompleteMultipartUpload (ordered partNumber, ETag)
+    S3-->>FS: object assembled atomically
+    FS->>FS: flip status uploaded, write change event
+```
 
 ### DD2: Resumable Uploads and Deduplication
 
@@ -200,7 +300,7 @@ The architecture is a classic "control plane vs data plane" split.
 2. The client maps the status array to its local chunk list and only requests presigned URLs for chunks whose status is `missing` or `uploading`.
 3. On reconnect after a full session loss, the client re-sends the fingerprint and receives the same status map—the upload picks up exactly where it left off.
 
-**Trust but verify:** The client's `PATCH /chunks` call reports `(chunkId, ETag)` as a hint. The server validates by calling S3 `ListParts` for the `uploadId` and comparing the ETag S3 reports for that part against the ETag the client reported. An attacker who fakes a chunk-complete notification cannot manufacture a valid S3 ETag without actually having uploaded the bytes. This also catches bitflips and silent data corruption in transit.
+> 💡 **Trust but verify:** The client's `PATCH /chunks` call reports `(chunkId, ETag)` as a hint. The server validates by calling S3 `ListParts` for the `uploadId` and comparing the ETag S3 reports for that part against the ETag the client reported. An attacker who fakes a chunk-complete notification cannot manufacture a valid S3 ETag without actually having uploaded the bytes. This also catches bitflips and silent data corruption in transit.
 
 **Progress tracking.** The completed-chunk-count divided by total-chunk-count, updated as PATCHes land and server-side verification passes, gives an accurate, server-verified progress bar. The client's own upload state is a lower bound; the server's verified count is the authoritative number.
 
@@ -235,6 +335,28 @@ The architecture is a classic "control plane vs data plane" split.
 - The server returns all events since the cursor in order, and the client advances its cursor to `nextCursor` in the response.
 - If the socket was down for an hour, the next poll catches all missed events. The cursor guarantees at-least-once delivery; the client's local state must be idempotent to duplicate events (easy: "mark chunk X uploaded" applied twice is harmless).
 
+```mermaid
+sequenceDiagram
+    participant A as Device A (writer)
+    participant FS as File Service
+    participant K as Kafka (by ownerId)
+    participant NS as Notification Service
+    participant B as Device B (reader)
+
+    Note over B,NS: Device B holds a persistent WebSocket
+    A->>FS: upload completes
+    FS->>K: write change event { fileId, changeType, newRevision }
+    K->>NS: consume event
+    NS->>NS: fan out to sockets of owner + SharedFiles users
+    NS-->>B: push { fileId, newRevision } (metadata only)
+    B->>FS: GET new FileMetadata
+    B->>B: download only changed chunks
+    Note over B,FS: Safety net — runs every 3-5 min regardless of socket
+    B->>FS: GET /files/changes?since={cursor}
+    FS-->>B: events[] since cursor, nextCursor
+    B->>B: advance cursor (idempotent apply)
+```
+
 **OS filesystem events.** On the upload side, the desktop client uses OS-level file watch APIs (FSEvents on macOS, `ReadDirectoryChangesW` on Windows, `inotify` on Linux) to detect local changes without a scan loop. A scan loop on a directory with 500,000 files takes tens of seconds and burns CPU; event-driven notification is immediate and cheap.
 
 **The server is the source of truth.** Clients never sync peer-to-peer. There is no distributed consensus problem to solve: every write goes to the server, every read comes from the server, and devices are merely caches of server state.
@@ -248,6 +370,31 @@ The architecture is a classic "control plane vs data plane" split.
 **How Rabin fingerprinting works.** The algorithm slides a fixed-width window (typically 48 bytes) across the byte stream one byte at a time, maintaining a polynomial hash of the window contents. When the hash value matches a target pattern (e.g., the lowest N bits are all zero), a chunk boundary is declared. The boundary position depends on the content of the window, not on any byte offset. Target patterns are tuned to achieve a desired average chunk size (typically 4-8 MB for large files, 512 KB-1 MB for small files).
 
 **Why CDC survives insertions.** Consider a 1-byte insertion at offset 0. The rolling hash window slides forward through the new byte. Within at most one average-chunk-size worth of bytes downstream from the insertion point, the hash will encounter the same content pattern it encountered before the insertion—because the content there is unchanged. From that re-synchronization point onward, every chunk boundary is identical to the pre-edit chunking. Only the chunk spanning the insertion point has a changed hash. That is typically one chunk re-uploaded, not ten thousand.
+
+```mermaid
+graph LR
+    subgraph "Fixed-size chunking — 1-byte insert at offset 0"
+        F0["insert<br/>byte"] --> F1["chunk 1<br/>SHIFTED"]
+        F1 --> F2["chunk 2<br/>SHIFTED"]
+        F2 --> F3["chunk 3<br/>SHIFTED"]
+        F3 --> F4["...all N<br/>SHIFTED"]
+    end
+
+    subgraph "Content-defined chunking — same insert"
+        C1["chunk 1<br/>CHANGED"] --> C2["re-sync<br/>boundary"]
+        C2 --> C3["chunk 2<br/>identical"]
+        C3 --> C4["chunk 3<br/>identical"]
+    end
+
+    style F1 fill:#FFB6C1
+    style F2 fill:#FFB6C1
+    style F3 fill:#FFB6C1
+    style F4 fill:#FFB6C1
+    style C1 fill:#FFB6C1
+    style C2 fill:#FFE4B5
+    style C3 fill:#90EE90
+    style C4 fill:#90EE90
+```
 
 **Practical boundaries.** CDC sets minimum and maximum chunk sizes (e.g., min 512 KB, max 8 MB) to bound variance. Without a minimum, adversarial or random content could produce many tiny chunks. Without a maximum, content that never hits the boundary pattern would produce one enormous chunk.
 
@@ -263,7 +410,26 @@ The cost is O(file size) CPU on the client per edit to re-chunk and re-hash, but
 
 **Conflict detection using revision numbers.** Each `FileMetadata` record carries a server-assigned monotonic `revision` counter, incremented on each write by the server (not the client). When device A begins editing, it reads revision `R`. When it uploads, it sends `expectedRevision: R` in the finalize request. If the server's current revision is still `R`, the write succeeds and revision becomes `R+1`. If another device has already written revision `R+1`, the server returns a 409 Conflict.
 
-**Why not timestamps.** Client clocks skew—a laptop whose clock drifted 30 seconds forward can make its edit appear "later" even if the other device's edit arrived at the server first. Server-assigned revision numbers are monotonic, centrally authoritative, and immune to client clock drift.
+> ⚠️ **Why not timestamps.** Client clocks skew—a laptop whose clock drifted 30 seconds forward can make its edit appear "later" even if the other device's edit arrived at the server first. Server-assigned revision numbers are monotonic, centrally authoritative, and immune to client clock drift.
+
+```mermaid
+sequenceDiagram
+    participant A as Device A (offline edit)
+    participant S as File Service
+    participant B as Device B (offline edit)
+
+    Note over A,B: Both read revision R before editing
+    A->>S: finalize { expectedRevision: R }
+    S->>S: current == R, accept
+    S-->>A: OK, revision now R+1
+    B->>S: finalize { expectedRevision: R }
+    S->>S: current is R+1, mismatch
+    S-->>B: 409 Conflict
+    S->>S: fork — store as filename (Conflicted Copy - DeviceB - date).ext
+    Note over S: existing R+1 keeps its name, no work lost
+    S-->>A: sync both files
+    S-->>B: sync both files
+```
 
 **Conflict fork.** On a 409, the server does not overwrite. Instead: (a) the existing file at revision `R+1` keeps its name, (b) the incoming version is stored as a new file named `filename (Conflicted Copy - DeviceName - 2024-01-15).ext`. Both files appear in all synced devices. No work is lost. The user sees both copies and can manually merge.
 
@@ -303,9 +469,27 @@ The cost is O(file size) CPU on the client per edit to re-chunk and re-hash, but
 
 ---
 
-## Scaling Journey: 0 to Infinity
+## 📈 Scaling Journey: 0 to Infinity
 
 This section is the author's own analysis, tailored to the file-sync shape of the problem: how the storage tier, sync fanout, chunking strategy, and metadata store evolve as load grows.
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0–100 users<br/>Monolith + Postgres<br/>whole-file upload · poll 30s"]
+    S2["Stage 2<br/>100–1K<br/>Presigned URLs<br/>fixed chunks + dedup"]
+    S3["Stage 3<br/>1K–100K<br/>CDN + WebSocket push<br/>file/notification split"]
+    S4["Stage 4<br/>100K–10M<br/>Content-defined chunking<br/>regional + sharded metadata"]
+    S5["Stage 5<br/>10M+<br/>Change-feed as a log<br/>fanout-on-read · global dedup"]
+
+    S1 -->|"2 GB upload melts the app box"| S2
+    S2 -->|"global download latency + replica lag"| S3
+    S3 -->|"power users re-upload every chunk"| S4
+    S4 -->|"viral shares melt the broker fanout"| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0-100 Users (MVP)
 
@@ -406,7 +590,7 @@ This section is the author's own analysis, tailored to the file-sync shape of th
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 ### Content-Defined Chunking vs Fixed-Size Chunking
 
@@ -464,7 +648,7 @@ The correct implementation stores sync state in a local SQLite database. The DB 
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Dimension | Mid (E4) | Senior (E5) | Staff+ (E6+) |
 |---|---|---|---|
@@ -477,3 +661,20 @@ The correct implementation stores sync state in a local SQLite database. The DB 
 | Storage tiering | Not expected | Mention hot/cold awareness | Drive tiering + dedup + GC discussion |
 | Proactivity | Interviewer drives | Shared driving | Candidate drives; interviewer only redirects |
 | Trade-off articulation | Identify one side | Identify both sides with a reason | Nuanced, often from production experience |
+
+---
+
+## 📚 Related Concepts
+
+- [Data Modelling](../CoreConcepts/DataModelling.md) — why mutable metadata (Postgres/DynamoDB) and immutable blobs (S3) belong in separate stores.
+- [Sharding](../CoreConcepts/Sharding.md) — sharding the metadata DB by `ownerId` and SharedFiles by reader `userId`.
+- [Caching](../CoreConcepts/Caching.md) — CDN edge caching of immutable content-addressed chunks; never caching metadata responses.
+- [Networking](../CoreConcepts/Networking.md) — WebSocket / SSE push for the sync happy path, presigned URLs, and TLS everywhere.
+- [Consistent Hashing](../CoreConcepts/ConsistentHashing.md) — distributing content-addressed chunks across storage nodes.
+- [Handling Large Blobs](../SystemDesign/Patterns/HandlingLargeBlobs.md) — presigned URLs, S3 multipart upload, and keeping bytes off the app tier.
+- [Real-Time Updates](../SystemDesign/Patterns/Real-TimeUpdates.md) — push + cursor-pull hybrid for cross-device sync.
+- [Dealing With Contention](../SystemDesign/Patterns/DealingWithContention.md) — revision-number CAS and conflict forking instead of last-write-wins.
+- [Scaling Reads](../SystemDesign/Patterns/ScalingReads.md) — CDN and range requests for fast global downloads.
+- [Kafka](../SystemDesign/DeepDives/Kafka.md) — the change-event broker partitioned by `ownerId` and the change-feed-as-a-log evolution.
+- [DynamoDB](../SystemDesign/DeepDives/Dynamodb.md) — a key-value metadata store option for FileMetadata at scale.
+- [Dropbox (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/Dropbox.md) — the source breakdown this doc expands on.

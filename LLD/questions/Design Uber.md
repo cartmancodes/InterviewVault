@@ -1,22 +1,26 @@
-# Design Uber
+# 🚗 Design Uber
 
 > **Pattern**: Geospatial Matching / Real-time
 > **Difficulty**: Hard
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/uber)
 
-## Table of Contents
-1. [Understanding the Problem](#understanding-the-problem)
-2. [Core Entities](#core-entities)
-3. [API Design](#api-design)
-4. [High-Level Design](#high-level-design)
-5. [Deep Dives](#deep-dives)
-6. [Scaling Journey: 0 to Infinity](#scaling-journey-0--)
-7. [Insider Tips and Tricks](#insider-tips-and-tricks)
-8. [Expected Depth by Level](#expected-depth-by-level)
+> **Summary**: Uber is a two-sided marketplace that matches a nearby available driver to a rider in under a minute. The hard parts are ingesting ~2.5M location writes/sec, running low-latency proximity search over a planet-sized fleet, and enforcing strict single-driver exclusivity at dispatch under racing requests. The mature design leans on a Redis/H3 geo index for reads, Kafka + a durable workflow (Temporal) for crash-safe offer loops, and Postgres compare-and-swap for a linearizable ride state machine.
+
+## 📋 Table of Contents
+- [Understanding the Problem](#understanding-the-problem)
+- [Layman's Explanation](#laymans-explanation)
+- [Core Entities](#core-entities)
+- [API Design](#api-design)
+- [High-Level Design](#high-level-design)
+- [Deep Dives](#deep-dives)
+- [Scaling Journey: 0 → Infinity](#scaling-journey-0---infinity)
+- [Insider Tips and Tricks](#insider-tips-and-tricks)
+- [Expected Depth by Level](#expected-depth-by-level)
+- [Related Concepts](#related-concepts)
 
 ---
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 Uber is a two-sided marketplace that pairs nearby drivers with riders in under a minute, subject to strict geospatial constraints and exclusivity (a driver can hold at most one active ride). The core technical challenge is ingesting millions of high-frequency location pings while simultaneously running low-latency proximity searches and maintaining strict consistency during dispatch.
 
@@ -67,7 +71,7 @@ Real Uber routes around live traffic on an actual road graph, uses ML to predict
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 | Entity | Purpose | Notable fields |
 |---|---|---|
@@ -79,7 +83,7 @@ Real Uber routes around live traffic on an actual road graph, uses ML to predict
 
 ---
 
-## API Design
+## 🔌 API Design
 
 All user identity is read from the session token or JWT on the server. The client never asserts `riderId` or `driverId` in the body.
 
@@ -117,21 +121,50 @@ Returns: streaming connection (SSE or websocket) with driver position and ETA.
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
-```
-[Rider App] --+
-              |
-[Driver App] -+--> [API Gateway] ---> [Ride Service]      (fare, state machine, persistence)
-                         |        \-> [Location Service]  (ingest pings, write to geo index)
-                         |        \-> [Match Service]     (proximity search + dispatch)
-                         |        \-> [Notification Svc]  (APNs / FCM fanout)
-                         |
-                         v
-               [Redis Geo Index]       <-- hot location store
-               [Primary DB: Postgres]  <-- Rider, Driver, Ride, Fare
-               [Kafka]                 <-- ride requests, dispatch workflow
-               [Temporal / Step Fn]    <-- durable matching workflow
+```mermaid
+graph TB
+    subgraph Clients
+        RA[Rider App]
+        DA[Driver App]
+    end
+
+    GW[API Gateway]
+
+    subgraph Services
+        RS[Ride Service<br/>fare + state machine<br/>+ persistence]
+        LS[Location Service<br/>ingest pings]
+        MS[Match Service<br/>proximity search<br/>+ dispatch]
+        NS[Notification Service<br/>APNs / FCM fanout]
+    end
+
+    subgraph Stores
+        REDIS[(Redis Geo Index<br/>hot location store)]
+        PG[(Postgres<br/>Rider · Driver · Ride · Fare)]
+        KAFKA[[Kafka<br/>ride requests /<br/>dispatch workflow]]
+        WF[Temporal / Step Fn<br/>durable matching workflow]
+    end
+
+    RA --> GW
+    DA -->|websocket pings| LS
+    GW --> RS
+    GW --> MS
+    RS --> PG
+    RS -->|RideRequested| KAFKA
+    LS -->|GEOADD| REDIS
+    KAFKA --> MS
+    MS -->|GEOSEARCH| REDIS
+    MS -->|lock driverId| REDIS
+    MS --> WF
+    MS --> NS
+    NS -.push offer.-> DA
+
+    style REDIS fill:#e1f5ff
+    style PG fill:#e1f5ff
+    style KAFKA fill:#FFE4B5
+    style WF fill:#f3e5f5
+    style MS fill:#90EE90
 ```
 
 **Write path (location ping):** driver app opens a websocket to Location Service; every 4 seconds (adaptive) it posts lat/lng; Location Service writes to Redis using `GEOADD` keyed by region.
@@ -140,7 +173,7 @@ Returns: streaming connection (SSE or websocket) with driver position and ETA.
 
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. Driver Location Ingestion at Scale
 
@@ -166,6 +199,34 @@ The full matching pipeline:
 4. Offer the top candidate; on decline or timeout, move to the next.
 5. Update ETA every 30 seconds as the driver's actual position and live traffic conditions change.
 
+```mermaid
+sequenceDiagram
+    participant R as Rider App
+    participant RS as Ride Service
+    participant K as Kafka
+    participant MS as Match Service
+    participant GEO as Redis Geo Index
+    participant D as Driver App
+
+    R->>RS: POST /rides { fareId }
+    RS->>RS: create Ride row (MATCHING)
+    RS->>K: emit RideRequested
+    K->>MS: consume event
+    MS->>GEO: GEOSEARCH pickup, 3km
+    GEO-->>MS: N nearest drivers
+    MS->>MS: filter available + score by road-graph ETA
+    MS->>GEO: SET NX PX 10000 lock:driverId
+    MS->>D: offer ride (via Notification)
+    alt Driver accepts within 10s
+        D->>RS: PATCH /rides ACCEPT
+        RS->>RS: CAS OFFERED → ACCEPTED
+        RS-->>R: driver assigned
+    else Decline or 10s timeout
+        GEO-->>MS: lock TTL expires
+        MS->>MS: offer next candidate
+    end
+```
+
 The geospatial index must handle cell-boundary riders correctly. Scatter-gather across neighboring cells prevents riders at the edge of a cell from missing a driver 200m away in the adjacent cell.
 
 **Dispatch must be single-writer per cell:** Without coordination, two Match Service instances could simultaneously read the same available drivers and assign both to the same rider. The invariant is enforced by sharding the dispatch service by geohash cell so exactly one instance owns each cell's write authority, or by acquiring a Redis distributed lock per `riderId` before any assignment transaction. Any given rider's assignment must be processed by exactly one writer.
@@ -185,22 +246,29 @@ Answer in the interview: start with PostGIS, justify moving to Redis geohash at 
 
 ### 4. Ride State Machine and Strong Consistency
 
-```
-REQUESTED -> MATCHING -> OFFERED -> ACCEPTED -> EN_ROUTE -> IN_TRIP -> COMPLETED
-                         |               |           |
-                         v               v           v
-                       EXPIRED       CANCELLED   CANCELLED
+```mermaid
+stateDiagram-v2
+    [*] --> REQUESTED
+    REQUESTED --> MATCHING
+    MATCHING --> OFFERED
+    OFFERED --> ACCEPTED: driver accepts
+    OFFERED --> EXPIRED: no accept in window
+    ACCEPTED --> EN_ROUTE: heading to rider
+    EN_ROUTE --> IN_TRIP: rider picked up
+    IN_TRIP --> COMPLETED
+    ACCEPTED --> CANCELLED
+    EN_ROUTE --> CANCELLED
+    COMPLETED --> [*]
+    EXPIRED --> MATCHING: re-queue to next driver
 ```
 
-More granularly for the driver-facing states:
-
-```
-requested -> driver_assigned -> en_route_to_rider -> rider_picked_up -> en_route_to_destination -> completed | cancelled
-```
+More granularly, the driver-facing states are `requested → driver_assigned → en_route_to_rider → rider_picked_up → en_route_to_destination → completed | cancelled`.
 
 Every transition is a conditional update in Postgres: `UPDATE rides SET status = 'ACCEPTED' WHERE rideId = ? AND status = 'OFFERED'`. If zero rows change, the transition lost a race and the caller sees the current state. This gives linearizability on the ride document itself.
 
 **Idempotency is mandatory:** Network retries can send the same transition twice. The state machine must be idempotent: applying the same transition twice from the same state must be a no-op, not an error. Use compare-and-swap (`UPDATE trips SET state='en_route' WHERE id=? AND state='driver_assigned'`) to enforce valid transitions atomically. A duplicate transition that hits the wrong source state should return the current state, not a 500.
+
+> ⚠️ **Single-driver exclusivity is the core correctness invariant.** Two matchers must never offer the same driver at once. Postgres CAS gives linearizability on the *ride* row; a Redis lock on `driverId` gives the dispatch mutex on the *driver*. You need both — they guard different objects.
 
 Driver exclusivity is enforced separately by a **Redis distributed lock keyed on `driverId` with a 10s TTL**. Match Service must acquire the lock before sending an offer; the lock auto-expires if the service crashes mid-dispatch. No two matchers can ever offer the same driver simultaneously. Postgres is the system of record; Redis is the dispatch mutex.
 
@@ -227,9 +295,27 @@ Trip data (route, fare, timestamps) can be retained for years for billing and di
 
 ---
 
-## Scaling Journey: 0 -> Infinity
+## 📈 Scaling Journey: 0 → Infinity
 
 This section is my own framing for how a ride-hailing backend concretely evolves. Each stage shows what you build, what you deliberately skip, and the failure that forces the next step.
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0–100 users<br/>Monolith + PostGIS<br/>sync SQL match"]
+    S2["Stage 2<br/>100–1K<br/>Location Svc + Redis<br/>websockets + lock"]
+    S3["Stage 3<br/>1K–100K<br/>City-sharded Redis + H3<br/>Kafka + Temporal"]
+    S4["Stage 4<br/>100K–10M<br/>Sharded Postgres<br/>hot-cell autoscale"]
+    S5["Stage 5<br/>10M+<br/>Regional cells<br/>global control plane"]
+
+    S1 -->|"PG write CPU saturates"| S2
+    S2 -->|"2nd city: cross-region nonsense"| S3
+    S3 -->|"single primary chokes @10M/day"| S4
+    S4 -->|"data residency + global events"| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0-100 Users (One city MVP)
 
@@ -318,7 +404,7 @@ This section is my own framing for how a ride-hailing backend concretely evolves
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 ### H3 Hexagonal Grid: Why Hexagons Beat Squares for Proximity
 Uber's H3 library uses a hierarchical hexagonal grid. Hexagons have a critical property squares lack: every neighbor cell center is equidistant from the center cell. Square grids have two distances (edge-adjacent = 1 unit, diagonal = 1.41 units), which causes inconsistency in proximity calculations. H3's hierarchical structure also allows multi-resolution queries — find drivers at resolution 9 (~174m cells), zoom out to resolution 7 (~5.1km) if none found. This variable-resolution search replaces multiple fixed-radius queries.
@@ -349,10 +435,22 @@ A single dispatch service for all 8 billion people on Earth is impractical. Shar
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Level | Breadth vs Depth | What you must nail | What is bonus |
 |---|---|---|---|
 | **Mid (E4)** | 80 / 20 | Clean entities and APIs. A working high-level design with one DB and a separate geo index. Recognize that plain Postgres will not scale location writes. At least a "good" answer to driver exclusivity (DB status column + timeout). | Naming a specific geospatial tech (PostGIS, Redis geo). |
 | **Senior (E5)** | 60 / 40 | Move fast through the basics. Deep-dive two of: Redis geohash vs PostGIS vs H3, the distributed-lock dispatch pattern, the Kafka + Temporal durable workflow for offer timeouts. Articulate trade-offs out loud (durability vs latency, strong vs eventual consistency). Proactively spot the 2M/sec write problem and propose adaptive pings + batching. | Progressive radius expansion, city-level sharding. |
 | **Staff+ (L7+)** | 40 / 60 | Drive the conversation. Three or more deep dives with original angles: H3 hex adjacency properties, hot-cell partition autoscaling, surge zone ML feedback loop, data-residency-driven cell architecture, failure modes at the driver-app side (flaky LTE, background throttling). Show calibrated opinions from real experience. The interviewer should leave having learned something. | Cross-region handoff, chaos/evacuation strategy, observability for match latency SLOs. |
+
+---
+
+## 📚 Related Concepts
+
+- [Sharding](../CoreConcepts/Sharding.md) — city/region sharding of the dispatch plane and Postgres ride storage.
+- [Consistent Hashing](../CoreConcepts/ConsistentHashing.md) — distributing location writes and cells across nodes.
+- [Redis](../CoreConcepts/Redis.md) — the geo index (`GEOADD`/`GEOSEARCH`) and the `SET NX PX` dispatch lock.
+- [Networking](../CoreConcepts/Networking.md) — websockets for driver pings vs HTTPS, SSE for rider tracking.
+- [Proximity Search](../SystemDesign/DeepDives/ProximitySearch.md) — geospatial index choices (geohash, quadtree, H3/S2) in depth.
+- [Kafka](../SystemDesign/DeepDives/Kafka.md) — absorbing demand bursts and partitioning by H3 prefix.
+- [Uber (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/Uber.md) — the source breakdown this doc expands on.

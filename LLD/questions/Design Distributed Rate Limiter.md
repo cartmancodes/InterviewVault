@@ -1,17 +1,19 @@
-# Design Distributed Rate Limiter
+# 🚦 Design Distributed Rate Limiter
 
 > **Pattern**: Coordination / Counting
 > **Difficulty**: Medium
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/distributed-rate-limiter)
 
+> **Summary**: A distributed rate limiter caps how often a client (user, IP, or API key) can call an API over a time window, enforcing a global limit across many gateway nodes without adding meaningful latency (< 10 ms) to the critical path. The design places the limiter at the edge (API gateway), keeps counter state in a centralized, sharded Redis accessed through atomic Lua scripts (to defeat the read-modify-write race), and picks token bucket as the default algorithm for its O(1) state and burst tolerance. The hard parts are consistency-vs-latency trade-offs, sync-vs-async counter updates at scale, hot-key mitigation, and choosing fail-open so the limiter never becomes the API's single point of failure.
+
 ---
 
-## Table of Contents
+## 📋 Table of Contents
 
 - [Understanding the Problem](#understanding-the-problem)
   - [Functional Requirements](#functional-requirements)
   - [Non-Functional Requirements](#non-functional-requirements)
-- [Layman's Explanation](#-laymans-explanation)
+- [Layman's Explanation](#laymans-explanation)
 - [Core Entities / Algorithms](#core-entities--algorithms)
 - [API Design](#api-design)
 - [High-Level Design](#high-level-design)
@@ -29,10 +31,11 @@
   - [Stage 5: 10M+ RPS (Hyperscale)](#stage-5-10m-rps-hyperscale)
 - [Insider Tips and Tricks](#insider-tips-and-tricks)
 - [Expected Depth by Level](#expected-depth-by-level)
+- [Related Concepts](#related-concepts)
 
 ---
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 A distributed rate limiter caps how often a client (user, IP, or API key) can call an API over a time window, protecting backends from abuse, runaway clients, and traffic spikes. The core tension is enforcing a global limit across many gateway nodes without adding meaningful latency to the critical path.
 
@@ -78,7 +81,7 @@ Real rate limiters serve **billions of requests across global regions**. They ha
 
 ---
 
-## Core Entities / Algorithms
+## 🔑 Core Entities / Algorithms
 
 The "entities" in a rate limiter are really the algorithm choices. Each trades accuracy, memory, and burst handling differently.
 
@@ -94,7 +97,7 @@ The "entities" in a rate limiter are really the algorithm choices. Each trades a
 
 ---
 
-## API Design
+## 🔌 API Design
 
 The rate limiter exposes a single internal decision primitive, invoked by the gateway on every request.
 
@@ -119,7 +122,7 @@ Rule configuration itself lives behind a small admin API (CRUD on rules; rules k
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
 **Placement decision: at the edge (API gateway / L7 load balancer).**
 - *In-process in each app server* — rejected: each node only sees its own slice of traffic, making the global limit unpredictable.
@@ -137,16 +140,43 @@ Rule configuration itself lives behind a small admin API (CRUD on rules; rules k
 3. Calls Redis via a Lua script that performs the token-bucket math atomically and returns allow/deny + remaining.
 4. Attaches rate-limit headers, forwards or rejects.
 
-```
-Client → LB → API Gateway ──(Lua script)──→ Redis (shared state)
-                    │
-                    └─ on allow → Backend services
-                    └─ on deny  → 429
+```mermaid
+graph TB
+    C[Client]
+    LB[Load Balancer<br/>L7]
+
+    subgraph "API Gateway (edge enforcement)"
+        GW[Gateway Node<br/>extract clientId from<br/>JWT / X-Forwarded-For / X-API-Key]
+        RC[(Local Rule Cache<br/>refreshed every 30s)]
+    end
+
+    subgraph "State Tier"
+        REDIS[(Redis<br/>shared counter state<br/>keyed by clientId<br/>+ EXPIRE per key)]
+        RULES[(Rule Config DB<br/>CRUD by scope, resource)]
+    end
+
+    BE[Backend Services]
+    R429[HTTP 429<br/>+ rate-limit headers]
+
+    C --> LB
+    LB --> GW
+    GW -->|resolve rules| RC
+    RC -.poll every 30s.-> RULES
+    GW -->|Lua: atomic token-bucket math| REDIS
+    REDIS -->|allow / deny + remaining| GW
+    GW -->|on allow| BE
+    GW -->|on deny| R429
+
+    style REDIS fill:#e1f5ff
+    style RULES fill:#e1f5ff
+    style RC fill:#e1f5ff
+    style GW fill:#90EE90
+    style R429 fill:#FFB6C1
 ```
 
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. Algorithm Choice: Token Bucket vs Sliding Window
 
@@ -195,6 +225,33 @@ A perfectly consistent global counter requires either a single-leader store or d
 - Async batched path for clients clearly under quota — the common case for most clients most of the time.
 - A per-gateway local cache tracks "earliest time this client could possibly hit the limit given current local count" so the gateway knows when to escalate to sync mode automatically.
 
+```mermaid
+graph LR
+    REQ[Incoming request]
+    Q{"Client near limit?<br/>&gt; 80% quota consumed"}
+
+    subgraph "Sync path (accurate)"
+        S1[Block on Redis<br/>~1 ms round-trip]
+        S2[Authoritative<br/>allow / deny]
+    end
+
+    subgraph "Async batched path (cheap)"
+        A1[Increment local<br/>in-process counter]
+        A2[Flush delta via INCRBY<br/>every M reqs / T ms]
+        A3[10–100× fewer<br/>Redis ops]
+    end
+
+    REQ --> Q
+    Q -->|yes| S1 --> S2
+    Q -->|no| A1 --> A2 --> A3
+
+    style S2 fill:#90EE90
+    style A3 fill:#90EE90
+    style Q fill:#FFE4B5
+```
+
+> ⚠️ **Async batching trades accuracy for throughput.** Between flushes a client can overshoot the global limit by up to `M × num_gateway_nodes` requests — e.g., a 100 req/min limit with `M = 5` across 10 gateways permits a worst-case 50-request (50%) overshoot. Tune `M` to your tolerance; for billing-critical limits, reduce `M` or stay on the sync path.
+
 ### 4. Multi-Node Coordination and Atomicity (Redis + Lua)
 
 Naive implementation using Redis transactions:
@@ -231,6 +288,31 @@ return { 1, tokens }
 
 All gateway nodes running the same Lua script against the same Redis primary produce a total serializable order of per-client operations. The `EXPIRE` call auto-cleans idle keys — critical when you have 100M registered clients, the vast majority of whom are inactive at any given moment.
 
+The contrast between the broken transaction and the atomic script is the crux of the whole design:
+
+```mermaid
+sequenceDiagram
+    participant G1 as Gateway Node 1
+    participant G2 as Gateway Node 2
+    participant R as Redis (single-threaded)
+
+    Note over G1,G2: Broken: HMGET read outside the transaction (TOCTOU)
+    G1->>R: HMGET bucket:alice (tokens=1)
+    G2->>R: HMGET bucket:alice (tokens=1)
+    Note over G1,G2: both compute "1 token → allow"
+    G1->>R: HSET tokens=0 (allow)
+    G2->>R: HSET tokens=0 (allow)
+    Note over G1,G2: limit exceeded — 2 requests passed on 1 token
+
+    Note over G1,R: Fix: whole read-compute-write is one Lua call
+    G1->>R: EVAL token-bucket Lua (KEYS bucket:alice)
+    R->>R: refill → min(cap, tokens + elapsed*rate)
+    R->>R: tokens < 1 ? deny : tokens-=1, HMSET, EXPIRE
+    R-->>G1: { allowed, remaining }
+    G2->>R: EVAL token-bucket Lua (runs only after G1 finishes)
+    R-->>G2: { allowed, remaining }
+```
+
 **Alternative for simple fixed-window counters:** use `INCR` and check the *returned value* (not a prior `GET`). `INCR` is atomic: `count = INCR key; if count == 1 then EXPIRE key window_seconds end; if count > limit then deny end`. This avoids Lua for the simplest case but does not generalize to token bucket math.
 
 **Sharding for horizontal scale:** hash `clientId` to a Redis shard via consistent hashing (or Redis Cluster's 16,384 hash slot scheme). The same client always routes to the same shard, preserving per-client atomicity globally. A single Redis instance handling 50–100K ops/sec × 10 shards = 500K–1M ops/sec capacity, covering well over 1M RPS of rate-limit checks (since each check is one Lua call that is faster than the request itself).
@@ -248,13 +330,45 @@ When the Redis cluster is unreachable, the gateway must choose a fallback policy
 3. If the outage exceeds a configured threshold (e.g., 30 seconds), optionally switch to fail-closed to protect downstream services from a traffic avalanche.
 4. Pair with Redis primary-replica failover (Sentinel or Redis Cluster) so "unreachable" states are rare (< 30 seconds for automatic failover) and the circuit breaker rarely opens.
 
-State the fail-open vs fail-closed tradeoff explicitly in an interview — interviewers consistently reward candidates who surface operational failure modes, not just happy-path design.
+```mermaid
+stateDiagram-v2
+    [*] --> Closed
+    Closed: Closed<br/>Redis reachable<br/>rate limiting enforced
+    FailOpen: Open / Fail-Open<br/>serve requests<br/>WITHOUT limiting
+    FailClosed: Fail-Closed<br/>reject all with 429/503<br/>protect downstream
+
+    Closed --> FailOpen: Redis unreachable<br/>(breaker opens immediately)
+    FailOpen --> FailOpen: alert on-call within 60s
+    FailOpen --> FailClosed: outage exceeds threshold<br/>(e.g. 30s) — optional
+    FailOpen --> Closed: Redis recovers<br/>(Sentinel failover < 30s)
+    FailClosed --> Closed: Redis recovers
+```
+
+> 💡 **Say the fail-open vs fail-closed tradeoff out loud.** Interviewers consistently reward candidates who surface operational failure modes, not just happy-path design. The production default is fail-open with monitoring and a short circuit-breaker timeout: a Redis outage is already a P0 incident, and piling a denial-of-service on top only lengthens recovery.
 
 ---
 
-## Scaling Journey: 0 → ∞
+## 📈 Scaling Journey: 0 → ∞
 
 A rate limiter is measured by the traffic flowing through it, not the user count. Each stage below adds infrastructure only when the previous stage's bottleneck bites.
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0–100 RPS<br/>In-process token bucket<br/>local Map + LRU"]
+    S2["Stage 2<br/>100–1K RPS<br/>Single shared Redis<br/>INCR / small Lua"]
+    S3["Stage 3<br/>1K–100K RPS<br/>Gateway + atomic Lua<br/>primary+replica, Sentinel"]
+    S4["Stage 4<br/>100K–10M RPS<br/>Sharded Redis + async batch<br/>hot-key + multi-tier"]
+    S5["Stage 5<br/>10M+ RPS<br/>Per-region clusters<br/>async reconciliation, DDoS offload"]
+
+    S1 -->|"2nd app server:<br/>2× quota bypass"| S2
+    S2 -->|"100× traffic:<br/>duplicated logic"| S3
+    S3 -->|"Redis CPU pins<br/>at 100%"| S4
+    S4 -->|"service goes global:<br/>transatlantic latency"| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0 – 100 RPS (MVP)
 
@@ -341,7 +455,7 @@ A rate limiter is measured by the traffic flowing through it, not the user count
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 ### Sliding Window Log Is Theoretically Correct but Practically Unusable
 The sliding window log stores every request timestamp for each user, then counts how many fall within the last N seconds. At 10K requests per user per window, you're storing 10K timestamps in Redis per user — prohibitive memory. The fix is the sliding window counter: divide time into fixed buckets, weight the previous bucket proportionally to overlap with the current window. It's an approximation (±0.1% error) but uses O(1) memory per user.
@@ -375,10 +489,26 @@ Rate limiting (throttling) is about *speed*: no more than N requests per second.
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Level | Breadth / Depth | Focus |
 |---|---|---|
 | **Mid** | Breadth-first (~80/20) | Pick one algorithm (Token Bucket), place limiter at the API gateway, name Redis as shared state, acknowledge sharding exists |
 | **Senior** | ~60/40 | Compare algorithms with trade-offs; articulate atomicity problem and Lua fix; discuss fail-open vs fail-closed; propose consistent-hashing shards and connection pooling without being prompted |
 | **Staff+** | ~40/60 | Treat algorithm/store as solved; spend time on hot-key mitigation, async batching, hybrid sync/async, multi-region reconciliation, limiter-as-its-own-SPOF, observability and rollout strategy; draw from real-world operations experience |
+
+---
+
+## 📚 Related Concepts
+
+- [Redis](../CoreConcepts/Redis.md) — the centralized counter store, atomic `INCR`/`EXPIRE`, and single-threaded Lua execution that makes the token-bucket check atomic.
+- [Distributed Locking](../CoreConcepts/DistributedLocking.md) — the multi-node coordination and TOCTOU race the Lua script defeats; the same read-modify-write hazard that motivates atomic primitives.
+- [Consistent Hashing](../CoreConcepts/ConsistentHashing.md) — hashing `clientId` to a Redis shard so the same client always routes to the same node, preserving per-client atomicity.
+- [Sharding](../CoreConcepts/Sharding.md) — horizontally scaling the counter tier (Redis Cluster's 16,384 slots) once a single primary pins at 100% CPU.
+- [Caching](../CoreConcepts/Caching.md) — the local in-process rule cache refreshed every 30s, and the async local counters that batch deltas to Redis.
+- [Networking](../CoreConcepts/Networking.md) — edge placement at the L7 gateway, connection pooling to Redis, and why an extra network hop matters on a per-request path.
+- [Redis (deep dive)](../SystemDesign/DeepDives/Redis.md) — in-memory data structures, atomicity, and sub-millisecond ops behind the state tier.
+- [API Gateway](../SystemDesign/DeepDives/ApiGateway.md) — the edge enforcement point where the limiter lives on the hot path.
+- [Dealing With Contention](../SystemDesign/Patterns/DealingWithContention.md) — atomic operations vs locks for the concurrent read-modify-write on a shared counter.
+- [Numbers to Know](../SystemDesign/CoreConcepts/NumbersToKnow.md) — the latency and throughput budgets (< 10 ms overhead, ~50–100K Redis ops/sec) that shape every stage.
+- [Rate Limiter (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/RateLimiter.md) — the source breakdown this doc expands on.

@@ -1,22 +1,26 @@
-# Design Ad Click Aggregator
+# 📊 Design Ad Click Aggregator
 
 > **Pattern**: Stream Aggregation / Exactly-Once
 > **Difficulty**: Hard
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/ad-click-aggregator)
 
-## Table of Contents
+> **Summary**: An ad click aggregator straddles two opposed workloads — a write-heavy ingest firehose (~10K clicks/sec, ~100M/day) and a read-heavy analytics tier (advertisers refreshing dashboards). Both sides touch money, so clicks can be neither lost nor double-counted, yet dashboards must feel live. The mature design lands clicks in Kafka behind an HMAC + Redis `SET NX` dedup gate, aggregates them in Flink 1-minute tumbling windows into an OLAP store for fast "estimated" reads, and reconciles nightly with Spark over the S3 event lake to produce the exact, audit-proof numbers that billing actually charges against.
+
+## 📋 Table of Contents
 1. [Understanding the Problem](#understanding-the-problem)
-2. [Core Entities](#core-entities)
-3. [API Design](#api-design)
-4. [High-Level Design](#high-level-design)
-5. [Deep Dives](#deep-dives)
-6. [Scaling Journey: 0 to Infinity](#scaling-journey-0--)
-7. [Insider Tips and Tricks](#insider-tips-and-tricks)
-8. [Expected Depth by Level](#expected-depth-by-level)
+2. [Layman's Explanation](#laymans-explanation)
+3. [Core Entities](#core-entities)
+4. [API Design](#api-design)
+5. [High-Level Design](#high-level-design)
+6. [Deep Dives](#deep-dives)
+7. [Scaling Journey: 0 to Infinity](#scaling-journey-0-to-infinity)
+8. [Insider Tips and Tricks](#insider-tips-and-tricks)
+9. [Expected Depth by Level](#expected-depth-by-level)
+10. [Related Concepts](#related-concepts)
 
 ---
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 An ad click aggregator sits at the intersection of two very different workloads: a massive write-heavy ingest pipeline (every click on every ad on every page) and a read-heavy analytics pipeline (advertisers continually refreshing dashboards to watch campaign performance). The interesting tension in the problem is that both sides care about money: advertisers pay per click, so clicks cannot be lost or double-counted, yet the dashboards must feel live.
 
@@ -61,7 +65,7 @@ Real ad systems reconcile **billions of dollars of revenue** down to legally def
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 | Entity | Key Fields | Notes |
 |--------|-----------|-------|
@@ -74,7 +78,7 @@ The impression is what makes click tracking tractable. Every render produces a f
 
 ---
 
-## API Design
+## 🔌 API Design
 
 ### Click ingest
 
@@ -96,35 +100,64 @@ Optional variants roll up by `campaign_id` or `advertiser_id`. All reads hit the
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
-```
-Browser click
-   |
-   v
-[Click Processor]  -- verify HMAC, dedup in Redis (SET NX, 24h TTL) -->
-   |
-   v (durable write before 302)
-[Kafka / Kinesis]  (partitioned by adId+windowBucket, N-day retention)
-   |
-   +--> [Stream Processor: Flink]  (tumbling 1-min windows, watermarks,
-   |        idempotent upsert sink)
-   |         |
-   |         +--> [OLAP store: Druid / ClickHouse]   (fast approximate tier)
-   |
-   +--> [Fraud Detection Job]  (separate Flink job, same topic,
-   |        pattern rules + ML, emits fraud labels)
-   |
-   +--> [Data lake: S3]   -- nightly Spark reconciliation (exact tier)
-                          -- batch results overwrite OLAP rollups
-                          -- discrepancy alert if drift > 0.01%
+```mermaid
+graph TB
+    B[Browser Click]
+
+    subgraph Ingest
+        CP[Click Processor<br/>verify HMAC<br/>302 redirect]
+        REDIS[(Redis Dedup<br/>SET NX · 24h TTL)]
+    end
+
+    KAFKA[[Kafka / Kinesis<br/>partition by adId+windowBucket<br/>N-day retention]]
+
+    subgraph "Streaming Tier - Fast / Approximate"
+        FLINK[Stream Processor: Flink<br/>1-min tumbling windows<br/>watermarks · idempotent upsert]
+        OLAP[(OLAP Store<br/>Druid / ClickHouse)]
+    end
+
+    FRAUD[Fraud Detection Job<br/>separate Flink job<br/>pattern rules + ML]
+    FLABELS[[fraud_labels topic]]
+
+    subgraph "Batch Tier - Exact / Billing"
+        S3[(Data Lake: S3<br/>immutable event history)]
+        SPARK[Nightly Spark<br/>recompute from scratch<br/>overwrite OLAP rollups]
+    end
+
+    DASH[Advertiser Dashboard]
+
+    B --> CP
+    CP -->|SET NX dedup| REDIS
+    CP -->|durable write before 302| KAFKA
+    KAFKA --> FLINK
+    KAFKA --> FRAUD
+    KAFKA --> S3
+    FLINK --> OLAP
+    FRAUD --> FLABELS
+    FLABELS --> SPARK
+    S3 --> SPARK
+    SPARK -->|overwrite exact rows| OLAP
+    SPARK -.->|"drift > 0.01% alert"| DASH
+    OLAP --> DASH
+
+    style CP fill:#90EE90
+    style REDIS fill:#e1f5ff
+    style KAFKA fill:#FFE4B5
+    style FLINK fill:#90EE90
+    style OLAP fill:#e1f5ff
+    style S3 fill:#e1f5ff
+    style SPARK fill:#90EE90
+    style FRAUD fill:#f3e5f5
+    style FLABELS fill:#FFE4B5
 ```
 
 The ingest side is tuned for never losing a click: the stream is the source of truth, Redis only exists to drop near-duplicates, and the OLAP store is a materialized view that can always be rebuilt from the lake. The query side is deliberately boring: serve pre-aggregated minute rows out of an OLAP engine that already handles time-series scans efficiently. Billing always uses the batch-reconciled exact tier, never the streaming approximate tier.
 
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. Exactly-Once vs At-Least-Once and Why "Exactly-Once" Is a Misnomer
 
@@ -139,6 +172,35 @@ The dedup window at the Redis layer is intentionally bounded to 24 hours. Storin
 The dedup key is generated upstream of the click, at render time. The ad placement service issues a fresh `impression_id` per render, signs it with an HMAC secret, and embeds the signed token in the click URL. The click processor verifies the signature (blocking fake click injection), then checks a distributed Redis set for the impression ID with `SET NX` and a 24-hour TTL. First write wins: if new, publish to the stream and cache the ID; if already present, drop.
 
 This stays correct across retries at any layer, including browser reload, CDN replays, or ingest-side retries. The HMAC verification gates entry to the pipeline, so a flood of fabricated click URLs is rejected before touching Redis or Kafka. The combination — HMAC at the edge, `SET NX` in Redis, upsert in the OLAP sink — provides three independent layers of deduplication, each addressing a different failure mode.
+
+```mermaid
+sequenceDiagram
+    participant U as Browser
+    participant CP as Click Processor
+    participant R as Redis (SET NX, 24h TTL)
+    participant K as Kafka
+    participant F as Flink
+    participant O as OLAP Sink
+
+    U->>CP: GET /click?impression=<signed_id>
+    CP->>CP: verify HMAC signature
+    alt Invalid signature (fabricated click)
+        CP-->>U: reject before Redis/Kafka
+    else Valid signature
+        CP->>R: SET NX impression_id
+        alt First write wins (new)
+            R-->>CP: OK
+            CP->>K: durable write (click event)
+            CP-->>U: 302 redirect to destination
+            K->>F: consume into (adId, minute) window
+            F->>O: upsert on (ad_id, minute_bucket)
+        else Already present (duplicate)
+            R-->>CP: exists → drop
+            CP-->>U: 302 redirect (no event published)
+        end
+    end
+    Note over K,O: 3rd dedup layer — replayed window<br/>upserts same key, never appends
+```
 
 ### 3. Stream Processing, Windowing, and Time Bucketing
 
@@ -157,6 +219,25 @@ The system uses two complementary mechanisms:
 - **Bounded allowed-lateness on Flink windows.** Watermarks advance event time based on observed event timestamps. A configurable tolerance (e.g., 30 minutes) keeps windows open past their nominal close time. Events within the tolerance are assigned to their correct window and trigger a window update to the OLAP sink. This handles the majority of mobile retries and flaky-network cases.
 - **Late-arrival side output.** Events arriving beyond the allowed-lateness tolerance are not dropped — they are routed to a "late events" side output topic. The nightly Spark batch job reads this topic alongside the main S3 event lake and includes late events in its recomputation. The nightly job's output overwrites the OLAP rows, so even clicks that were weeks late end up in the correct billing period once the batch runs.
 
+```mermaid
+graph LR
+    E[Late Click Event<br/>arrives after window close]
+    W{Within allowed<br/>lateness?<br/>e.g. 30 min}
+    UPD[Assign to correct window<br/>trigger window update<br/>→ OLAP upsert]
+    SIDE[[Late-events side<br/>output topic]]
+    SPARK[Nightly Spark<br/>reads S3 lake + late topic<br/>recompute + overwrite OLAP]
+
+    E --> W
+    W -->|Yes: streaming handles cheaply| UPD
+    W -->|No: batch handles correctly| SIDE
+    SIDE --> SPARK
+
+    style UPD fill:#90EE90
+    style SIDE fill:#FFE4B5
+    style SPARK fill:#90EE90
+    style W fill:#FFE4B5
+```
+
 The key insight: the streaming layer handles the common case cheaply; the batch layer handles the tail case correctly. Neither layer needs to handle both.
 
 ### 5. Hot Advertisers and Hot Partitions
@@ -165,6 +246,41 @@ Partitioning Kafka by `ad_id` alone is simple but catastrophic when a single ad 
 
 - **Composite partition key.** Partition by `(advertiserId, windowBucket)` or by `adId` (individual ad ID, which is more granular than advertiser ID) to distribute load. For ultra-high-volume ads, add random salting: rewrite the Kafka key as `ad_id:<0..N>` where N is chosen per ad based on recent traffic volume. The stream processor strips the suffix before aggregation.
 - **Two-stage aggregation.** Pre-aggregate within each salted partition (stage 1), then merge partial counts in a second Flink operator keyed by plain `ad_id` (stage 2). This keeps per-task state small on hot keys and prevents a single partition from stalling the entire job's watermark progress.
+
+```mermaid
+graph TB
+    HOT[Viral ad<br/>millions of clicks / 60s]
+
+    subgraph Salted Ingest
+        P0[Partition ad_id:0]
+        P1[Partition ad_id:1]
+        PN[Partition ad_id:N]
+    end
+
+    subgraph "Stage 1 - Partial Aggregation"
+        A0[Flink task<br/>partial count]
+        A1[Flink task<br/>partial count]
+        AN[Flink task<br/>partial count]
+    end
+
+    MERGE[Stage 2 — Merge Operator<br/>keyed by plain ad_id]
+    OUT[(OLAP upsert<br/>ad_id, minute_bucket)]
+
+    HOT --> P0
+    HOT --> P1
+    HOT --> PN
+    P0 --> A0
+    P1 --> A1
+    PN --> AN
+    A0 -->|strip suffix| MERGE
+    A1 -->|strip suffix| MERGE
+    AN -->|strip suffix| MERGE
+    MERGE --> OUT
+
+    style HOT fill:#FFB6C1
+    style MERGE fill:#90EE90
+    style OUT fill:#e1f5ff
+```
 
 OLAP-side hotspots are handled by sharding on `advertiser_id` rather than `ad_id`, which naturally distributes load since a single advertiser runs many ads with different popularity profiles. The metrics API layer fans out queries across shards and merges results.
 
@@ -178,6 +294,36 @@ The streaming pipeline (Kafka + Flink) is optimized for freshness, not exactness
 
 The batch reconciliation pipeline (Spark on raw event logs in S3, running nightly) reads the complete, immutable event history, recomputes all aggregates from scratch, and overwrites the streaming pipeline's outputs in the OLAP store. This pipeline's output is exact, auditable, and legally defensible for billing. Never bill from the streaming pipeline.
 
+```mermaid
+graph LR
+    K[[Kafka<br/>click events]]
+
+    subgraph "Fast / Approximate - Dashboards"
+        FL[Flink streaming<br/>1-min windows]
+        EST["OLAP rows<br/>labelled estimated<br/>1-2% error OK"]
+    end
+
+    subgraph "Exact / Auditable - Billing"
+        S3[(S3 raw event lake<br/>immutable history)]
+        SP[Nightly Spark<br/>recompute from scratch]
+        FIN[Finalized OLAP rows<br/>exact · legally defensible]
+    end
+
+    DIFF{Continuous diff<br/>per ad_id, minute}
+
+    K --> FL --> EST
+    K --> S3 --> SP --> FIN
+    EST --> DIFF
+    FIN -->|overwrite| EST
+    FIN --> DIFF
+    DIFF -.->|"drift > 0.01% - alert / pause billing"| SP
+
+    style EST fill:#FFE4B5
+    style FIN fill:#90EE90
+    style S3 fill:#e1f5ff
+    style DIFF fill:#FFB6C1
+```
+
 Discrepancies between the two layers are a monitoring signal. A continuous diff job compares streaming counts to batch counts for each `(ad_id, minute_bucket)`. Discrepancies above 0.01% trigger alerts and can pause billing exports before incorrect invoices go out. This is not redundant work — it is the audit trail that catches silent streaming bugs before they compound.
 
 ### 7. Click Fraud Detection as a Separate Pipeline
@@ -186,9 +332,29 @@ Fraud signals — same IP clicking the same ad 100 times in 1 minute, impossible
 
 The fraud detection pipeline is a separate Flink job reading from the same Kafka topic. It applies pattern rules (velocity checks, IP reputation lookups) and optionally ML model scoring, and emits fraud labels to a separate `fraud_labels` topic. The nightly Spark reconciliation job joins raw events against fraud labels, excluding fraudulent clicks from billing counts. This means fraudulent clicks may appear in the real-time dashboard briefly but are excluded from the final billing figures — an acceptable tradeoff.
 
+> ⚠️ **Fraud filtering lives in the batch tier, not the stream.** Fraudulent clicks can transiently inflate the "estimated" dashboard number, but they are stripped during nightly reconciliation before any invoice is generated. Merging fraud detection into the aggregation pipeline would couple stateless per-window aggregation with cross-window state and ML inference — two very different computational concerns.
+
 ---
 
-## Scaling Journey: 0 to Infinity
+## 📈 Scaling Journey: 0 to Infinity
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0–100 clicks/s<br/>Postgres INSERT<br/>SELECT GROUP BY"]
+    S2["Stage 2<br/>100–1K<br/>Async queue + batch<br/>read replica + rollups"]
+    S3["Stage 3<br/>1K–100K<br/>Redis + Kafka + Flink<br/>OLAP upsert · HLL"]
+    S4["Stage 4<br/>100K–1M<br/>Key salting · sharded OLAP<br/>nightly Spark reconcile"]
+    S5["Stage 5<br/>1M+ Hyperscale<br/>Multi-region · tiered SLAs<br/>hot-advertiser isolation"]
+
+    S1 -->|"read/write fight over 1 disk"| S2
+    S2 -->|"cron lag + hot ad primary"| S3
+    S3 -->|"viral ad pins 1 partition"| S4
+    S4 -->|"single-region blast radius"| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0 to 100 Clicks/sec (MVP)
 
@@ -259,7 +425,7 @@ The fraud detection pipeline is a separate Flink job reading from the same Kafka
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 ### "Exactly-Once" Delivery Is a Lie — At-Least-Once + Idempotency Is the Standard
 
@@ -301,12 +467,31 @@ The streaming pipeline can have bugs, Kafka consumer lag, duplicate processing, 
 
 Unlike most systems where a dropped message is an acceptable tradeoff for throughput, dropped click events mean advertisers aren't charged for real clicks (or users aren't credited for referral clicks). Every event must be durably written to Kafka before the HTTP 200 is returned to the client. If Kafka is unavailable, write to a local WAL and retry — never acknowledge a click without durable persistence. Use dead-letter queues for messages that fail processing after N retries.
 
+> 💡 **Never acknowledge a click you haven't persisted.** The 302 redirect is only returned after the event is durably written to Kafka; if the broker is down, the click service writes to a local WAL and retries rather than dropping it. A dropped click is a revenue-loss event, not a throughput tradeoff.
+
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Level | Breadth vs Depth | What interviewers expect | Pitfalls |
 |-------|------------------|--------------------------|----------|
 | Mid (E4) | ~80% breadth, 20% depth | Arrive at a workable batch or micro-batch design. Identify the need for idempotency. Choose reasonable stores with a short justification. Respond well to prompts about scaling. | Jumping straight to "use Kafka and Flink" without explaining why. Forgetting to protect billing accuracy. |
 | Senior (E5) | ~60% breadth, 40% depth | Move through the high-level design quickly, then go deep on at least two of: exactly-once semantics, hot partitions, reconciliation, late data, OLAP choice. Articulate trade-offs between batch, micro-batch, and streaming. Recognize bottlenecks before being asked. | Hand-waving dedup ("we'll just use a UUID"). Treating stream vs batch as either/or instead of complementary. |
 | Staff+ (E6+) | ~40% breadth, 60% depth | Skip fundamentals. Drive the conversation. Discuss specifics like Flink watermarks, HLL merging, key salting, Kafka replication modes, and the cost/accuracy trade-off between tiers. Bring real operational experience: how deploys corrupt windows, how to diff stream vs batch, how to evacuate a hot region. Teach the interviewer something. | Being academic instead of operational. Proposing exotic architectures without justifying them against simpler Lambda-style designs. |
+
+---
+
+## 📚 Related Concepts
+
+- [Sharding](../CoreConcepts/Sharding.md) — sharding the OLAP store by `advertiser_id` and Redis dedup by `impression_id` hash.
+- [Consistent Hashing](../CoreConcepts/ConsistentHashing.md) — distributing Kafka partitions and salted keys across nodes without hot spots.
+- [Caching](../CoreConcepts/Caching.md) — the Redis `SET NX` dedup layer and its bounded 24-hour TTL.
+- [Redis](../CoreConcepts/Redis.md) — the `SET NX` dedup set that drops near-duplicate impression IDs.
+- [Data Indexing](../CoreConcepts/DataIndexing.md) — time-bucketed OLAP rollups and multi-level pre-aggregation for fast dashboard scans.
+- [Kafka](../SystemDesign/DeepDives/Kafka.md) — the durable event log, partitioning strategy, and at-least-once delivery semantics.
+- [Flink](../SystemDesign/DeepDives/Flink.md) — tumbling windows, watermarks, checkpointing, and idempotent upsert sinks.
+- [Time Series Databases](../SystemDesign/DeepDives/TimeSeriesDatabases.md) — the OLAP tier (Druid / ClickHouse) that serves minute-bucket metrics.
+- [Scaling Writes](../SystemDesign/Patterns/ScalingWrites.md) — absorbing the ~10K clicks/sec ingest firehose off the OLTP path.
+- [Managing Long Running Tasks](../SystemDesign/Patterns/ManagingLongRunningTasks.md) — the nightly Spark reconciliation batch job.
+- [Ad Click Aggregator (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/AdClickAggregator.md) — the source breakdown this doc expands on.
+- [Metrics Monitoring](../SystemDesign/ProblemBreakdowns/MetricsMonitoring.md) — a sibling write-heavy aggregation problem with the same stream-vs-batch tension.

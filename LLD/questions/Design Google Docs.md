@@ -1,16 +1,17 @@
-# Design Google Docs
+# 📝 Design Google Docs
 
 > **Pattern**: Real-time Collaboration / OT/CRDT
 > **Difficulty**: Hard
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/google-docs)
 
----
+> **Summary**: Google Docs is a browser-based collaborative editor where many people type into the same document at once and every view must stay byte-consistent despite dropped packets, sleeping tabs, and edits landing on top of each other. Scoped to plain text for an interview, the design routes every operation through a single-writer coordinator per document that totally orders edits, transforms concurrent operations against each other with **Operational Transformation (OT)**, assigns a monotonic revision, and persists to an append-only operation log with periodic snapshots. Presence (cursors) is ephemeral and never logged; offline edits buffer locally and rebase against the server log on reconnect, falling back to a three-way merge when the log has been truncated.
 
-## Table of Contents
+## 📋 Table of Contents
 
 - [Understanding the Problem](#understanding-the-problem)
   - [Functional Requirements](#functional-requirements)
   - [Non-Functional Requirements](#non-functional-requirements)
+- [Layman's Explanation](#laymans-explanation)
 - [Core Entities](#core-entities)
 - [API Design](#api-design)
 - [High-Level Design](#high-level-design)
@@ -29,10 +30,11 @@
   - [Stage 5: 10M+ Users](#stage-5-10m-users)
 - [Insider Tips and Tricks](#insider-tips-and-tricks)
 - [Expected Depth by Level](#expected-depth-by-level)
+- [Related Concepts](#related-concepts)
 
 ---
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 Google Docs is a browser-based rich-text editor that lets many users edit the same document at the same time. The hard parts are not rendering text; they are keeping everyone's view consistent to the byte while the network drops packets, tabs go to sleep, and users type on top of each other. Two insertions arriving at the server at the same index cannot both "win" naively, or the document diverges forever.
 
@@ -93,7 +95,7 @@ Real Google Docs is far more than a chalkboard. It handles rich text formatting 
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 - **Document**: The logical unit being edited. Has a `doc_id`, an owner, a monotonically increasing `revision` number, and a current text blob (materialized from operations).
 - **Operation**: The atomic edit. In the OT model this is typically `{op_id, doc_id, client_id, base_revision, type: insert|delete|retain, position, payload}`. Operations are totally ordered per document by the server.
@@ -102,9 +104,60 @@ Real Google Docs is far more than a chalkboard. It handles rich text formatting 
 - **Presence**: Ephemeral per-session state broadcast to peers: cursor position, selection range, name color, last heartbeat. Not durable.
 - **User**: `{user_id, display_name, avatar}` - used only to render presence chips.
 
+```mermaid
+erDiagram
+    DOCUMENT ||--o{ OPERATION : "totally orders"
+    DOCUMENT ||--o{ SNAPSHOT : "materialized at revision"
+    DOCUMENT ||--o{ SESSION : "has live"
+    SESSION ||--|| PRESENCE : "broadcasts (ephemeral)"
+    USER ||--o{ SESSION : "opens"
+
+    DOCUMENT {
+        string doc_id
+        string owner
+        int revision
+        blob text
+    }
+    OPERATION {
+        string op_id
+        string doc_id
+        string client_id
+        int base_revision
+        string type
+        int position
+        string payload
+    }
+    SNAPSHOT {
+        string doc_id
+        int revision
+        string blob_ref
+        timestamp created_at
+    }
+    SESSION {
+        string session_id
+        string doc_id
+        string user_id
+        string client_id
+        int last_acked_revision
+    }
+    PRESENCE {
+        int cursor
+        int selection_range
+        string color
+        timestamp last_heartbeat
+    }
+    USER {
+        string user_id
+        string display_name
+        string avatar
+    }
+```
+
+> 📖 **Durable vs ephemeral.** `DOCUMENT`, `OPERATION`, and `SNAPSHOT` are the durable state of record. `SESSION` and `PRESENCE` are live, in-memory, and disappear on disconnect — dashed intent here: presence is broadcast to peers but never written to the operation log.
+
 ---
 
-## API Design
+## 🔌 API Design
 
 The editing path is split between REST for document lifecycle and a WebSocket channel for the hot path.
 
@@ -131,7 +184,7 @@ A single WebSocket is multiplexed for edits, presence, and server-initiated catc
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
 At the logical level, four flows need to work:
 
@@ -140,11 +193,51 @@ At the logical level, four flows need to work:
 3. **Server serializes.** A single authoritative writer per document receives the op, transforms it against any operations that committed since `base_revision`, assigns the next revision number, persists it to the operation log, and broadcasts the transformed op to all other sessions.
 4. **Peers apply.** Each peer receives the op with its revision number, applies it to its local copy, and advances its `last_acked_revision`.
 
+```mermaid
+graph TB
+    subgraph "Clients"
+        C1[Browser Tab A<br/>local editor + DOM<br/>base_revision]
+        C2[Browser Tab B<br/>local editor + DOM<br/>base_revision]
+    end
+
+    subgraph "Edge"
+        REST[REST API<br/>doc lifecycle:<br/>create / load / share]
+        WS[WebSocket Channel<br/>op · cursor · ack · snapshot]
+    end
+
+    subgraph "Coordinator: single-writer per doc"
+        CO[Doc Coordinator<br/>transform vs ops since base_revision<br/>assign next revision<br/>broadcast]
+        PR[Presence Map<br/>in-memory · ephemeral]
+    end
+
+    subgraph "Storage"
+        OL[(Operation Log<br/>append-only<br/>keyed by doc_id, revision)]
+        SN[(Snapshot Store<br/>S3 / GCS blobs)]
+    end
+
+    C1 -->|1. load doc| REST
+    REST -->|snapshot + ops after rev| SN
+    C1 <-->|2. op / cursor / ack| WS
+    C2 <-->|4. transformed op broadcast| WS
+    WS --> CO
+    CO -->|3. fsync before ack| OL
+    CO -->|every N ops / M min| SN
+    CO --> PR
+    CO -->|transformed op + revision| WS
+
+    style CO fill:#90EE90
+    style OL fill:#e1f5ff
+    style SN fill:#e1f5ff
+    style PR fill:#FFE4B5
+```
+
 The critical invariant is that all operations on a given document flow through one place - a single-writer coordinator - because concurrent independent transforms on two servers would diverge. The rest of the system (snapshots, presence fan-out, WebSocket termination) can be horizontally scaled freely.
+
+> 💡 **The single-writer coordinator is the load-bearing assumption.** Every operation for a document flows through exactly one coordinator process — not for performance, but for correctness. If two coordinators independently transformed and committed ops for the same doc, its revision sequence would fork into two incompatible histories. Everything else (edge WebSocket termination, snapshots, presence fan-out) scales horizontally; the coordinator is the one place that must not.
 
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. Operational Transformation vs CRDT
 
@@ -182,13 +275,54 @@ Broadcast goes out:
 - To A: ack with `assigned_revision=12` and also the earlier op from B (which A had not yet seen). A applies B's op first, then reconciles its optimistic local edit to match what the server finalized.
 - To B: A's transformed op at revision 12. B applies it.
 
+```mermaid
+sequenceDiagram
+    participant A as Client A (rev 10)
+    participant S as Coordinator
+    participant B as Client B (rev 10)
+
+    Note over A,B: doc = "hello" @ rev 10
+    A->>A: type " world" → insert(5, " world") base=10
+    B->>B: delete "lo" → delete(3, 2) base=10
+    B->>S: delete(3, 2) @ base=10
+    S->>S: accept, assign rev 11 → "hel"
+    S-->>B: ack rev 11
+    A->>S: insert(5, " world") @ base=10
+    S->>S: A is behind by 1 op
+    S->>S: transform vs delete(3,2):<br/>index 5 → 3
+    S->>S: assign rev 12 → "hel world"
+    S-->>A: ack rev 12 + B's delete op
+    A->>A: apply B's op, reconcile local edit
+    S-->>B: A's transformed op @ rev 12
+    B->>B: apply → "hel world"
+    Note over A,B: both converge to "hel world"
+```
+
 Both clients converge to `"hel world"`. Note that naive "last write wins" would have deleted part of A's insert or placed it at the wrong index; OT is what makes this correct.
 
 A critical correctness point: the server assigns all revision numbers using its own monotonic counter. The `ts` field that clients include in operation frames cannot be trusted for ordering — client clocks can differ by seconds or minutes, and two concurrent operations from different clients may report timestamps that cross over. Wall-clock timestamps from clients are used only for display purposes (e.g., "last edited 3 minutes ago") and must never influence the transformation pipeline or operation ordering.
 
+> ⚠️ **Client clocks are not a clock.** Order every operation by the coordinator's own monotonic revision counter, never by the client's `ts`. Two concurrent ops from different devices can report crossed-over timestamps, so wall time is display-only ("last edited 3 minutes ago") and must never leak into the transformation pipeline.
+
 ### 4. Offline Edits and Reconnection
 
 While disconnected, the client keeps accepting keystrokes, appending them to a local pending queue, and applying them to its local DOM. Each pending op carries the `base_revision` it was created against - always the last revision the client saw from the server.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Connected
+    Connected --> Editing: keystroke → op acked
+    Editing --> Connected: advance last_acked_revision
+    Connected --> Offline: connection lost
+    Editing --> Offline: connection lost
+    Offline --> Offline: buffer op to local pending queue
+    Offline --> Reconnecting: network returns
+    Reconnecting --> Rebasing: gap small<br/>(ops still in log)
+    Reconnecting --> ThreeWayMerge: gap too large<br/>(log truncated)
+    Rebasing --> Connected: rebase queued ops one by one,<br/>receive acks
+    ThreeWayMerge --> Connected: merge local + baseline + snapshot<br/>(conflict dialog if overlap)
+    Connected --> [*]
+```
 
 On reconnect:
 
@@ -210,6 +344,52 @@ The WebSocket fleet is stateless with respect to documents - any edge node can t
 - **Presence fan-out**: The coordinator owns the authoritative session list for its docs; it pushes updates to the edge nodes that currently host those sessions.
 - **Failover**: When a coordinator dies, the placement service elects a new one. The new coordinator rebuilds state by replaying the operation log from the latest snapshot. Clients experience a short stall and reconnect. The critical correctness requirement during failover is not just speed of election — it is guaranteeing that the old coordinator has fully stopped processing before the new one starts. A fencing token (a monotonically increasing epoch number, sometimes called a "generation number") enforces this: the new coordinator writes its epoch to a shared store, and any late-arriving write from the old coordinator that carries a stale epoch is rejected. Without a fencing token, a coordinator that is slow to die (e.g., paused by a GC or a network partition) can race with its successor and produce two diverging revision sequences for the same document.
 
+```mermaid
+graph TB
+    subgraph "Clients"
+        CL[Client Tabs]
+    end
+
+    subgraph "Edge Tier: stateless"
+        LB[Load Balancer<br/>sticky / consistent hash]
+        E1[WS Terminator 1<br/>TLS · auth · frame parse]
+        E2[WS Terminator 2]
+    end
+
+    subgraph "Placement"
+        ZK[Placement Service<br/>ZooKeeper / routing cache<br/>doc_id → coordinator]
+    end
+
+    subgraph "Coordinator Tier: single-writer per doc"
+        CO1[Coordinator A<br/>owns doc set via<br/>consistent hash on doc_id<br/>+ fencing epoch]
+        CO2[Coordinator B]
+    end
+
+    subgraph "Storage"
+        LOG[(Operation Log)]
+        SNAP[(Snapshots)]
+    end
+
+    CL --> LB
+    LB --> E1
+    LB --> E2
+    E1 -->|lookup coordinator| ZK
+    E2 -->|lookup coordinator| ZK
+    E1 -->|forward frame| CO1
+    E2 -->|forward frame| CO2
+    CO1 --> LOG
+    CO2 --> LOG
+    CO1 -.replay from snapshot on failover.-> SNAP
+
+    style CO1 fill:#90EE90
+    style CO2 fill:#90EE90
+    style ZK fill:#FFE4B5
+    style LOG fill:#e1f5ff
+    style SNAP fill:#e1f5ff
+```
+
+> ⚠️ **Failover correctness is about stopping the old writer, not electing fast.** The dangerous case is a coordinator that is slow to die — paused by a GC or stuck behind a network partition — racing its successor. A fencing token (a monotonically increasing epoch) lets the new coordinator reject any late write carrying a stale epoch, so two coordinators can never both commit to the same document and fork its revision sequence.
+
 To prevent a slow client from stalling op delivery to all other collaborators on the same document, each session on the coordinator maintains an application-level send queue with a maximum depth (typically a few hundred frames). If the queue fills because the client is not draining the socket fast enough, the coordinator switches that session to "catch-up mode": it stops enqueuing incremental ops and waits until the client drains, then sends a single snapshot to resynchronize. This is necessary because TCP's flow control will eventually back-pressure a slow client, but only after hundreds of frames have already accumulated in the kernel socket buffer — by which point the coordinator may be blocked on a socket write, delaying broadcasts to all other sessions.
 
 Capacity back-of-envelope: a modern Linux box with tuned kernel settings can hold ~500K-1M idle WebSockets, but "active editing" workloads cap out much earlier (CPU for op transform, fan-out). Plan ~10-50K active sessions per coordinator process, sharded across a fleet.
@@ -225,9 +405,27 @@ The durability story has two halves.
 
 ---
 
-## Scaling Journey: 0 to Infinity
+## 📈 Scaling Journey: 0 to Infinity
 
 This journey is my original framing for how to evolve a Google Docs backend. It is not a verbatim scale-up path from the interview; it is a reasoned trajectory through the specific inflection points of collaborative editing.
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0–100<br/>Single server + Postgres row<br/>last-write-wins polling"]
+    S2["Stage 2<br/>100–1K<br/>WebSockets + OT<br/>single-writer per doc"]
+    S3["Stage 3<br/>1K–100K<br/>Edge / coordinator tiers<br/>ZooKeeper + Kafka log"]
+    S4["Stage 4<br/>100K–10M<br/>Multi-region home coordinator<br/>CRDT offline fallback"]
+    S5["Stage 5<br/>10M+<br/>Stateless ring + hot secondaries<br/>per-region CRDT reconcile"]
+
+    S1 -->|"concurrent edits clobber"| S2
+    S2 -->|"single box = SPOF, hot doc saturates CPU"| S3
+    S3 -->|"cross-region 200ms RTT, hot-doc overload"| S4
+    S4 -->|"ZooKeeper metadata bottleneck"| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0 to 100 Users (MVP)
 
@@ -279,7 +477,7 @@ This journey is my original framing for how to evolve a Google Docs backend. It 
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 ### OT's TP2 Property Is Why Peer-to-Peer OT Fails in Practice
 
@@ -315,7 +513,7 @@ TCP's flow control will eventually back-pressure a slow client, but by that time
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Area | Mid-level | Senior | Staff |
 | --- | --- | --- | --- |
@@ -328,3 +526,18 @@ TCP's flow control will eventually back-pressure a slow client, but by that time
 | Offline | Mentions local buffer | Rebase on reconnect against server log | Bounds replay window with snapshots, explains CRDT-style fallback when log is truncated |
 | Scaling | Adds replicas and a cache | Sharding by `doc_id`, consistent hashing, stateless edge | Multi-region coordination, metadata plane scaling, QoS for hot docs |
 | Storage | One table of documents | Operation log + periodic snapshots | Log retention, cold tiering, compaction, implications for version history |
+
+---
+
+## 📚 Related Concepts
+
+- [Distributed Locking](../CoreConcepts/DistributedLocking.md) — the single-writer coordinator, leader election, and the fencing-token epoch that makes failover safe.
+- [Consistent Hashing](../CoreConcepts/ConsistentHashing.md) — mapping each `doc_id` to exactly one coordinator, and pushing that lookup down into the edge fleet.
+- [Sharding](../CoreConcepts/Sharding.md) — sharding the operation log and coordinator fleet by `doc_id`, and per-region cell isolation.
+- [Networking](../CoreConcepts/Networking.md) — the WebSocket hot path (ops, cursor, ack frames) vs REST for document lifecycle, and application-level backpressure.
+- [Redis](../CoreConcepts/Redis.md) — in-memory presence state and the Redis Streams pub/sub layer for presence fan-out on hot docs.
+- [Real-Time Updates](../SystemDesign/Patterns/Real-TimeUpdates.md) — pushing server-initiated operation and presence frames to connected clients.
+- [Dealing With Contention](../SystemDesign/Patterns/DealingWithContention.md) — concurrent edits at the same index and why serialization through one writer resolves them.
+- [Kafka](../SystemDesign/DeepDives/Kafka.md) — the append-only operation log partitioned by `doc_id` for durable ordering and cheap replay.
+- [Zookeeper](../SystemDesign/DeepDives/Zookeeper.md) — the placement service that assigns docs to coordinators and elects a new one on failover.
+- [Google Docs (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/GoogleDocs.md) — the source breakdown this doc expands on.

@@ -1,18 +1,21 @@
-# Design FB Live Comments
+# 💬 Design FB Live Comments
 
 > **Pattern**: Real-time Broadcast / Fanout
 > **Difficulty**: Medium
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/fb-live-comments)
 
-## Table of Contents
+> **Summary**: FB Live Comments is the chat plane floating over a live video — a read-heavy, fanout-shaped workload where one comment writer spawns tens of thousands of reads, all wanting their comment within ~200 ms. The hard parts are massive write fan-out on a single hot stream, real-time push to millions of viewers, and graceful degradation when a mega-stream's firehose exceeds what any human (or socket) can absorb. The mature design pushes with SSE, brokers comments through Redis Pub/Sub (Kafka on the write path), samples aggressively above a velocity threshold, and offloads mega-streams to CDN snapshots — accepting per-stream partial ordering as the correct, scalable target.
+
+## 📋 Table of Contents
 
 1. [Understanding the Problem](#understanding-the-problem)
    - [Functional Requirements](#functional-requirements)
    - [Non-Functional Requirements](#non-functional-requirements)
-2. [Core Entities](#core-entities)
-3. [API Design](#api-design)
-4. [High-Level Design](#high-level-design)
-5. [Deep Dives](#deep-dives)
+2. [Layman's Explanation](#laymans-explanation)
+3. [Core Entities](#core-entities)
+4. [API Design](#api-design)
+5. [High-Level Design](#high-level-design)
+6. [Deep Dives](#deep-dives)
    - [1. Push vs Pull: Picking the Transport](#1-push-vs-pull-picking-the-transport)
    - [2. Horizontal Scaling of Realtime Servers](#2-horizontal-scaling-of-realtime-servers)
    - [3. Handling Mega-Streams](#3-handling-mega-streams)
@@ -21,13 +24,14 @@
    - [6. Connection-Tier Cost and WebSocket Server Architecture](#6-connection-tier-cost-and-websocket-server-architecture)
    - [7. Backpressure and Slow Subscribers](#7-backpressure-and-slow-subscribers)
    - [8. Thundering Herd on Stream Start and Reconnect](#8-thundering-herd-on-stream-start-and-reconnect)
-6. [Scaling Journey: 0 to Infinity](#scaling-journey-0-to-infinity)
-7. [Insider Tips and Tricks](#insider-tips-and-tricks)
-8. [Expected Depth by Level](#expected-depth-by-level)
+7. [Scaling Journey: 0 to Infinity](#scaling-journey-0-to-infinity)
+8. [Insider Tips and Tricks](#insider-tips-and-tricks)
+9. [Expected Depth by Level](#expected-depth-by-level)
+10. [Related Concepts](#related-concepts)
 
 ---
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 Facebook Live Comments is the stream of chat that floats over a live video while the broadcast is in flight. The broadcast itself (video encode/transcode/delivery) is out of scope; we only design the comment plane. The hard part is that this is a **read-heavy, fanout-shaped** workload: one writer spawns tens or hundreds of thousands of reads, all of which want their comment within ~200 ms.
 
@@ -74,7 +78,7 @@ Real Facebook Live is messier than a stadium. It handles dozens of languages sim
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 | Entity | Fields | Notes |
 |---|---|---|
@@ -86,7 +90,7 @@ A `Viewer` is not a first-class DB entity; it is a live SSE/WebSocket session tr
 
 ---
 
-## API Design
+## 🔌 API Design
 
 **Post a comment**
 ```
@@ -114,19 +118,37 @@ Response is an SSE stream where each event carries a `Comment` JSON payload and 
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
-```
- Commenter ──POST──► API Gateway ──► Comment Service ──► Comments DB (DynamoDB)
-                                           │
-                                           ▼
-                                       Pub/Sub Broker  (channel keyed by liveVideoId)
-                                           │
-                                           ▼
-                                   Realtime Fanout Servers (SSE)
-                                           │
-                                           ▼
-                                        Viewers
+```mermaid
+graph TB
+    subgraph Clients
+        CMT[Commenter]
+        VW[Viewers<br/>SSE subscribers]
+    end
+
+    GW[API Gateway]
+    CS[Comment Service<br/>write + publish]
+
+    subgraph Stores
+        DDB[(Comments DB<br/>DynamoDB<br/>PK=liveVideoId SK=commentId)]
+        BROKER[[Pub/Sub Broker<br/>channel per liveVideoId]]
+    end
+
+    RT[Realtime Fanout Servers<br/>hold open SSE connections]
+
+    CMT -->|POST /comments| GW
+    GW --> CS
+    CS -->|1. write append-only| DDB
+    CS -->|2. publish after write| BROKER
+    BROKER -->|3. deliver to subscribers| RT
+    RT -.->|4. push SSE events| VW
+    VW -->|late joiner: GET /comments backfill| GW
+
+    style DDB fill:#e1f5ff
+    style BROKER fill:#FFE4B5
+    style CS fill:#90EE90
+    style RT fill:#90EE90
 ```
 
 1. Commenter POSTs. The Comment Service writes to DynamoDB (or a similar KV/NoSQL store; the schema is `PK=liveVideoId, SK=commentId`).
@@ -138,7 +160,7 @@ Why DynamoDB: the access pattern is `by liveVideoId, ordered by time`, writes ar
 
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. Push vs Pull: Picking the Transport
 
@@ -161,7 +183,31 @@ Comments are still *posted* with a plain POST (one request, done), so we do not 
 | Reconnection | Built into browser spec | Must implement manually |
 | Right for this problem | Yes | No — comments only flow one way |
 
-Gotchas: some proxies buffer chunked responses (disable with `X-Accel-Buffering: no` on NGINX), and browsers cap ~6 SSE connections per origin over HTTP/1.1—use HTTP/2 so multiplexing removes that cap.
+The end-to-end path — a plain POST to write, an SSE stream to receive — looks like this:
+
+```mermaid
+sequenceDiagram
+    participant C as Commenter
+    participant GW as API Gateway
+    participant CS as Comment Service
+    participant DB as Comments DB
+    participant B as Pub/Sub Broker
+    participant RT as Realtime Server
+    participant V as Viewer (SSE)
+
+    V->>RT: GET /stream (Accept: text/event-stream)
+    Note over V,RT: connection held open (one-way)
+    C->>GW: POST /comments { message }
+    GW->>CS: forward (userId from JWT)
+    CS->>DB: write comment (append-only)
+    DB-->>CS: commentId + eventId
+    CS->>B: publish on channel live:{liveVideoId}
+    CS-->>C: 201 Created (Comment)
+    B->>RT: deliver event
+    RT-->>V: SSE event (id: eventId, Comment JSON)
+```
+
+> ⚠️ **SSE infra gotchas.** Some proxies buffer chunked responses — disable with `X-Accel-Buffering: no` on NGINX. Browsers cap ~6 SSE connections per origin over HTTP/1.1; use HTTP/2 so multiplexing removes that cap.
 
 ### 2. Horizontal Scaling of Realtime Servers
 
@@ -186,6 +232,24 @@ Gotchas: some proxies buffer chunked responses (disable with `X-Accel-Buffering:
 1. **Sampling.** When comment velocity exceeds a threshold (say 200/sec), switch to representative sampling: pick a bounded N per second, biasing toward comments from followed accounts, verified users, or the broadcaster. This is not a performance shortcut—it is a product decision. YouTube Live shows roughly 1–2% of comments on popular streams. The UI still feels alive without the firehose. Random sampling with a small bias toward highly-reacted comments is sufficient.
 2. **CDN snapshots.** For the truly massive streams, maintain a ring buffer of the last ~200 comments per `liveVideoId` in Redis. A worker flushes a snapshot JSON to the CDN every 1 s. Viewers on mega-streams poll `GET /cdn/live/{id}/snapshot` instead of holding an SSE connection. Trades 1–2 s of latency for near-zero origin cost and arbitrary read scale.
 3. **Mode switching.** Clients are told by the server which mode to use (`"mode": "sse"` vs `"mode": "cdn-poll"`). Use hysteresis—do not flap modes on every second—switch up at 500 viewers/sec and back only when sustained below 200 viewers/sec for 30 s.
+
+```mermaid
+stateDiagram-v2
+    [*] --> SSE
+    SSE: SSE (full firehose)
+    SampledSSE: Sampled-SSE (bias verified/followed)
+    CDNPoll: CDN-Poll (snapshot every 1s)
+
+    SSE --> SampledSSE: velocity > 200 comments/sec
+    SampledSSE --> CDNPoll: > 500 viewers/sec
+    CDNPoll --> SampledSSE: sustained < 200 viewers/sec for 30s
+    SampledSSE --> SSE: sustained < 200 comments/sec
+    note right of CDNPoll
+        hysteresis: do not flap
+        trades 1-2s latency for
+        near-zero origin cost
+    end note
+```
 4. **Slow mode (write-path rate limiting).** Allow the broadcaster to enable "slow mode": a per-user rate limiter keyed by `(userId, streamId)` with a configurable TTL (e.g., 30 seconds) stored in Redis. A user who posted within the TTL window gets a 429 response. This reduces write volume before it reaches the broker at all. Critically, slow mode must be enforced at write time—not by dropping comments after they are already published.
 
 **Numbers to anchor the argument:** a 1 M-viewer stream at 1% engagement produces 10 K comments/sec. At 100 bytes per comment, that is 1 MB/sec of comment data. Fanned out to 1 M viewers, that is 1 TB/sec of egress—clearly impossible without sampling or CDN offload.
@@ -201,6 +265,26 @@ Gotchas: some proxies buffer chunked responses (disable with `X-Accel-Buffering:
 - **Deduplication** on the client: keep a small set of recently-seen `commentId`s (a fixed-size ring buffer or a bloom filter for memory efficiency) and drop duplicates where HTTP backfill and SSE overlap.
 - **Ordering guarantee:** per-stream partial ordering is the correct target. Comments from the same Kafka partition (keyed by `streamId`) are ordered. Across partitions or across regions, ordering is best-effort. Two viewers may see slightly different comment sequences. This is a deliberate, correct tradeoff—not a bug. Advertising total ordering would require a centralized sequencer that cannot scale.
 
+The reconnect path bridges the cold-open backfill and the live SSE resume without dropping or duplicating comments:
+
+```mermaid
+sequenceDiagram
+    participant V as Viewer (client)
+    participant RT as Realtime Server
+    participant DB as Comments DB
+    participant R as Redis recent backlog
+
+    Note over V: network blips / app backgrounds
+    V->>DB: GET /comments?since=lastCommentId&limit=100
+    DB-->>V: gap-bridging history
+    V->>RT: reconnect GET /stream (Last-Event-ID: N)
+    RT->>R: LRANGE live:{id}:recent 0 200
+    R-->>RT: events with eventId > N
+    RT-->>V: replay missed events (id: > N)
+    Note over V: dedup via recently-seen ring buffer / bloom filter
+    RT-->>V: resume live SSE stream
+```
+
 ### 5. Choice of Pub/Sub Broker
 
 **Problem.** We need a broker that supports many short-lived channels (one per `liveVideoId`), dynamic subscription (viewers wander between streams), and fire-and-forget delivery (the database is already durable).
@@ -215,6 +299,18 @@ Gotchas: some proxies buffer chunked responses (disable with `X-Accel-Buffering:
 - Kafka excels at durable, ordered, replayable streams consumed by a small number of well-known consumer groups—not at ephemeral fan-out to millions of transient subscribers.
 
 **Kafka does belong in the write path** as the event bus between the Comment Service and the Realtime fleet—one Kafka topic with `streamId` as the partition key gives you durability, replay for region-to-region replication, and ordered delivery within a stream. The Realtime Servers then use Redis Pub/Sub for the final hop to individual SSE connections.
+
+```mermaid
+graph LR
+    CS[Comment Service] -->|partition key=streamId| K[[Kafka<br/>durable + ordered<br/>region replay]]
+    K --> RT[Realtime Servers]
+    RT -->|final hop| RP[(Redis Pub/Sub<br/>sub-ms, ephemeral<br/>channel per liveVideoId)]
+    RP -.->|push| V[SSE connections]
+
+    style K fill:#FFE4B5
+    style RP fill:#e1f5ff
+    style RT fill:#90EE90
+```
 
 **Scaling Redis Pub/Sub:**
 - Shard by `hash(liveVideoId) % M`. Each Realtime Server connects only to the shards containing its streams.
@@ -248,7 +344,7 @@ Gotchas: some proxies buffer chunked responses (disable with `X-Accel-Buffering:
 2. **Close on overflow:** if the buffer exceeds a threshold for more than N seconds, close the connection with a specific close code (`4001: slow consumer`). The client reconnects, gets a catch-up replay, and resumes. This is better than silently accumulating lag.
 3. **Never block the producer:** the goroutine/thread receiving from Redis Pub/Sub and fanning out to clients must never block waiting for a slow client's send to complete. Use non-blocking channel sends with immediate drop on full.
 
-The key principle: **producers must never be slowed by consumers**. The comment pipeline from write to delivery is a broadcast—if one viewer's network is slow, it should not delay delivery to all other viewers on the same server.
+> ⚠️ **Producers must never be slowed by consumers.** The comment pipeline from write to delivery is a broadcast—if one viewer's network is slow, it should not delay delivery to all other viewers on the same server. Drop, don't block: comments are ephemeral, so a lagging client is dropped or closed, never allowed to back up the fanout.
 
 ### 8. Thundering Herd on Stream Start and Reconnect
 
@@ -269,9 +365,27 @@ Both produce a spike of connection attempts that can overwhelm the connection ti
 
 ---
 
-## Scaling Journey: 0 to Infinity
+## 📈 Scaling Journey: 0 to Infinity
 
 This is the original progression I would walk through if asked "how does this evolve?" The inflection points are real operational breakpoints, not arbitrary numbers.
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0–100 viewers<br/>Monolith + Postgres<br/>2s polling"]
+    S2["Stage 2<br/>100–1K<br/>Single Realtime Server<br/>in-process SSE + LRU"]
+    S3["Stage 3<br/>1K–100K<br/>Redis Pub/Sub<br/>consistent-hash routing"]
+    S4["Stage 4<br/>100K–1M<br/>Sharded Redis + CDN<br/>sampling + slow mode"]
+    S5["Stage 5<br/>1M+<br/>Regional fleets<br/>hierarchical fanout tree"]
+
+    S1 -->|"polling bottleneck @500 viewers"| S2
+    S2 -->|"one process caps ~20-50K sockets"| S3
+    S3 -->|"Redis egress + fanout CPU @100K"| S4
+    S4 -->|"cross-region RTT > 200ms"| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0–100 Viewers per stream (MVP)
 
@@ -329,7 +443,7 @@ This is the original progression I would walk through if asked "how does this ev
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 ### You Must Sample Comments Above a Threshold — It's a UX Requirement
 A stream with 1M concurrent viewers posting comments at even 1% engagement produces 10,000 comments per second. Rendering all of them is both technically and visually impossible. Production systems sample aggressively above a threshold — YouTube Live shows perhaps 1-2% of comments on popular streams. The sampling is random with slight bias toward highly-reacted comments. This is not a scaling shortcut; it's a product decision that happens to solve a scaling problem.
@@ -360,7 +474,7 @@ With comments arriving from millions of clients across multiple regions with var
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Area | Mid-Level | Senior | Staff+ |
 |---|---|---|---|
@@ -375,3 +489,19 @@ With comments arriving from millions of clients across multiple regions with var
 | Thundering herd | Does not raise the problem. | Raises mass reconnect scenario; proposes backoff. | Covers both stream-start and mass-reconnect scenarios; specifies jitter formula, admission control, pre-scaling hooks, and graceful rolling deploys. |
 | Connection cost | Does not quantify. | Estimates rough connection count. | Derives the 64 GB socket-buffer number, uses it to argue for a dedicated connection tier, and connects it to why regional PoP servers are necessary. |
 | Time budget | 80% breadth, 20% depth. Usually stalls in the scaling deep dive. | 60% breadth, 40% depth. Leads the scaling discussion. | 40% breadth, 60% depth. Interviewer steers topics, not the design. |
+
+---
+
+## 📚 Related Concepts
+
+- [Real-Time Updates](../SystemDesign/Patterns/Real-TimeUpdates.md) — SSE vs WebSocket vs polling for the viewer push channel.
+- [Scaling Reads](../SystemDesign/Patterns/ScalingReads.md) — the read-heavy fanout shape and CDN snapshot offload.
+- [Dealing With Contention](../SystemDesign/Patterns/DealingWithContention.md) — the hot-key / hot-stream problem on a single popular video.
+- [Consistent Hashing](../CoreConcepts/ConsistentHashing.md) — routing same-video viewers to the same Realtime Servers with minimal remap on topology change.
+- [Sharding](../CoreConcepts/Sharding.md) — partitioning broker channels and Redis by `hash(liveVideoId)`.
+- [Redis](../CoreConcepts/Redis.md) — Pub/Sub for the final SSE hop, the replay backlog (`LRANGE`), and slow-mode rate-limit keys.
+- [Networking](../CoreConcepts/Networking.md) — SSE over HTTP/2, connection budgets, and proxy buffering pitfalls.
+- [Caching](../CoreConcepts/Caching.md) — the last-200-comments ring buffer and CDN snapshot layer.
+- [Kafka](../SystemDesign/DeepDives/Kafka.md) — the durable write-path event bus partitioned by `streamId`.
+- [Redis (deep dive)](../SystemDesign/DeepDives/Redis.md) — Pub/Sub topology and sharding for the fanout tier.
+- [FB Live Comments (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/FbLiveComments.md) — the source breakdown this doc expands on.

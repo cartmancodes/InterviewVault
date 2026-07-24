@@ -1,14 +1,17 @@
-# Design Facebook News Feed
+# 📰 Design Facebook News Feed
 
 > **Pattern**: Fan-out / Feed Aggregation
 > **Difficulty**: Medium–Hard
 > **Sources**: [Hello Interview](https://www.hellointerview.com/learn/system-design/problem-breakdowns/fb-news-feed) · Twitter/Meta/LinkedIn/Pinterest Engineering Blogs
 
+> **Summary**: A news feed delivers a personalized, reverse-chronological (or ML-ranked) stream of posts from followed accounts to billions of users at sub-second latency. The defining tension is a ~50:1 read-to-write ratio combined with follower counts that span 0 to 100M+, making per-user fan-out wildly asymmetric. The production answer is **hybrid fanout**: precompute normal-account feeds into per-user Redis sorted sets (fan-out on write), skip celebrities above a threshold and merge their recent posts live at read time (fan-out on read), front hot viral posts with a replicated cache, and — at hyperscale — replace reverse-chron with a multi-stage ML ranking pipeline.
+
 ---
 
-## Table of Contents
+## 📋 Table of Contents
 
 - [Understanding the Problem](#understanding-the-problem)
+- [Layman's Explanation](#laymans-explanation)
 - [Core Entities](#core-entities)
 - [API Design](#api-design)
 - [High-Level Design](#high-level-design)
@@ -24,10 +27,11 @@
 - [Scaling Journey: 0 → ∞](#scaling-journey-0--)
 - [Insider Tips and Tricks](#insider-tips-and-tricks)
 - [Expected Depth by Level](#expected-depth-by-level)
+- [Related Concepts](#related-concepts)
 
 ---
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 A news feed delivers a personalized, reverse-chronological (or ranked) stream of posts from followed accounts to billions of users, at sub-second latency. The core tension: writes create posts once, but reads consume those posts billions of times per day — and follower counts range from 0 to 100M+, making per-user fan-out wildly asymmetric.
 
@@ -74,7 +78,7 @@ The real Facebook News Feed is one of the most sophisticated production ML syste
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 | Entity | Description |
 |---|---|
@@ -83,9 +87,37 @@ The real Facebook News Feed is one of the most sophisticated production ML syste
 | **Post** | Content authored by a user, visible to followers |
 | **FeedEntry** | A precomputed reference (`userId → [postId, timestamp]`) in the feed cache |
 
+```mermaid
+erDiagram
+    USER ||--o{ FOLLOW : "follows"
+    USER ||--o{ POST : "authors"
+    USER ||--o{ FEEDENTRY : "owns feed"
+    POST ||--o{ FEEDENTRY : "referenced by"
+
+    USER {
+        string userId PK
+    }
+    FOLLOW {
+        string followerId FK
+        string followedId FK
+    }
+    POST {
+        string postId PK
+        string authorId FK
+        string content
+        string mediaUrls
+        long createdAt
+    }
+    FEEDENTRY {
+        string userId FK
+        string postId FK
+        long timestamp
+    }
+```
+
 ---
 
-## API Design
+## 🔌 API Design
 
 ```
 POST /posts
@@ -106,7 +138,48 @@ GET /feed?pageSize={n}&cursor={timestamp?}
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
+
+```mermaid
+graph TB
+    subgraph Clients
+        C[Client<br/>infinite scroll]
+    end
+
+    GW[API Gateway]
+
+    subgraph Services
+        PS[Post Service<br/>create posts]
+        FS[Feed Service<br/>read + hybrid merge]
+        WF[Worker Fleet<br/>fan-out on write<br/>sharded by authorId]
+    end
+
+    subgraph Stores
+        POSTS[(DynamoDB / Cassandra<br/>Posts + GSI authorId,createdAt)]
+        FOLLOWS[(Follows table<br/>+ reverse GSI)]
+        REDISFEED[(Redis Sorted Set<br/>feed:userId · capped 200)]
+        SQS[[SQS<br/>fanout events]]
+    end
+
+    C --> GW
+    GW --> PS
+    GW --> FS
+    PS -->|write post| POSTS
+    PS -->|enqueue postId,authorId| SQS
+    SQS --> WF
+    WF -->|ZADD per follower<br/>if not celebrity| REDISFEED
+    WF -->|read follower list| FOLLOWS
+    FS -->|ZREVRANGEBYSCORE| REDISFEED
+    FS -->|live celebrity GSI query| POSTS
+    FS -->|hydrate + merge| C
+
+    style REDISFEED fill:#e1f5ff
+    style POSTS fill:#e1f5ff
+    style FOLLOWS fill:#e1f5ff
+    style SQS fill:#FFE4B5
+    style FS fill:#90EE90
+    style WF fill:#90EE90
+```
 
 ### Data Model
 
@@ -137,35 +210,51 @@ Capped at 200 entries via ZREMRANGEBYRANK after each insert.
 
 ### Write Path (Post Creation)
 
-```
-Client → API Gateway → Post Service → DynamoDB (posts table)
-                                    → SQS (fanout event: {postId, authorId})
-                                    ↓
-                              Worker Fleet
-                                    ↓
-                    For each follower (if follower count < threshold):
-                        ZADD feed:{followerId} {timestamp} {postId}
-                        ZREMRANGEBYRANK feed:{followerId} 0 -201  (keep top 200)
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant GW as API Gateway
+    participant PS as Post Service
+    participant DB as DynamoDB (posts)
+    participant Q as SQS
+    participant W as Worker Fleet
+    participant R as Redis feed sets
+
+    C->>GW: POST /posts
+    GW->>PS: create post
+    PS->>DB: write post row
+    PS->>Q: enqueue {postId, authorId}
+    PS-->>C: { postId, createdAt }
+    Q->>W: deliver fanout event
+    loop each follower (if follower count < threshold)
+        W->>R: ZADD feed:{followerId} {ts} {postId}
+        W->>R: ZREMRANGEBYRANK feed:{followerId} 0 -201
+    end
 ```
 
 ### Read Path (Feed Retrieval)
 
-```
-Client → Feed Service
-              ↓
-         ZREVRANGEBYSCORE feed:{userId} +inf {cursor} LIMIT {pageSize}
-              ↓                                        ↑
-     For celebrity follows:                    (O(1) cache lookup for normal users)
-         Query Post GSI (authorId, createdAt < cursor LIMIT 20)
-              ↓
-         Merge + sort + hydrate post content
-              ↓
-         Return to client
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant FS as Feed Service
+    participant R as Redis feed set
+    participant DB as Post GSI
+
+    C->>FS: GET /feed?cursor
+    FS->>R: ZREVRANGEBYSCORE feed:{userId} +inf {cursor} LIMIT {n}
+    R-->>FS: precomputed postIds (O(1) for normal follows)
+    opt celebrity follows
+        FS->>DB: query (authorId, createdAt < cursor LIMIT 20)
+        DB-->>FS: recent celebrity posts
+    end
+    FS->>FS: merge + sort + hydrate content
+    FS-->>C: { posts[], nextCursor }
 ```
 
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. Heavy Follower Lists (Fan-out on Read)
 
@@ -229,6 +318,8 @@ The celebrity set is typically small (most users follow < 5 celebrities), so the
 - Accepts higher memory cost (N × data) but eliminates the hot-shard problem entirely
 - No inter-replica coordination required
 
+> 💡 **Sharding distributes keys, not load on a single key.** For a hot key like a viral post, splitting keys across shards leaves all of that one key's traffic on one node — the problem just relocates. Replication is the fix: N identical replicas each hold the full hot dataset, and the viral post's reads spread evenly across all N.
+
 **Additional technique — Local in-process cache (L1):**
 
 For posts receiving millions of reads/second, add a small in-process LRU cache (e.g., Caffeine in Java, functools.lru_cache in Python) in each Feed Service instance. The cache holds the top ~1,000 hottest posts with a 1-5 second TTL. This eliminates even Redis round-trips for the hottest content. Twitter calls this pattern "multi-tier caching."
@@ -241,16 +332,21 @@ Reverse-chronological order works but is suboptimal — a user who follows 2,000
 
 **Industry-standard multi-stage funnel (Meta, Instagram, LinkedIn, Pinterest, TikTok):**
 
-```
-Total eligible posts (1,000+ per user per day)
-         ↓
-  Candidate Retrieval (ANN embedding search)    → ~2,000 candidates
-         ↓
-  Pre-Ranking / Early-Stage (lightweight model)  → ~200 candidates
-         ↓
-  Full Ranking (heavy multitask neural network)  → ~50 candidates
-         ↓
-  Reranking (diversity, integrity, business rules) → final feed
+```mermaid
+graph LR
+    A["Total eligible posts<br/>1,000+ per user/day"]
+    B["Candidate Retrieval<br/>ANN embedding search<br/>~2,000 candidates"]
+    C["Pre-Ranking / Early-Stage<br/>lightweight model<br/>~200 candidates"]
+    D["Full Ranking<br/>heavy multitask NN<br/>~50 candidates"]
+    E["Reranking<br/>diversity · integrity<br/>business rules<br/>final feed"]
+
+    A --> B --> C --> D --> E
+
+    style A fill:#FFB6C1
+    style B fill:#FFE4B5
+    style C fill:#FFE4B5
+    style D fill:#FFE4B5
+    style E fill:#90EE90
 ```
 
 **Why stages exist:**
@@ -334,11 +430,29 @@ Both are handled in Pass 2 of Meta's ranking pipeline — the contextual refinem
 
 **Problem:** With hybrid fanout (precomputed feed + live celebrity queries), pagination breaks in a subtle way.
 
-Scenario: User loads page 1 at T=100 (cursor=T100). A celebrity posts at T=110. User loads page 2 (cursor=T100). The live celebrity query always returns the most recent posts, so the T=110 post appears on page 2 — out of order, and the user may have never seen page 1 content from that celebrity.
+> ⚠️ **The celebrity live query jumps the timeline.** User loads page 1 at T=100 (cursor=T100). A celebrity posts at T=110. User loads page 2 (cursor=T100). The live celebrity query always returns the most recent posts, so the T=110 post appears on page 2 — out of order, and the user may have never seen page 1 content from that celebrity.
 
 **Production fix — snapshot the celebrity query upper bound:**
 
 The first feed request establishes a session cursor: `upperBound = now()`. All celebrity queries in subsequent page loads are scoped to `createdAt < upperBound AND createdAt < pageCursor`. The T=110 post is invisible until the user starts a fresh session.
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant FS as Feed Service
+    participant DB as Celebrity Post GSI
+
+    Note over U,DB: Session start establishes upperBound = now() = T100
+    U->>FS: page 1 (cursor = T100)
+    FS->>DB: createdAt < min(upperBound=T100, cursor=T100)
+    DB-->>FS: posts up to T100
+    FS-->>U: page 1
+    Note over DB: Celebrity posts at T110 (after upperBound)
+    U->>FS: page 2 (cursor = T100)
+    FS->>DB: createdAt < min(upperBound=T100, cursor=T100)
+    DB-->>FS: T110 post excluded (temporally consistent)
+    FS-->>U: page 2 in order
+```
 
 This ensures the merged timeline is temporally consistent across all pagination pages. This is the kind of correctness detail that separates Senior from Staff.
 
@@ -359,7 +473,25 @@ This ensures the merged timeline is temporally consistent across all pagination 
 
 ---
 
-## Scaling Journey: 0 → ∞
+## 📈 Scaling Journey: 0 → ∞
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0–100<br/>Monolith + Postgres<br/>JOIN feed query"]
+    S2["Stage 2<br/>100–1K<br/>Read replica + index<br/>Redis sessions"]
+    S3["Stage 3<br/>1K–100K<br/>Precomputed Redis feeds<br/>SQS fan-out workers"]
+    S4["Stage 4<br/>100K–10M<br/>Celebrity threshold<br/>hybrid read + sharding"]
+    S5["Stage 5<br/>10M–2B+<br/>Multi-region + L1/L2/L3<br/>ML ranking pipeline"]
+
+    S1 -->|"feed reads spike DB CPU"| S2
+    S2 -->|"p99 > 500ms at 200+ follows"| S3
+    S3 -->|"50K+ follower accounts choke fanout"| S4
+    S4 -->|"viral 10M/s reads + global RTT"| S5
+
+    style S1 fill:#FFB6C1
+    style S3 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0–100 Users (MVP)
 
@@ -453,7 +585,7 @@ This ensures the merged timeline is temporally consistent across all pagination 
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 These are the details that distinguish candidates who have operated large-scale systems from those who have only studied them.
 
@@ -601,10 +733,28 @@ The edge case: two posts with identical timestamps. Use a composite cursor `(tim
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Level | Breadth / Depth | Focus |
 |---|---|---|
 | **Mid (E4)** | Breadth-first | Clean API + data model; working high-level design; aware that fan-out is a problem; not expected to solve celebrity problem fully |
 | **Senior (E5)** | ~60/40 | Proactively surface fan-out problem and celebrity threshold without prompting; articulate hybrid fanout tradeoffs; at least one deep dive on caching or pagination correctness |
 | **Staff+ (E6+)** | ~40/60 | Cover all deep dives; bring real numbers (50:1 ratio, cache sizing, latency targets); discuss multi-stage ranking pipeline; identify pagination correctness edge cases; mention operational challenges (feature store, A/B testing, feedback loops); minimal interviewer steering |
+
+---
+
+## 📚 Related Concepts
+
+- [Caching](../CoreConcepts/Caching.md) — precomputed feed cache, replicated (not sharded) cache for viral hot keys, and multi-tier L1/L2/L3.
+- [Sharding](../CoreConcepts/Sharding.md) — sharding worker fanout by `authorId` and Redis feed sets by `userId`.
+- [Consistent Hashing](../CoreConcepts/ConsistentHashing.md) — distributing feed sets and cache load across nodes.
+- [Redis](../CoreConcepts/Redis.md) — sorted sets (`ZADD`/`ZREVRANGEBYSCORE`) as the per-user feed store and Twitter's HybridList.
+- [Data Modelling](../CoreConcepts/DataModelling.md) — Posts/Follows/Feed tables and the GSIs that back them.
+- [Data Indexing](../CoreConcepts/DataIndexing.md) — the `(authorId, createdAt DESC)` GSI enabling the celebrity live query.
+- [Scaling Reads](../SystemDesign/Patterns/ScalingReads.md) — the read-heavy 50:1 ratio and precomputation strategy.
+- [Scaling Writes](../SystemDesign/Patterns/ScalingWrites.md) — async fan-out workers absorbing write amplification.
+- [Real-Time Updates](../SystemDesign/Patterns/Real-TimeUpdates.md) — pushing new posts and action-bumping into active feeds.
+- [Kafka](../SystemDesign/DeepDives/Kafka.md) — the fan-out event pipeline and real-time feature streams.
+- [Flink](../SystemDesign/DeepDives/Flink.md) — TikTok's online joiner building real-time training examples.
+- [FB News Feed (HelloInterview breakdown)](../SystemDesign/ProblemBreakdowns/FbNewsFeed.md) — the source breakdown this doc expands on.
+- [Instagram](../SystemDesign/ProblemBreakdowns/Instagram.md) — sibling feed system with Two-Tower retrieval for Explore.

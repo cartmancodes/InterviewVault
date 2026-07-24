@@ -1,35 +1,26 @@
-# Design Job Scheduler
+# ⏰ Design Job Scheduler
 
 > **Pattern**: Cron / Distributed Scheduler
 > **Difficulty**: Medium
 > **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/job-scheduler)
 
----
+> **Summary**: A job scheduler accepts one-shot, recurring (cron/interval), and immediate jobs, then reliably fires each one near its trigger time and delivers it to a worker pool that survives duplicates. The CRUD surface is trivial; the engineering is the invariant that a job scheduled for `T` fires close to `T` even when leaders fail over, clocks drift, or tens of thousands of jobs come due in the same second. The mature design separates three concerns — storing the schedule, picking the due set on time (indexed lookahead → time-bucketed tables → in-memory heap), and delivering runs at-least-once with an idempotency key that handlers compose into effective exactly-once.
 
-## Table of Contents
-
-1. [Understanding the Problem](#understanding-the-problem)
-   - [Functional Requirements](#functional-requirements)
-   - [Non-Functional Requirements](#non-functional-requirements)
-2. [Core Entities](#core-entities)
-3. [API Design](#api-design)
-4. [High-Level Design](#high-level-design)
-5. [Deep Dives](#deep-dives)
-   - [1. Timed Dispatch: Finding Due Jobs on Time](#1-timed-dispatch-finding-due-jobs-on-time)
-   - [2. Leader Election for the Dispatcher](#2-leader-election-for-the-dispatcher)
-   - [3. Idempotency Keys and Deduplication](#3-idempotency-keys-and-deduplication)
-   - [4. At-Least-Once vs Exactly-Once Execution](#4-at-least-once-vs-exactly-once-execution)
-   - [5. Retries, Backoff, and Dead-Letter Handling](#5-retries-backoff-and-dead-letter-handling)
-   - [6. Time Zone and DST Correctness](#6-time-zone-and-dst-correctness)
-   - [7. Missed-Job Policy](#7-missed-job-policy)
-   - [8. Job Output Storage](#8-job-output-storage)
-6. [Scaling Journey: 0 to Infinity](#scaling-journey-0--)
-7. [Insider Tips and Tricks](#insider-tips-and-tricks)
-8. [Expected Depth by Level](#expected-depth-by-level)
+## 📋 Table of Contents
+- [Understanding the Problem](#understanding-the-problem)
+- [Layman's Explanation](#laymans-explanation)
+- [Core Entities](#core-entities)
+- [API Design](#api-design)
+- [High-Level Design](#high-level-design)
+- [Deep Dives](#deep-dives)
+- [Scaling Journey: 0 to Infinity](#scaling-journey-0-to-infinity)
+- [Insider Tips and Tricks](#insider-tips-and-tricks)
+- [Expected Depth by Level](#expected-depth-by-level)
+- [Related Concepts](#related-concepts)
 
 ---
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 A job scheduler lets clients register work to run at a specific point in time (one-shot or recurring) and then reliably dispatches that work to a pool of executors when its trigger time arrives. The interesting engineering is not the CRUD surface that accepts the job definition; it is the invariant that a job scheduled for `T` actually fires near `T` even when servers die, leaders fail over, the clock drifts, or a million other jobs are due in the same second. A good design separates three concerns cleanly: storing the schedule, picking the "due" set at the right moment, and delivering those items to workers in a way that survives duplicates.
 
@@ -73,7 +64,7 @@ Real schedulers like Airflow handle thousands of DAGs with millions of task inst
 
 ---
 
-## Core Entities
+## 🔑 Core Entities
 
 | Entity | Key Fields | Notes |
 |---|---|---|
@@ -84,7 +75,7 @@ Real schedulers like Airflow handle thousands of DAGs with millions of task inst
 
 ---
 
-## API Design
+## 🔌 API Design
 
 All endpoints live behind an authenticated gateway; `ownerId` is derived from the caller's identity, not the payload.
 
@@ -116,43 +107,42 @@ Design notes:
 
 ---
 
-## High-Level Design
+## 🏗️ High-Level Design
 
-```
-                    +---------------+
-        Client ---> | API Service   |---> Jobs DB (Postgres / Dynamo)
-                    +---------------+        ^
-                                             | reads due rows
-                                             |
-                    +------------------+     |
-                    | Dispatcher       |-----+
-                    | (leader-elected) |
-                    +--------+---------+
-                             |
-                             v
-                    +------------------+
-                    | Work Queue       |
-                    | (Kafka / SQS)    |
-                    +--------+---------+
-                             |
-                             v
-                    +------------------+
-                    | Worker Pool      |----> User handler
-                    | (stateless)      |
-                    +--------+---------+
-                             |
-                             v
-                    +------------------+
-                    | Runs DB          |
-                    | (append-only)    |
-                    +------------------+
-                             |
-                             v
-                    +------------------+
-                    | Object Storage   |
-                    | (S3 / GCS)       |
-                    | job output/logs  |
-                    +------------------+
+```mermaid
+graph TB
+    Client[Client]
+
+    subgraph Services
+        API[API Service<br/>parse schedule<br/>compute nextRunAt]
+        DISP[Dispatcher<br/>leader-elected<br/>due-window poll]
+        WP[Worker Pool<br/>stateless<br/>claim + execute]
+    end
+
+    subgraph Stores
+        JOBS[(Jobs DB<br/>Postgres / Dynamo<br/>index on nextRunAt)]
+        RUNS[(Runs DB<br/>append-only<br/>one row per attempt)]
+        OBJ[(Object Storage<br/>S3 / GCS<br/>job output + logs)]
+    end
+
+    Q[[Work Queue<br/>Kafka / SQS]]
+    HANDLER[User Handler]
+
+    Client -->|POST /jobs| API
+    API -->|write job row| JOBS
+    DISP -->|reads due rows| JOBS
+    DISP -->|write DISPATCHED run| RUNS
+    DISP -->|publish message| Q
+    Q --> WP
+    WP -->|invoke| HANDLER
+    WP -->|write SUCCEEDED / FAILED| RUNS
+    WP -->|outputRef key| OBJ
+
+    style JOBS fill:#e1f5ff
+    style RUNS fill:#e1f5ff
+    style OBJ fill:#e1f5ff
+    style Q fill:#FFE4B5
+    style DISP fill:#90EE90
 ```
 
 Flow for a single firing:
@@ -164,6 +154,34 @@ Flow for a single firing:
 5. A worker consumes the queue message, claims the run (marks it `RUNNING`), executes the payload, and writes back either `SUCCEEDED` or `FAILED`. Failure paths feed into the retry logic.
 6. Job output, logs, and result artifacts are written to object storage; only the S3 key (`outputRef`) is stored in the Runs DB row.
 
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant API as API Service
+    participant J as Jobs DB
+    participant D as Dispatcher
+    participant Q as Work Queue
+    participant W as Worker
+    participant R as Runs DB
+    participant O as Object Storage
+
+    C->>API: POST /jobs
+    API->>J: persist job row (nextRunAt)
+    API-->>C: { jobId, nextRunAt }
+    loop every ~1s tick
+        D->>J: SELECT due rows (nextRunAt <= now + lookahead)
+        J-->>D: due jobs
+        D->>R: write Run (DISPATCHED, idempotencyKey)
+        D->>J: recompute nextRunAt (recurring) / mark done (one-shot)
+        D->>Q: publish run message
+    end
+    Q->>W: deliver run
+    W->>R: CAS DISPATCHED -> RUNNING
+    W->>W: execute payload
+    W->>O: stream output, get outputRef
+    W->>R: write SUCCEEDED / FAILED + outputRef
+```
+
 Why these components:
 - **Separate dispatcher** so that the API service does not block on scheduling concerns and so that the "find due jobs" loop can be tuned independently.
 - **Work queue** so that execution can scale horizontally and so that worker crashes redeliver the message instead of losing the run.
@@ -172,7 +190,7 @@ Why these components:
 
 ---
 
-## Deep Dives
+## 🔬 Deep Dives
 
 ### 1. Timed Dispatch: Finding Due Jobs on Time
 
@@ -198,6 +216,25 @@ The 30-second lookahead shrinks the scan from O(total jobs) to O(jobs due in the
 
 **Clock discipline.** All dispatchers must run NTP/chrony with strict drift bounds. A dispatcher whose clock is five seconds slow will fire every job five seconds late across its entire shard; worse, a dispatcher five seconds fast will fire before the intended time, which some handlers treat as a correctness violation. Monitoring per-host clock skew is non-negotiable. At scale, a clock skew alert threshold of ±500ms is a reasonable starting point.
 
+The four dispatch strategies form an evolution as firing rate climbs:
+
+```mermaid
+graph LR
+    A["Naive poll<br/>SELECT WHERE nextRunAt <= now<br/>O(total jobs) full scan"]
+    B["Indexed lookahead<br/>B-tree + 30s window<br/>FOR UPDATE SKIP LOCKED"]
+    C["Time-bucketed tables<br/>partition by minute<br/>touch recent partition only"]
+    D["In-memory heap<br/>min-heap on nextRunAt<br/>DB only on load + write"]
+
+    A -->|"full-table scan"| B
+    B -->|"scan spans timeline"| C
+    C -->|"hot-window volume"| D
+
+    style A fill:#FFB6C1
+    style B fill:#FFE4B5
+    style C fill:#FFE4B5
+    style D fill:#90EE90
+```
+
 ### 2. Leader Election for the Dispatcher
 
 Multiple dispatcher instances pulling the same due-window will double-fire jobs unless they coordinate. The standard mitigations are leader election or partitioning.
@@ -205,6 +242,25 @@ Multiple dispatcher instances pulling the same due-window will double-fire jobs 
 **Single-leader model.** One dispatcher node holds a lease in a coordination service (ZooKeeper, etcd, or a Postgres advisory lock). Only the lease holder performs the due-query and enqueues runs. On lease loss the next candidate picks up within a tick or two. Simple and correct, but the single leader is a throughput ceiling. Lease TTLs are typically short (5–10 seconds) with aggressive heartbeating so that failover completes in seconds rather than minutes.
 
 **Why a plain Redis lock is not enough.** A classic `SETNX` lease without fencing can admit a zombie leader: node A's lease expires under a GC pause, node B takes over and starts dispatching, but then node A resumes thinking it still holds the lease. Both nodes now dispatch the same jobs simultaneously. The fix is fencing tokens: each lock acquisition returns a monotonically increasing token, and every enqueue operation includes the token. The queue or downstream service rejects writes with stale tokens. etcd and ZooKeeper provide fencing tokens natively (revision numbers / zxid). With Redis you must implement Redlock plus an explicit token generation mechanism.
+
+```mermaid
+sequenceDiagram
+    participant A as Dispatcher A
+    participant L as Lock Service
+    participant B as Dispatcher B
+    participant Q as Work Queue
+
+    A->>L: acquire lease (token=41)
+    L-->>A: granted, token=41
+    Note over A: GC pause — lease TTL expires
+    B->>L: acquire lease (token=42)
+    L-->>B: granted, token=42
+    B->>Q: enqueue run (token=42)
+    Q-->>B: accepted (42 >= highest seen)
+    Note over A: resumes, still thinks it holds lease
+    A->>Q: enqueue run (token=41)
+    Q-->>A: REJECTED (41 < 42, stale token)
+```
 
 **Sharded leaders.** Partition jobs by `hash(jobId) % N`. Each shard has its own lease, and leadership for different shards can live on different hosts. A six-shard layout can be served by three physical dispatchers, each holding two leases. Adding a dispatcher host means redistributing leases, not vertical scaling. This scales linearly until the coordination service itself becomes the bottleneck, which is usually well past a hundred shards.
 
@@ -238,7 +294,7 @@ True exactly-once execution in a distributed system requires a distributed trans
 
 **Layer 4: Transactional outbox at the worker.** When the handler must atomically record "job done" and "side effect happened" across two systems, use a transactional outbox: write both to the same DB in one transaction, then a separate relay publishes the side effect. Combined with layer 3 this gives effective exactly-once.
 
-In an interview, being explicit that exactly-once is a property of the composed system and not a primitive the scheduler provides is the important signal. "I give you at-least-once plus an idempotency key, and you compose that into exactly-once at the handler" is the honest answer. Attempting true exactly-once at the infrastructure layer requires distributed transactions that cost more in latency and complexity than the problem is worth.
+> 💡 **Exactly-once is composed, not provided.** In an interview, being explicit that exactly-once is a property of the composed system and not a primitive the scheduler provides is the important signal. "I give you at-least-once plus an idempotency key, and you compose that into exactly-once at the handler" is the honest answer. Attempting true exactly-once at the infrastructure layer requires distributed transactions that cost more in latency and complexity than the problem is worth.
 
 ### 5. Retries, Backoff, and Dead-Letter Handling
 
@@ -253,9 +309,26 @@ Failures are the default case, not the exception: transient network blips, downs
 
 **Retry budget.** Each job carries a `maxRetries`. After exhausting retries the run is moved to a dead-letter store (a separate table or DLQ) with the full error trail. The job itself remains scheduled for its next `nextRunAt` if recurring; only the specific failed run is dead-lettered.
 
-**Dead-letter queue triage.** The DLQ is read by an operator UI, not reprocessed automatically. Automatic DLQ drain is a classic foot-gun: a systemic downstream outage fills the DLQ, the drain policy retries everything at midnight, and the same outage happens again amplified.
+**Dead-letter queue triage.** The DLQ is read by an operator UI, not reprocessed automatically.
+
+> ⚠️ **Automatic DLQ drain is a classic foot-gun.** A systemic downstream outage fills the DLQ, the drain policy retries everything at midnight, and the same outage happens again — amplified. Keep DLQ drain a human-triggered action.
 
 **Poison-job protection.** A single job that consistently crashes the worker process can take out an entire worker fleet if the queue keeps redelivering it. Track per-run `attempt` count on the broker side and force-DLQ after `N` attempts even if the worker did not explicitly classify the failure. This broker-side protection is independent of the application-level `maxRetries` setting and acts as a safety net against unhandled panics.
+
+The lifecycle of a single `Run` row, from dispatch through retries to terminal state:
+
+```mermaid
+stateDiagram-v2
+    [*] --> DISPATCHED: dispatcher writes run
+    DISPATCHED --> RUNNING: worker CAS claim
+    RUNNING --> SUCCEEDED
+    RUNNING --> FAILED
+    FAILED --> DISPATCHED: RETRY_TRANSIENT / RATE_LIMITED<br/>backoff + jitter, attempt < maxRetries
+    FAILED --> DEAD_LETTER: FAIL_PERMANENT<br/>or retries exhausted
+    RUNNING --> DEAD_LETTER: broker force-DLQ<br/>after N redeliveries
+    SUCCEEDED --> [*]
+    DEAD_LETTER --> [*]
+```
 
 ### 6. Time Zone and DST Correctness
 
@@ -295,7 +368,27 @@ Job metadata — schedule, status, `last_run_at`, `next_run_at` — is queried o
 
 ---
 
-## Scaling Journey: 0 to Infinity
+## 📈 Scaling Journey: 0 to Infinity
+
+```mermaid
+graph LR
+    S1["Stage 1<br/>0–100 jobs/day<br/>single process<br/>in-memory queue"]
+    S2["Stage 2<br/>100–10K/day<br/>split services<br/>leader lock + outbox"]
+    S3["Stage 3<br/>10K–1M/day<br/>sharded leases<br/>time-bucketed + Kafka"]
+    S4["Stage 4<br/>1M–100M/day<br/>in-memory heap<br/>fair queuing"]
+    S5["Stage 5<br/>100M+/day<br/>multi-region active-active<br/>per-tenant fleets"]
+
+    S1 -->|"single process SPOF"| S2
+    S2 -->|"one dispatcher = ceiling"| S3
+    S3 -->|"DB chokes on top-of-hour fan-in"| S4
+    S4 -->|"regional outage blast radius"| S5
+
+    style S1 fill:#FFB6C1
+    style S2 fill:#FFE4B5
+    style S3 fill:#FFE4B5
+    style S4 fill:#FFE4B5
+    style S5 fill:#90EE90
+```
 
 ### Stage 1: 0 to 100 Jobs/day (MVP)
 
@@ -374,7 +467,7 @@ Job metadata — schedule, status, `last_run_at`, `next_run_at` — is queried o
 
 ---
 
-## Insider Tips and Tricks
+## 💡 Insider Tips and Tricks
 
 ### The Dispatcher Must Scan Only the Near-Future Window
 
@@ -410,7 +503,7 @@ Job metadata (schedule, status, last_run_at, next_run_at) belongs in the schedul
 
 ---
 
-## Expected Depth by Level
+## 🎓 Expected Depth by Level
 
 | Level | Breadth vs Depth | What a strong signal looks like |
 |---|---|---|
