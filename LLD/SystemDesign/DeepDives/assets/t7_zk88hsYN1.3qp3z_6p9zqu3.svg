@@ -1,0 +1,21 @@
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 319.06787109375 235.2001953125" >
+  <!-- svg-source:excalidraw -->
+  <!-- payload-type:application/vnd.excalidraw+json --><!-- payload-version:2 -->
+  <defs>
+    <style class="style-fonts">
+      @font-face {
+        font-family: "Virgil";
+        src: url("https://files.hellointerview.com/build-assets/PRODUCTION/_next/static/media/Excalifont-s.p.436754fa.woff2");
+      }
+      @font-face {
+        font-family: "Cascadia";
+        src: url("https://file%2B.vscode-resource.vscode-cdn.net/Users/iamnafets/.cursor/extensions/pomdtr.excalidraw-editor-3.7.4/public//dist/excalidraw-assets/Cascadia.woff2");
+      }
+      @font-face {
+        font-family: "Assistant";
+        src: url("https://file%2B.vscode-resource.vscode-cdn.net/Users/iamnafets/.cursor/extensions/pomdtr.excalidraw-editor-3.7.4/public//dist/excalidraw-assets/Assistant-Regular.woff2");
+      }
+    </style>
+    
+  </defs>
+  <rect x="0" y="0" width="319.06787109375" height="235.2001953125" fill="#ffffff"></rect><g transform="translate(118.32471466064453 72.6533203125) rotate(0 18 72.89999999999998)"><text x="18" y="0" font-family="Segoe UI Emoji" font-size="36px" fill="#1e1e1e" text-anchor="middle" style="white-space: pre;" direction="ltr" dominant-baseline="text-before-edge">00</text><text x="18" y="48.6" font-family="Segoe UI Emoji" font-size="36px" fill="#1e1e1e" text-anchor="middle" style="white-space: pre;" direction="ltr" dominant-baseline="text-before-edge">00</text><text x="18" y="97.2" font-family="Segoe UI Emoji" font-size="36px" fill="#1e1e1e" text-anchor="middle" style="white-space: pre;" direction="ltr" dominant-baseline="text-before-edge">...</text></g><g stroke-linecap="round" transform="translate(57.587890625 69.55078125) rotate(0 85 77.82470703125)"><path d="M32 0 C70.55 -0.22, 107.62 2.08, 138 0 M32 0 C66.71 0, 101.51 -0.05, 138 0 M138 0 C160.23 -0.27, 171.64 10.62, 170 32 M138 0 C159.39 0.75, 170.59 10.71, 170 32 M170 32 C171.74 54.57, 172.34 80.73, 170 123.65 M170 32 C169.44 58.22, 169.85 83.14, 170 123.65 M170 123.65 C168.65 143.81, 160.45 157.16, 138 155.65 M170 123.65 C171.12 146.58, 160.12 155.86, 138 155.65 M138 155.65 C104.3 155.67, 70.12 155.03, 32 155.65 M138 155.65 C96.02 155.42, 54.31 155.55, 32 155.65 M32 155.65 C10.6 154.7, 0.12 146.07, 0 123.65 M32 155.65 C9.85 153.8, -1.65 146.75, 0 123.65 M0 123.65 C-0.93 104.74, 1.59 80.36, 0 32 M0 123.65 C-0.63 97.33, 0.52 71.12, 0 32 M0 32 C1.9 9.13, 9.27 -0.95, 32 0 M0 32 C0.67 12.29, 11.01 -1.86, 32 0" stroke="#1e1e1e" stroke-width="2" fill="none"></path></g><g transform="translate(10 10) rotate(0 149.533935546875 17.5)"><text x="0" y="0" font-family="Virgil, Segoe UI Emoji" font-size="28px" fill="#1e1e1e" text-anchor="start" style="white-space: pre;" direction="ltr" dominant-baseline="text-before-edge">Bloom Filter Contents</text></g></svg>
