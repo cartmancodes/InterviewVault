@@ -1,8 +1,23 @@
-# Online Chess
+# ♟️ Online Chess
 
 Practice with guided hints and real-time feedback
 
-## Understanding the Problem
+> **Overview**: An online chess platform pairs players by skill, runs a real-time game where the server owns the board and both clocks, and ranks everyone on a global leaderboard. The whole design turns on one principle — the server, never the client, validates every move and owns the time — and scales that to 500K concurrent games (1M connections) at peak.
+
+## 📋 Table of Contents
+- [🎯 Understanding the Problem](#understanding-the-problem)
+- [🏗️ The Set Up](#the-set-up)
+- [🏗️ High-Level Design](#high-level-design)
+- [🔬 Potential Deep Dives](#potential-deep-dives)
+- [🎤 What is Expected at Each Level?](#what-is-expected-at-each-level)
+
+## 🧒 Layman's Explanation
+
+Think of a chess club with one referee sitting between two players. Neither player is allowed to touch the official scoresheet or the game clock — the referee does. When you make a move, you tell the referee, "knight to f3." The referee checks it's legal, moves the piece on the master board, punches your clock to stop it and starts your opponent's, and only then tells your opponent what you played. Because the referee holds the one true board and the one true clock, nobody can cheat the rules or steal time by lying.
+
+Now imagine half a million of these games happening at once. You need a fast way to pair up players of similar skill (the matchmaker at the door), a room full of referees each running a batch of games from memory (the game servers), and a giant ranked ladder on the wall that updates the moment a game finishes (the leaderboard). The interesting engineering is all about keeping each referee fast, making sure a game survives if its referee faints, and keeping the clock fair when one player sits much farther from the club than the other.
+
+## 🎯 Understanding the Problem
 
 > ♟️ What is Chess.com / Lichess ? Online chess platforms let players find an opponent of similar skill, play a real-time game with a shared clock, and climb a global rating leaderboard. The server validates every move and owns both clocks, so neither player can cheat the rules or the time.
 
@@ -49,13 +64,13 @@ Here is how it might look on your whiteboard:
 
 ![Non-Functional Requirements](assets/hXIcTwz_Rob-.1crl_qkwsmblh.svg)
 
-## The Set Up
+## 🏗️ The Set Up
 
-### Planning the Approach
+### 🗺️ Planning the Approach
 
 We'll build this the way you'd want to in a real interview, going one functional requirement at a time, in the order a player hits them. First we match two players into a game, then we play that game in real time with the server owning the board and the clocks, and finally we rank players on the leaderboard once their games end. The real-time game is the heart of the system and where the game server comes in, so it gets the most attention. Once the three requirements work end to end, the non-functional requirements (scale, low latency, and a fair clock) are what we dig into in the deep dives.
 
-### [Defining the Core Entities](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#core-entities-2-minutes)
+### 🔑 [Defining the Core Entities](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#core-entities-2-minutes)
 
 We'll start with a short list of the nouns we'll need for the api design and storage model. We don't need columns yet, just enough vocabulary to talk about the API and the design.
 
@@ -70,7 +85,7 @@ On the whiteboard, you can just jot down the entities like this:
 
 ![Core Entities](assets/0arxLDVxDPIF.3_wf773gqxqcj.svg)
 
-### [API or System Interface](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#api-or-system-interface-5-minutes)
+### 🔌 [API or System Interface](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#api-or-system-interface-5-minutes)
 
 We have two very different kinds of interaction here. Matchmaking and the leaderboard are ordinary request/response, so they make sense as REST calls. Gameplay is a continuous back-and-forth between two players and the server, so it rides over a WebSocket. We'll design the REST surface first and then describe the messages that flow over the socket.
 
@@ -110,7 +125,30 @@ GET /leaderboard?cursor={cursor}&limit={limit} -> Player[]
 GET /players/:playerId/rank -> { rank, rating }
 ```
 
-## High-Level Design
+## 🏗️ High-Level Design
+
+Before the pieces, here's the full lifecycle a single game moves through, from a match request to a rating change:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Pending: player POSTs match request
+    Pending --> Matched: compatible opponent claimed
+    Pending --> Expired: no peer found, widen then time out
+    Matched --> Playing: Game created, both open WebSocket
+    Playing --> Paused: game server unreachable
+    Paused --> Playing: reassigned and moves replayed
+    Playing --> Ended: checkmate / stalemate / draw / flag
+    Ended --> [*]: result written, ELO applied
+    Expired --> [*]
+
+    classDef good fill:#90EE90
+    classDef bad fill:#FFB6C1
+    classDef step fill:#FFE4B5
+    class Ended good
+    class Paused bad
+    class Expired bad
+    class Playing step
+```
 
 ### 1) Players should be able to find an opponent through skill-based matchmaking and start a game
 
@@ -163,6 +201,24 @@ Here's how a move flows once both players are connected:
 6. It pushes an `opponentMove` to the other player and a `moveAck` back to the mover, each carrying the authoritative clock times so both sides stay in sync. An illegal move gets a rejecting `moveAck` and nothing changes.
 7. When the game ends by checkmate, stalemate or another draw, or flag (running out of time), the service writes the result and sends `gameEnd` to both players. Checkmate and the automatic draws fall out of the same move validation that already owns the rules.
 
+Here that move flow is over the wire, showing why the durable append (step 5) lands before either player is told (step 6):
+
+```mermaid
+sequenceDiagram
+    participant W as White (client)
+    participant GS as Game Service<br/>in-memory board
+    participant Log as Durable Move Log
+    participant B as Black (client)
+
+    W->>GS: sendMove {from, to, moveNumber}
+    Note over GS: validate vs in-memory board,<br/>check it is White's turn
+    GS->>GS: update board, stop White clock, start Black clock
+    GS->>Log: append move (before broadcast)
+    GS-->>B: opponentMove {from, to, whiteTimeMs, blackTimeMs}
+    GS-->>W: moveAck {accepted, whiteTimeMs, blackTimeMs}
+    Note over GS,B: on checkmate, draw, or flag,<br/>write result and send gameEnd to both
+```
+
 The in-memory board is the live source of truth, and the database is really a recovery log sitting off the hot path that can be used at any time to rebuild the current state of the board. Notice that step 5 comes before step 6. We persist a move before we broadcast it. If we acked the mover or pushed to the opponent first and then crashed, recovery would come back to a board missing a move both players already saw, exactly the corrupted state we said we'd rather pause than allow. We can persist synchronously like this because the 200ms budget easily absorbs a few-millisecond write, so correctness is basically free here.
 
 Pushing each validated move to the opponent the instant it's accepted is a textbook realtime-updates problem. Our pattern breakdown walks through why a persistent WebSocket beats polling or SSE when both sides send and receive continuously, which is exactly the shape of a chess game.
@@ -184,11 +240,11 @@ Where it falls apart is a player's own rank. `SELECT COUNT(*) FROM players WHERE
 
 That gets us a working system. Players match, play a validated real-time game, and climb a leaderboard. Now the bottlenecks. Let's tackle them.
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
 
 > How much you should drive these is a function of seniority. A mid-level candidate can lean on the interviewer to steer toward the interesting problems. A senior or staff candidate is expected to look around corners and name these bottlenecks before they're asked.
 
-### 1) How do we match players fairly at scale?
+### 📈 1) How do we match players fairly at scale?
 
 At peak we have 500K concurrent games, so about 1M players in active games. Most chess is played at fast time controls, where a bullet or blitz game lasts a couple of minutes, and players usually re-queue as soon as a game ends. So roughly 1M players each starting a fresh match request every ~120 seconds is `1M / 120 ≈ 8k new match requests per second` from the actively-playing population alone. Add players arriving fresh plus evening and tournament peaks and it's into the tens of thousands per second.
 
@@ -248,7 +304,7 @@ No, and the throughput math proves it. The textbook "scale matchmaking" answer r
 
 It's a single point of failure for the pending pool, so we run Redis replicated with automatic failover (Redis Sentinel, or a managed Redis Cluster) and promote a replica if the primary dies. The saving grace is that pending match requests are cheap and ephemeral, not durable game state, so even if a failover loses the in-flight pool, clients just re-submit and the queue refills within seconds. That's a much lower bar than the game servers, where we went to real lengths to preserve in-progress games.
 
-### 2) How do we scale the game servers to 500K concurrent games?
+### 📈 2) How do we scale the game servers to 500K concurrent games?
 
 We chose stateful, in-memory game servers back in the high-level design, and this is where that choice has to earn its keep. It's the part that makes online chess different from a CRUD app. Each active game holds two persistent WebSocket connections and live in-memory state (the board, whose turn, both clocks). At 500K games that's 1M connections and 500K little stateful sessions. A box can hold tens of thousands of idle WebSocket connections, but a live game server is also validating moves and running clocks, so realistic per-node game counts are lower and the fleet runs to dozens or low hundreds of servers. The hard parts are that both players in a game have to land on the same server, and that a server crash takes its games down with it.
 
@@ -296,6 +352,23 @@ Putting it together, here's the full path when a server holding game G dies:
 4. S' loads G's row and replays its moves to rebuild the board, reads generation N, and bumps it to N+1 as the new owner.
 5. A delayed write from the partitioned-but-alive S lands at generation N, fails the `generation <= :gen` check against N+1, and is rejected.
 
+```mermaid
+sequenceDiagram
+    participant S as Server S<br/>owns G, gen N
+    participant Reg as Registry<br/>ZooKeeper / etcd
+    participant R as Session Router
+    participant Sp as Server S'<br/>successor
+    participant C as Clients
+
+    S--xReg: crash, ephemeral node expires
+    Reg-->>R: membership change
+    R->>R: rebuild ring without S
+    C->>R: reconnect dropped socket
+    R->>Sp: route both players to S'
+    Sp->>Sp: load row, replay moves, bump gen N to N+1
+    Note over S,Sp: delayed write from partitioned S at gen N<br/>fails generation <= gen check, rejected
+```
+
 That reconnect is a visible blip, though pausing the clock during it (our consistency-over-availability choice) keeps it fair. The fencing in step 5 is the real consistency-over-availability work and the easy thing to skip, since without it a partitioned-but-alive server would keep mutating a game the ring already moved.
 
 Keep player disconnects separate from server failure, because the clock rule flips. When a player drops their own connection, the clock keeps running, maybe with a short grace window. If you don't reconnect in time you flag, just like over the board. Pausing on every disconnect would let someone escape a losing position by closing the tab. Recovery otherwise is just a row read plus replaying a few hundred bytes of moves, so it's effectively instant.
@@ -304,7 +377,7 @@ One wart is inherent to hashing. Because placement is a pure function of the rin
 
 > Wouldn't a framework just do all of this for you? In production, often yes. Stateful sharding frameworks and virtual-actor runtimes make placement a directory a coordinator owns instead of a hash every router recomputes, so adding capacity picks up only new games and no healthy game moves on a membership change. Akka Cluster Sharding is the real example here, it's what Lichess runs its live games on, and Microsoft Orleans does the same with virtual actors addressed by gameId. For heavier process-per-match games like shooters, managed allocation (Agones, AWS GameLift) hands you a whole server per match. Be honest about what this changes for chess, though, which is nothing about the answer. You still recover by replaying the move log and you still want a fencing token, Orleans even ships a strongly-consistent grain directory to prevent the exact double-write our generation guard already handles. The hand-rolled consistent-hash router is genuinely fine here. You'd reach for a framework only if you were already living in that ecosystem.
 
-### 3) How do we keep the clock fair despite uneven latency?
+### ⚠️ 3) How do we keep the clock fair despite uneven latency?
 
 The server owns the clock, so it can only start and stop a player's timer when their move actually arrives over the network. That means each player's network latency comes out of their own clock, and players don't have equal latency. Say Player A sits 30ms from the server and Player B sits 200ms away. Every move B makes spends about 170ms more in transit than A's does, and the server charges that extra time to B. Over 40 moves in a 3-minute blitz game, that's nearly 7 seconds of B's clock spent purely on network transit, which is plenty to lose on time. Players on mobile or far from the server are at a real disadvantage through no fault of their play. How do we make the clock fair?
 
@@ -326,7 +399,7 @@ Run the 200ms player through it. Without compensation they pay about 170ms every
 
 The compensation is still an estimate. RTT is noisy and network paths can be asymmetric, so crediting `median_rtt / 2` isn't perfect on any single move, though it's fair on average. There's also an abuse angle, and it's worth being honest about it. Because we credit time off measured RTT, a client can inflate its own RTT by deliberately dragging out its pong responses, and the server can't tell a stalled pong from a genuinely slow link. Server-side timestamps don't save us here, the client isn't forging anything, it's just answering slowly. So the real defense isn't perfect detection, it's a cap. We limit how much any single move can claw back (a ceiling around 100ms), which means even a client gaming its RTT can't turn a slow connection into meaningful free time. Compensation stays best-effort by design, and that's fine, the goal is leveling a systematic geographic disadvantage, not defeating a determined cheater at the margin. Beyond that the estimator needs tuning, and the client's local display can briefly disagree with the authoritative server time, which you smooth over in the UI rather than the protocol.
 
-### 4) How do we keep the leaderboard correct and fast at 10M players?
+### 📈 4) How do we keep the leaderboard correct and fast at 10M players?
 
 Back in the high-level design we flagged two things to come back to here. Computing a single player's rank out of 10M, and making sure a finished game's rating change reliably lands. We'll start with the rank, since that's the part with a more substantive design challenge. The reliability of the write is mostly mechanical, so we'll close on it.
 
@@ -361,7 +434,7 @@ We couldn't fit everything. A few more directions an interviewer might push on:
 3. **Storing and serving the game archive**: Every finished game is kept forever (Lichess sits on more than 12 billion), which is a data-at-rest problem separate from the live path. It powers post-game analysis and the opening explorer, the "what do players usually play in this position" feature. This is easier than it first looks, because a game is just its move sequence stored as a string, so finding every game that followed a given line is a prefix range scan over those sequences rather than anything fancy. Richer queries across the whole archive, aggregating by position including transpositions, are where you'd reach for a columnar or search store (Lichess indexes games in Elasticsearch), but none of it belongs on the OLTP database the live game runs on.
 4. **Premoves in bullet**: In bullet and ultrabullet, players queue a move to fire the instant the opponent moves, and strong players stack several in a row. What makes it interesting is the server logic, validating and applying a move the player committed before they'd seen the opponent's actual reply, discarding it cleanly when the reply makes it illegal, and doing all of that the moment the opponent's move lands so the queued move costs effectively no clock. Real platforms have iterated on these edge cases for years.
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 We've gone deeper here than any single interview will. The useful question is what's actually expected of you, and that depends on the level you're interviewing at.
 
@@ -376,6 +449,25 @@ For senior, I want you to speed through the high-level design so we can spend ou
 ### Staff+
 
 For a staff+ candidate, I'm looking for depth and judgment past the textbook answers. The signal I weight most here is the one from the game-server deep dive, realizing that the durable move log already is the recovery mechanism, so a replacement server just replays a few hundred bytes of moves, and the only thing failover really needs is a generation fence to lock out the server it replaced. The over-engineering trap is reaching for a checkpoint scheme or a separate snapshot table when a chess game is too short to need either. Knowing to ask "does this problem actually need the fancy pattern?" is what separates a staff answer from a merely thorough one. I'd expect you to go deeper on the production realities we glossed over, like how the session router drains games on a deploy, what reconnection looks like from the client during a failover, and how the matchmaking widening policy is tuned from real wait-time data.
+
+## 🎓 Key Takeaways
+
+- **The server owns move validation and both clocks.** Anything a client could lie about to gain an edge — its rating, its remaining time, a legal move — must be decided server-side. Identity comes from the auth token, never the request body.
+- **Stateful in-memory game servers beat a shared store for chess.** A game is a few hundred bytes lasting a couple of minutes, so validating against an in-memory board stays well inside the 200ms budget. The durable move log written off the hot path is the recovery mechanism — a replacement server just replays it, no snapshot table needed.
+- **Matchmaking rides a Redis sorted set per time control.** Range-by-score finds a near-rating opponent, a wait-time-widening window handles the rating extremes, and an atomic `ZREM` claim guarantees exactly one worker books a waiting player. The throughput math shows a single node has headroom, so no sharding.
+- **Consistency over availability on failure.** A server crash pauses the game rather than risk divergent boards. A consistent-hash router with a membership registry reassigns games, and a `generation` fence stops a partitioned-but-alive zombie server from writing to a game the ring already moved on.
+- **Clock fairness credits one-way latency back.** The server stays authoritative but hands back `median_rtt / 2` (capped around 100ms) before charging think time, so distant players aren't systematically taxed for network transit.
+- **The leaderboard is a derived view over finished games.** A btree makes top-N cheap, but exact rank is `O(rank)` on a btree — so use a Redis sorted set (`ZREVRANK`, `O(log n)`) for exact rank, or bucketed band counts when approximate is good enough.
+
+## 📚 Related Concepts
+
+- [Real-Time Updates](../Patterns/Real-TimeUpdates.md) — why a persistent WebSocket beats polling or SSE for the bidirectional move flow.
+- [Dealing with Contention](../Patterns/DealingWithContention.md) — the atomic-claim techniques behind the `ZREM` matchmaking race fix.
+- [Redis](../DeepDives/Redis.md) — the sorted sets powering both the matchmaking pool and the leaderboard rank.
+- [Consistent Hashing](../../CoreConcepts/ConsistentHashing.md) — how the session router maps a game to a server with minimal remapping.
+- [Zookeeper](../DeepDives/Zookeeper.md) — the ephemeral-node membership registry the router watches.
+- [Scaling Reads](../Patterns/ScalingReads.md) — indexing and caching patterns behind the leaderboard reads.
+- [Elasticsearch](../DeepDives/Elasticsearch.md) — where the offline game archive and opening explorer live.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/online-chess](https://www.hellointerview.com/learn/system-design/problem-breakdowns/online-chess)*

@@ -1,12 +1,25 @@
-# FB Post Search
+# 🔍 FB Post Search
 
-Practice with guided hints and real-time feedback
+> **Overview**: This breakdown designs the keyword-search experience for Facebook posts under an explicit constraint — no search engine (Elasticsearch) or pre-built full-text index is allowed — so the focus is on the fundamentals of data layout, indexing, and scaling. The system must return searches fast (median < 500ms), make new posts searchable within a minute, and absorb a write-heavy load that is actually dominated by likes rather than searches. The central tool is a hand-rolled **inverted index** kept in Redis, then extended with caching, sharding, and tiered cold storage.
 
-Watch the author walk through the problem step-by-step
+## 📋 Table of Contents
+- [Layman's Explanation](#laymans-explanation)
+- [Understanding the Problem](#understanding-the-problem)
+- [Scale estimations](#scale-estimations)
+- [The Set Up](#the-set-up)
+- [High-Level Design](#high-level-design)
+- [Potential Deep Dives](#potential-deep-dives)
+- [What is Expected at Each Level?](#what-is-expected-at-each-level)
 
-Watch the author walk through the problem step-by-step
+---
 
-## Understanding the Problem
+## 🧒 Layman's Explanation
+
+Imagine a giant library where trillions of notes are pinned to the walls, and someone asks: "Show me every note that mentions *Taylor*." Reading every single note to check (the naive `SELECT ... LIKE '%Taylor%'` scan) would take forever. Instead, the librarian keeps a **card catalog**: one card per word, and on the back of each card is the list of every note that contains that word. Looking up "Taylor" is now instant — you just read that one card. That card catalog is an **inverted index**, and Facebook post search builds exactly this, but in fast memory (Redis) instead of on paper.
+
+There's a twist: the library keeps *two* catalogs for every word. One orders the notes newest-first (sort by recency), the other orders them by how many "likes" they have (sort by popularity), so you can answer either kind of question without re-reading everything. And because a wildly popular word like "Taylor" would have a card too long to carry, the librarians trim the lists to a manageable length, keep stacks of the most common searches right by the front door (a **cache** + **CDN**), and file rarely-touched cards away in a cheap back-room archive (**blob storage**).
+
+## 🎯 Understanding the Problem
 
 > 🔍 What is Facebook ? Facebook is a social network centered around “posts” (messages). Users consume posts via a timeline composed of posts from users they follow or more recently, that the algorithm predicts they will enjoy. Posts can be replied, “liked”, or “shared” (sometimes with commentary).
 
@@ -55,7 +68,7 @@ Here's how these might be shorthanded in an interview. Note that out-of-scope re
 
 ![Requirements](assets/d6okFYifTNjq.1yjmx9rtklqxn.svg)
 
-## Scale estimations
+## 📊 Scale estimations
 
 For this problem, it's obvious we're dealing with a large-scale system. What we need to know in order to make informed design decisions is a few parameters: how much data are we storing, how often are we writing to the system, and how frequently are we reading from it?
 
@@ -93,7 +106,7 @@ For this particular problem, doing these estimations helps us to determine the n
 
 ![Scale Estimates](assets/gIsLWlha26zt.3atny9bhtw8hg.svg)
 
-## The Set Up
+## 🔑 The Set Up
 
 ### Planning the Approach
 
@@ -121,7 +134,7 @@ In a real system we might be consuming from a Kafka stream or some other event b
 
 With these APIs defined, we can start to see the shape of our system. Writes come in via the two write endpoints and are written to a database. Queries come in via the search endpoint and read from the database. Good start!
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
 
 Remember, for our high-level design we're walking through our functional requirements and trying to build a simple system that satisfies them before we go deep into optimizations in our deep dive. Starting simple will avoid rabbit-holing on unimportant pieces and by covering our requirements quickly we can guarantee the system doesn't have any missing pieces.
 
@@ -199,7 +212,7 @@ We've doubled the amount of storage required for our indexes here. This is a val
 
 We also introduced a new problem: likes are happening quite frequently. Each like event requires us to update many scores so that the like indexes are up-to-date. This puts a lot of stress on our system, which we'll both note for our interviewer and plan to address later.
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
 
 With the core functional requirements met, it's time to dig into the non-functional requirements and other optimizations via deep dives.
 
@@ -238,6 +251,23 @@ The least invasive change we can make is to look at the set intersection between
 2. Intersect them - that is, find all the postIds which are in both "Taylor" and "Swift".
 3. Grab the post contents for each of these postIds and ensure they actually contain "Taylor Swift" and not a disconnected string like "My friend Taylor made a swift exit".
 4. Return the posts that pass the filter in (3), in order.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Search Service
+    participant I as Index (Redis)
+    participant P as Post Service
+    C->>S: search "Taylor Swift"
+    S->>I: get postIds for "Taylor"
+    S->>I: get postIds for "Swift"
+    I-->>S: two postId lists
+    S->>S: intersect lists (keep postIds in both)
+    S->>P: fetch contents for intersected postIds
+    P-->>S: post contents
+    S->>S: filter to true phrase "Taylor Swift"
+    S-->>C: matching posts, in order
+```
 
 The biggest challenges with this approach is that the Post ID set for "Taylor" and "Swift" may be very large, which makes it prohibitive to pass over the network and to intersect. If there are millions of posts for each keyword, we could be transferring megabytes of data which need to be put into a hash table and intersected. This can be hard to do while meeting our 500ms SLA.
 
@@ -286,6 +316,19 @@ We've partly handled the ingestion of new posts, but our need to index like coun
 
 This is a low-hanging opportunity to optimize our system. How can we reduce the number of writes we have to do to our indexes?
 
+The progression below previews how each idea in this section chips away at the like-write volume — ending in the two-stage design that trades an approximate index for a precise re-rank at read time.
+
+```mermaid
+graph LR
+    A["Write every like<br/>1 write per like"] --> B["Batch over a window<br/>~30s, 1 write per window"]
+    B --> C["Milestone writes<br/>only at powers of 2 or 10"]
+    C --> D["Two-stage re-rank<br/>approx index, then fresh<br/>Like Service lookup"]
+    style A fill:#FFB6C1
+    style B fill:#FFE4B5
+    style C fill:#FFE4B5
+    style D fill:#90EE90
+```
+
 One approach we can take is to batch the writes for likes. Instead of writing every like update to our indexes, we can batch likes for a given postId over a period (like 30 seconds). Then, instead of needing to write 500 times for a particularly viral post, we can make 1 update with an increment of 500.
 
 To do this we’ll need a secondary "batcher" service which accepts like events and aggregates them over a fixed window (maybe 30 seconds) before writing them back to Kafka to be consumed by the ingestion service.
@@ -323,7 +366,7 @@ Our full design might look like this, although most candidates (especially Mid-l
 
 ![Full Design](assets/9eVgh-ya2jzK.3735lz37ufrop.svg)
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 There’s a lot of meat to this question! Your interviewer may even have you go deeper on specific sections. What might you expect in an actual assessment?
 
@@ -352,6 +395,26 @@ There’s a lot of meat to this question! Your interviewer may even have you go 
 **The Bar for Post Search**: For a staff+ candidate, expectations are set high regarding depth and quality of solutions, particularly for the complex scenarios discussed earlier. Your interviewer will be looking for you to be getting through several of the deep dives, showcasing not just proficiency but also innovative thinking and optimal solution-finding abilities. A crucial indicator of a staff+ candidate's caliber is the level of insight and knowledge they bring to the table. A good measure for this is if the interviewer comes away from the discussion having gained new understanding or perspectives. There are a lot of different ways to solve this problem.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **This is a write-heavy system, not a read-heavy one.** The estimates flip the intuition: ~100k likes/sec dominates ~10k posts/sec and ~10k searches/sec — so the hardest problems live on the ingestion path, not the query path.
+- **The inverted index is the heart of the design.** Instead of scanning petabytes with `LIKE '%keyword%'`, map each keyword to the list of postIds that contain it, tokenizing posts at ingestion time. Keep it in Redis for in-memory speed (with a durable alternative like MemoryDB for safety).
+- **Keep two indexes to serve both sort orders cheaply.** A Redis list ordered by creation time (the `creation index`) and a Redis sorted set scored by likes (the `likes index`) let you sort by recency or popularity without re-sorting at request time — at the cost of doubled storage.
+- **De-scoped personalization + a 1-minute staleness SLA make caching very effective.** A distributed search cache with a sub-1-minute TTL, plus a CDN with `cache-control` headers, cut read latency to tens of milliseconds and shield the index from duplicate queries.
+- **Tame the write volume with batching, milestones, and a two-stage read.** Buffer ingestion through Kafka and shard indexes by keyword; batch likes over a window and only write at milestones (powers of 2/10) so the index is *approximately* ordered, then re-rank the top N×2 with fresh counts from the Like Service for a precise result.
+- **Constrain storage aggressively.** Cap each inverted index to ~1k–10k items, and tier rarely-searched keyword indexes out of Redis into cold blob storage (S3/R2), falling back to it only on a Redis miss.
+
+## 📚 Related Concepts
+
+- [Elasticsearch](../DeepDives/Elasticsearch.md) — the inverted-index deep dive behind the core idea (even though we hand-roll our own here).
+- [Redis](../DeepDives/Redis.md) — in-memory lists and sorted sets used for the creation and likes indexes.
+- [Kafka](../DeepDives/Kafka.md) — the log/stream used to fan out and buffer high-volume ingestion.
+- [Scaling Reads](../Patterns/ScalingReads.md) — the caching and CDN strategies applied to the query path.
+- [Scaling Writes](../Patterns/ScalingWrites.md) — the toolkit for the ingestion and like-write volume problems.
+- [Data Indexing](../../CoreConcepts/DataIndexing.md) — indexing fundamentals that motivate the inverted index.
+- [Caching](../../CoreConcepts/Caching.md) — eviction, TTLs, and cache design for the search cache.
+- [Sharding](../../CoreConcepts/Sharding.md) — sharding indexes by keyword to spread write load.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/fb-post-search](https://www.hellointerview.com/learn/system-design/problem-breakdowns/fb-post-search)*

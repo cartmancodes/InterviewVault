@@ -1,8 +1,28 @@
-# Local Delivery Service
+# 🛵 Local Delivery Service
 
 Practice with guided hints and real-time feedback
 
-## Understanding the Problem
+> **Overview**: Gopuff-style local delivery aggregates item availability across 500+ micro distribution centers (DCs) and lets customers order items deliverable within 1 hour of their location. The design hinges on two hard problems: serving fast (<100ms) availability reads that are the *union* of inventory across nearby DCs, and placing strongly-consistent orders without ever double-booking the same physical product.
+
+## 📋 Table of Contents
+- [Layman's Explanation](#laymans-explanation)
+- [Understanding the Problem](#understanding-the-problem)
+- [Set Up](#set-up)
+- [High-Level Design](#high-level-design)
+- [Deep Dives](#deep-dives)
+- [What is Expected at Each Level?](#what-is-expected-at-each-level)
+- [Key Takeaways](#key-takeaways)
+- [Related Concepts](#related-concepts)
+
+---
+
+## 🧒 Layman's Explanation
+
+Imagine a chain of corner stores scattered across your city, each stocking snacks, drinks, and household basics. When you open the app and ask "what can reach me in the next hour?", the answer isn't the shelf of any single store — it's the *combined* shelves of every store close enough to drive to you in time. The app quietly figures out which stores are near (not just as-the-crow-flies, but by real drive time through traffic), then adds up their stock and shows you the total.
+
+Ordering is the tricky part. If two people both grab the last bag of chips from the same store at the same second, someone has to lose. So the moment you check out, the system "holds" those exact physical items — like a cashier setting your basket aside — records the order, and subtracts them from stock, all in one indivisible motion so the same bag is never promised to two people.
+
+## 🎯 Understanding the Problem
 
 > ‍💨 What is Gopuff ? Gopuff delivers goods typically found in a convenience store via rapid delivery and 500+ micro distribution centers (DCs).
 
@@ -42,9 +62,9 @@ Here's how these might be shorthanded in an interview. Note that out-of-scope re
 
 ![Requirements](assets/fJOBrgvwe33w.08ceimkh1_bj3.svg)
 
-## Set Up
+## 📐 Set Up
 
-### Planning the Approach
+### 🧭 Planning the Approach
 
 Before we go forward with designing the system, we'll think briefly through the approach we'll take.
 
@@ -52,7 +72,7 @@ For this problem, our requirements are fairly straightforward, so we'll take our
 
 To do this we'll start by enumerating the "nouns" of our system, build out an API, and then start drawing our boxes.
 
-### [Defining the Core Entities](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#core-entities-2-minutes)
+### 🔑 [Defining the Core Entities](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#core-entities-2-minutes)
 
 Core entities are the high level "nouns" for the system. We're not (yet) designing a full data model - for that, we'll need to have a better idea of how the system fits together overall. But by figuring out the entities we'll have the right blocks to build the rest of the system. Getting the right entities is particularly important for designing a good REST API as resources are the central anchor point for a REST API - which are very tightly related to our core entities.
 
@@ -69,7 +89,7 @@ The remaining entities should be more obvious: we need `DistributionCenter` to k
 
 > Particularly in product design, outlining the identity of the entities in your system is important. By starting with the most concrete physical or business entities (e.g. items, users, etc.) and working your way up to more abstract entities (e.g. orders, carts, etc.) you can ensure that you don't miss any important entities.
 
-### Defining the API
+### 🔌 Defining the API
 
 Next, we can start with the APIs we need to satisfy, which should track closely to our functional requirements. There are a lot of extraneous details we could shove into these APIs, but we're going to start simple to avoid burning unnecessary time in the interview (a common mistake in practice!).
 
@@ -79,9 +99,9 @@ To meet our requirements we only need two APIs: the first API allows us to get a
 
 > Note here that we're passing our location to both APIs: before the order can be processed by the backend we'll need to confirm the inventory is available close enough to the user's location to deliver within 1 hour.
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
 
-### 1) Customers should be able to query availability of items
+### 🔎 1) Customers should be able to query availability of items
 
 Let's move to the first requirement: customers should be able to query availability of items by location.
 
@@ -117,7 +137,7 @@ When a user makes a request to get availability for items A, B, and C from latit
 
 Great! Our availability requirement is (mostly) satisfied.
 
-### 2) Customers should be able to order items.
+### 🛒 2) Customers should be able to order items.
 
 The last thing we need to complete our requirements is for us to enable placing orders. For this, we require _strong consistency_ to make sure two users aren't ordering the same item. To do this we need to check inventory, record the order, and update the inventory together atomically.
 
@@ -155,9 +175,22 @@ d. A new row is created in the Orders table (and OrderItems table) recording the
 e. The transaction is committed.
 3. If the transaction succeeds, we return the order to the user.
 
+Viewed as a lifecycle, a single order moves through the atomic transaction like this — either every item is reserved and the order commits, or the whole thing is rejected:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Requested: user places order for A, B, C
+    Requested --> Checking: SERIALIZABLE transaction opens
+    Checking --> Rejected: any item out of stock
+    Checking --> Recorded: all items in stock, inventory marked ordered
+    Recorded --> Confirmed: transaction commits
+    Confirmed --> [*]
+    Rejected --> [*]
+```
+
 There are some downsides to this setup. In particular, if any of the items become unavailable in the users order the entire order fails. We'll want to return a more meaningful error message to the user in this case, but this is preferable to succeeding in an order that might not make sense (e.g. a device and its battery).
 
-### Putting it all Together
+### 🧩 Putting it all Together
 
 With the two approaches listed, we can now pull everything together for a solution to our problem:
 
@@ -165,9 +198,9 @@ With the two approaches listed, we can now pull everything together for a soluti
 
 We have three services, one for Availability requests, one for Orders, and a shared service for Nearby DCs. Both our Availability and Orders service use the Nearby service to look up DCs that are close enough to the user. We have a singular Postgres database for inventory and orders, partitioned by region. Our Availability service reads via read replicas, our Orders service writes to the leader using atomic transactions to avoid double writes. A great foundation!
 
-## Deep Dives
+## 🔬 Deep Dives
 
-### 1) Make availability lookups incorporate traffic and drive time
+### 🚗 1) Make availability lookups incorporate traffic and drive time
 
 So far our system is only determining nearby DCs based on a simple distance calculation. But if our DC is over a river, or a border, it may be close in miles but not close in drive time. Further, traffic might influence the travel times. Since our functional requirements mandate 1 hour of drive time, we'll need something more sophisticated. What can we do?
 
@@ -187,7 +220,18 @@ We build on the previous solution to sync periodically (like every 5 minutes) fr
 
 ![Travel Time Against Nearby DCs](assets/ck2dd8gZP3z_.25ld0eqkrw2x0.svg)
 
-### 2) Make availability lookups fast and scalable
+The nearby-DC lookup evolves in three steps, each fixing the weakness of the last:
+
+```mermaid
+graph LR
+    P["Straight-line distance<br/>Euclidean / Haversine<br/>ignores traffic and roads"] --> Q["Sync DC table to memory<br/>call travel-time service<br/>for every DC"]
+    Q -->|"too many external calls"| R["Prune by fixed radius<br/>~60 miles, then travel-time<br/>only on candidate DCs"]
+    style P fill:#FFB6C1
+    style Q fill:#FFE4B5
+    style R fill:#90EE90
+```
+
+### 📈 2) Make availability lookups fast and scalable
 
 Currently, once we have nearby DCs we use those DCs to look up availability directly from our database. This introduces a lot of load onto our database. Let's briefly detour into some estimates to figure out how much throughput we might expect.
 
@@ -200,6 +244,17 @@ Queries: 10M orders/day / (100k seconds/day) * 10 / 0.05 = 20k queries/second
 ```
 
 This is pretty sizeable number of queries per second. We clearly need to think about how we can scale this. What do we do?
+
+The scaling journey for availability reads walks from hitting the database directly to a cached, partitioned, replica-backed design:
+
+```mermaid
+graph LR
+    A["Query Postgres directly<br/>~20k queries/sec"] -->|"heavy DB load"| B["Add Redis cache<br/>low TTL ~1 min<br/>Order Service expires entries"]
+    B --> C["Partition by region ID<br/>first 3 zip digits<br/>+ read replicas for availability"]
+    style A fill:#FFB6C1
+    style B fill:#FFE4B5
+    style C fill:#90EE90
+```
 
 Local delivery services like Gopuff demonstrate classic **scaling reads** patterns where inventory queries vastly outnumber actual purchases. With 20k queries/second for availability checks but only occasional inventory updates, aggressive caching with short TTLs becomes critical.
 
@@ -221,7 +276,7 @@ By choosing the "great" solutions for both challenges we net out with a solution
 
 ![Final Nearby Service](assets/4FgaR9e104m2.23dsz1fz0ew8c.svg)
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 Your interviewer may even have you go deeper on specific sections, or ask follow-up questions. What might you expect in an actual assessment?
 
@@ -250,6 +305,24 @@ Your interviewer may even have you go deeper on specific sections, or ask follow
 **The Bar for GoPuff**: For a staff+ candidate, expectations are set high regarding depth and quality of solutions, particularly for the complex scenarios discussed earlier. Your interviewer will be looking for you to be diving deep into at least 2-3 key areas, showcasing not just proficiency but also innovative thinking and optimal solution-finding abilities. They should show unique insights for at least a couple follow-up questions of increasing difficulty. A crucial indicator of a staff+ candidate's caliber is the level of insight and knowledge they bring to the table. A good measure for this is if the interviewer comes away from the discussion having gained new understanding or perspectives.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **Availability is a union, not a single lookup.** Find the DCs that can deliver within 1 hour first, then sum their inventory — keeping the whole path under 100ms.
+- **Nearby-DC lookup evolves for correctness and cost.** Straight-line distance (Euclidean/Haversine) becomes radius-pruned candidates passed to an external travel-time service, so you don't waste calls on DCs that could never deliver in time.
+- **Orders demand strong consistency.** Colocating orders and inventory in one Postgres database and using a single `SERIALIZABLE` transaction prevents double-booking — sidestepping the deadlocks and orphaned-lock failure modes of manual cross-store locking.
+- **Reads vastly outnumber writes** (~20k availability QPS derived from 10m orders/day). Scale reads with a short-TTL Redis cache (invalidated by the Order Service), region partitioning by the first 3 zip digits, and read replicas for availability while orders write to the leader.
+- **One ACID datastore is a deliberate trade-off.** It simplifies atomicity but couples the scaling of orders and inventory and forgoes picking the best-fit store per workload.
+
+## 📚 Related Concepts
+
+- [Scaling Reads](../Patterns/ScalingReads.md) — the cache, replica, and partition progression this design applies to availability queries.
+- [Dealing with Contention](../Patterns/DealingWithContention.md) — locking strategies and avoiding double-booking.
+- [Distributed Locking](../../CoreConcepts/DistributedLocking.md) — the locking failure modes (deadlocks, orphaned locks) the single-transaction approach avoids.
+- [Postgresql](../DeepDives/Postgresql.md) — the ACID datastore and `SERIALIZABLE` transactions behind orders.
+- [Redis](../DeepDives/Redis.md) — the in-memory cache fronting availability reads.
+- [Sharding](../../CoreConcepts/Sharding.md) — region-based partitioning of the inventory dataset.
+- [Proximity Search](../DeepDives/ProximitySearch.md) — locating nearby DCs by latitude/longitude.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/gopuff](https://www.hellointerview.com/learn/system-design/problem-breakdowns/gopuff)*

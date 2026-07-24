@@ -1,4 +1,4 @@
-# FB Live Comments
+# 💬 FB Live Comments
 
 Practice with guided hints and real-time feedback
 
@@ -6,7 +6,28 @@ Watch the author walk through the problem step-by-step
 
 Watch the author walk through the problem step-by-step
 
-## Understanding the Problem
+> **Overview**: Facebook Live Comments lets viewers post and read a continuous stream of comments on a live video feed in near-real-time. The design starts simple (POST to create, cursor-paginated GET for history) and then layers on depth: moving from polling to a push-based model over Server-Sent Events, coordinating comment delivery across many servers with pub/sub, and finally rethinking delivery entirely (sampling and CDN snapshots) when a single stream goes mega-viral. Throughout, the system favors availability and low latency (< 200ms end-to-end) over strong consistency.
+
+## 📋 Table of Contents
+- [Understanding the Problem](#understanding-the-problem)
+- [The Set Up](#the-set-up)
+- [High-Level Design](#high-level-design)
+- [Potential Deep Dives](#potential-deep-dives)
+- [What is Expected at Each Level?](#what-is-expected-at-each-level)
+- [Key Takeaways](#key-takeaways)
+- [Related Concepts](#related-concepts)
+
+---
+
+## 🧒 Layman's Explanation
+
+Imagine a huge stadium showing a live game on the big screen, and everyone in the crowd is scribbling reactions on sticky notes. When one person writes a note, we want everyone else to see it almost instantly — that's the "post a comment, everyone sees it" problem.
+
+If ushers had to keep walking the aisles asking "any new notes? any new notes?" (that's **polling**), they'd wear themselves out and still be late. It's far better to hand each new note straight to the crowd the moment it's written — that's a **push** model (Server-Sent Events). But one usher can only face one section of the stadium, so we split the crowd across many ushers and use a central bulletin board (**pub/sub**) so every usher instantly hears about every note for the games their section is watching.
+
+Now imagine the World Cup final: notes are flying in thousands per second — faster than anyone could ever read. At that point delivering every single note is pointless. Instead we just show a readable *sample* of them, or we photograph the note-board once a second and post identical copies at every stadium gate (a **CDN snapshot**) so millions can glance at the same picture. Nobody reads every note; they just feel the roar of the crowd.
+
+## 📖 Understanding the Problem
 
 > 📹 What are Facebook Live Comments? Facebook Live Comments is a feature that enables viewers to post comments on a live video feed. Viewers can see a continuous stream of comments in near-real-time.
 
@@ -44,13 +65,13 @@ Here's how your requirements section might look on your whiteboard:
 
 ![FB Live Comments Requirements](assets/ch8ofDA7i1R7.093xgj5edrfs0.svg)
 
-## The Set Up
+## 🎯 The Set Up
 
 ### Planning the Approach
 
 Before you move on to designing the system, it's important to start by taking a moment to plan your strategy. Fortunately, for these common product style system design questions, the plan should be straightforward: build your design up sequentially, going one by one through your functional requirements. This will help you stay focused and ensure you don't get lost in the weeds as you go. Once you've satisfied the functional requirements, you'll rely on your non-functional requirements to guide you through layering on depth and complexity to your design.
 
-### [Defining the Core Entities](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#core-entities-2-minutes)
+### 🔑 [Defining the Core Entities](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#core-entities-2-minutes)
 
 I like to begin with a broad overview of the primary entities. Initially, establishing these key entities will guide our thought process and lay a solid foundation as we progress towards defining the API. Think of these as the "nouns" of the system.
 
@@ -68,7 +89,7 @@ In your interview, this can be as simple as a bulleted list like:
 
 Now, let's carry on to outline the API, tackling each functional requirement in sequence. This step-by-step approach will help us maintain focus and manage scope effectively.
 
-### [API or System Interface](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#api-or-system-interface-5-minutes)
+### 🔌 [API or System Interface](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#api-or-system-interface-5-minutes)
 
 We'll need a simple POST endpoint to create a comment.
 
@@ -90,7 +111,7 @@ GET /comments/:liveVideoId?cursor={last_comment_id}&pageSize=10&sort=desc
 
 Pagination will be important for this endpoint. More on that later when we get deeper into the design.
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
 
 To get started with our high-level design, let's begin by addressing the first functional requirement.
 
@@ -174,7 +195,21 @@ While cursor pagination reduces database load compared to offset pagination, it 
 
 Cursor based pagination is a better fit for our use case. Unlike offset pagination, it's more efficient as we don't need to scan through all preceding rows. It's stable - new comments won't disrupt the cursor's position during scrolling. It works well with DynamoDB's key-based queries, and it scales better since performance remains consistent as comment volume grows.
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
+
+The deep dives follow a natural escalation: we replace naive polling with a push model, then coordinate that push across many servers, and finally rethink delivery entirely once a single stream reaches mega-viral scale.
+
+```mermaid
+graph LR
+    P["Polling<br/>clients guess<br/>doesn't scale"] --> PU["Push model<br/>SSE over HTTP<br/>fits read-heavy load"]
+    PU --> CO["Multi-server coordination<br/>pub/sub per-channel<br/>hash(liveVideoId) % N"]
+    CO --> MS["Mega-stream delivery<br/>sampling + CDN snapshots<br/>pull-based, ~1-2s latency"]
+
+    style P fill:#FFB6C1
+    style PU fill:#90EE90
+    style CO fill:#FFE4B5
+    style MS fill:#90EE90
+```
 
 ### 1) How can we ensure comments are broadcasted to viewers in real-time?
 
@@ -294,6 +329,24 @@ On the client side, instead of maintaining an SSE connection, the app polls the 
 
 The nice thing about this approach is that it leverages infrastructure we already have. CDNs are designed to serve the same content to millions of users simultaneously, and that's literally their job. A comment snapshot is just another piece of cacheable content, no different from a video thumbnail.
 
+```mermaid
+sequenceDiagram
+    participant C as Viewer Client
+    participant S as Realtime Server<br/>(ring buffer)
+    participant CDN as CDN Edge
+    Note over S: Keeps last 100-200<br/>comments per mega-stream
+    loop Every second
+        S->>CDN: Write snapshot of ring buffer
+        CDN-->>CDN: Cache snapshot at edge
+    end
+    loop Every second
+        C->>CDN: Poll for latest snapshot
+        CDN-->>C: Cached snapshot
+        C->>C: Animate new comments,<br/>spaced over the interval
+    end
+    Note over C: Optimistically inserts the user's<br/>own comment for read-your-own-write
+```
+
 We can set the threshold dynamically too, so when a stream crosses 100,000 concurrent viewers or 500 comments per second, we automatically flip from SSE to CDN delivery. The client handles this transition seamlessly.
 
 The tradeoff is latency. We're now delivering comments with up to 1-2 seconds of delay rather than sub-200ms. But as established earlier, this doesn't matter for mega-streams because users can't meaningfully engage with individual comments anyway.
@@ -324,11 +377,26 @@ We need to set practical limits on how far back we'll replay. If a user was disc
 
 If the user reconnects to a different Realtime Messaging Server than before (likely, given load balancing), that server needs access to the comment history. A shared Redis cache gives any server the ability to replay recent comments for any video.
 
+```mermaid
+sequenceDiagram
+    participant C as Viewer Client
+    participant S as Realtime Server
+    participant R as Shared Redis<br/>(recent comments)
+    C--xS: Connection drops (tunnel, WiFi switch)
+    Note over C: Tracks last comment ID locally
+    C->>S: Reconnect with Last-Event-ID
+    S->>R: Fetch comments since last ID
+    R-->>S: Missed comments (bounded, ~last 5 min)
+    S-->>C: Replay missed comments
+    S-->>C: Resume live stream
+    Note over C: Dedupe by comment ID, merge with SSE
+```
+
 The main complexity is coordinating between the SSE stream and HTTP catch-up to avoid duplicates or gaps. If comments arrive via SSE while we're processing the HTTP response, the client needs to deduplicate based on comment IDs and merge correctly.
 
 > When discussing disconnection handling in an interview, SSE's Last-Event-ID mechanism provides the foundation, but a production system needs more. Mention the need for bounded replay (you can't replay an hour of comments), client-side tracking of position, and graceful degradation when replay isn't possible. This shows you've thought about the messy realities of mobile networks and user behavior.
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 Ok, that was a lot. You may be thinking, "how much of that is actually required from me in an interview?" Let's break it down.
 
@@ -371,6 +439,26 @@ You should know which technologies to use, not just in theory but in practice, a
 **The Bar for FB Live Comments:** For a staff+ candidate, expectations are high regarding depth and quality of solutions, particularly when it comes to scaling the broadcasting of comments. I expect staff+ candidates to not only identify the pub/sub solution but proactively call out the limitations around reliability or scalability and suggest solutions. They likely have a good understanding of the exact technology they would use and can discuss the trade-offs of different solutions in detail.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **Split reads from writes.** Comment creation is infrequent while reads dominate, so a simple POST persists comments to DynamoDB, and dedicated Realtime Messaging Servers handle the heavy fan-out of delivering them.
+- **Push beats polling, and SSE beats WebSockets here.** Polling can't hit near-real-time targets economically; SSE's one-way streaming over standard HTTP matches the read-heavy imbalance better than a two-way WebSocket per viewer.
+- **Coordination is the real scaling problem.** With viewers of one video spread across servers, pub/sub (partitioned via `hash(liveVideoId) % N`) plus consistent-hashing/L7 routing — or a Dispatcher Service — ensures every viewer sees every comment. Redis pub/sub's fire-and-forget nature is fine because comments are persisted anyway.
+- **Requirements change at mega-scale.** At thousands of comments/second no human can read every one, so sampling and CDN-snapshot pull delivery (trading sub-200ms for ~1-2s latency) become the elegant answers — staff-level thinking.
+- **Handle flaky clients gracefully.** SSE's `Last-Event-ID`, client-side position tracking, a shared Redis cache for replay, and bounded catch-up (~last 5 minutes) let viewers recover missed comments without duplicates.
+- **Cursor pagination over offset.** For loading comment history, cursor pagination on `last_comment_id` is stable under inserts/deletes and stays efficient as volume grows, mapping cleanly onto DynamoDB key-based queries.
+
+## 📚 Related Concepts
+
+- [Real-Time Updates](../Patterns/Real-TimeUpdates.md) — the broader pattern behind SSE, WebSockets, and pub/sub broadcasting that this problem showcases.
+- [Scaling Reads](../Patterns/ScalingReads.md) — caching and CDN strategies for the read-heavy delivery side of the system.
+- [Consistent Hashing](../../CoreConcepts/ConsistentHashing.md) — the L7 routing technique that co-locates viewers of the same video on the same server.
+- [Redis](../DeepDives/Redis.md) — the low-latency pub/sub and shared replay cache used for coordination and catch-up.
+- [Kafka](../DeepDives/Kafka.md) — the alternative pub/sub backbone and its trade-offs for dynamic subscription patterns.
+- [Zookeeper](../DeepDives/Zookeeper.md) — the coordination service that keeps Dispatcher/routing mappings in sync.
+- [DynamoDB](../DeepDives/Dynamodb.md) — the scalable, highly available store chosen for persisting comments.
+- [WhatsApp](Whatsapp.md) — a related real-time messaging breakdown with a more balanced read/write ratio.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/fb-live-comments](https://www.hellointerview.com/learn/system-design/problem-breakdowns/fb-live-comments)*

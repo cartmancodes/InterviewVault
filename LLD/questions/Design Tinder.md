@@ -405,7 +405,7 @@ sequenceDiagram
         NS->>P: push to A (B's card)
         NS->>P: push to B (A's card)
     end
-    Note over NS,P: crash after PG write? Kafka redelivers;<br/>ON CONFLICT dedups, pushes fire on retry
+    Note over NS,P: crash after PG write? Kafka redelivers,<br/>ON CONFLICT dedups, pushes fire on retry
 ```
 
 **Decoupling via Kafka is load-bearing here.** The swipe hot path returns `matched: true` to the client as soon as the Lua script confirms the match — before any of the above steps complete. The client shows the overlay immediately. The Kafka consumer handles side effects asynchronously. This means a network partition between the Kafka broker and APNS will delay the push notification but will never stall the swipe response.

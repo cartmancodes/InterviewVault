@@ -300,7 +300,7 @@ sequenceDiagram
         U->>BS: POST /bookings/{id}/confirm { payment_token }
         BS->>S: charge (idempotency_key)
         S-->>BS: payment succeeded
-        BS->>PG: BEGIN; status = BOOKED; COMMIT
+        BS->>PG: BEGIN, status = BOOKED, COMMIT
         BS->>R: DEL seat key
         BS-->>U: { status: CONFIRMED, receipt_url }
     else SETNX returns 0 (already held)

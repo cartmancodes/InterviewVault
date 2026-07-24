@@ -1,12 +1,27 @@
-# WhatsApp
+# 💬 WhatsApp
 
-Practice with guided hints and real-time feedback
+> **Overview**: WhatsApp is a messaging service that lets users send and receive encrypted messages from their phones and computers — famously built on Erlang and renowned for handling high scale with limited engineering and infrastructure outlay. This breakdown designs group chats, real-time and offline message delivery, and media attachments at the scale of billions of users. The heart of the problem is durably storing messages while delivering them in real time, and routing those messages to the right server among hundreds.
 
-Watch the author walk through the problem step-by-step
+## 📋 Table of Contents
+- [Layman's Explanation](#laymans-explanation)
+- [Understanding the Problem](#understanding-the-problem)
+- [The Set Up](#the-set-up)
+- [High-Level Design](#high-level-design)
+- [Potential Deep Dives](#potential-deep-dives)
+- [What is Expected at Each Level?](#what-is-expected-at-each-level)
+- [References](#references)
+- [Key Takeaways](#key-takeaways)
+- [Related Concepts](#related-concepts)
 
-Watch the author walk through the problem step-by-step
+---
 
-## Understanding the Problem
+## 🧒 Layman's Explanation
+
+Think of WhatsApp as a global postal system. When you send a letter, the post office (the **Chat Server**) first writes a copy into the recipient's mailbox (the **Inbox** table) so the message can never be lost, then tries to hand-deliver it immediately if the recipient is home (**online** via their WebSocket). The recipient signs for it (an **ack**), and only then is the copy removed from the mailbox. If they're away, the letter waits in their mailbox for up to 30 days until they come back.
+
+With billions of people, no single post office can know where everyone is. So a directory assigns each person to a specific branch based on their ID (**consistent hashing**, tracked in ZooKeeper), and a very fast internal courier (**Redis Pub/Sub**) shuttles messages between branches so a letter dropped at one branch reaches the branch holding the recipient. Bulky parcels (media attachments) don't go through the letter carriers at all — you get a claim ticket (a **pre-signed URL**) and drop them straight at the warehouse (**blob storage**).
+
+## 🎯 Understanding the Problem
 
 > 🚗 What is Whatsapp ? Whatsapp is a messaging service that allows users to send and receive encrypted messages and calls from their phones and computers. Whatsapp is famously built on Erlang and renowned for handling high scale with limited engineering and infrastructure outlay.
 
@@ -50,7 +65,7 @@ Before getting into non-functional requirements, it might make sense to ask your
 
 ![Requirements](assets/xwI1Eu3Q7GUr.1-s8qcoq387-2.svg)
 
-## The Set Up
+## 🧭 The Set Up
 
 ### Planning the Approach
 
@@ -170,7 +185,7 @@ Our whiteboard might look like this:
 
 Now that we have a base to work with let's figure out how we can implement them while we satisfy our requirements.
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
 
 ### 1) Users should be able to start group chats with multiple participants (limit 100)
 
@@ -274,7 +289,7 @@ Expiring attachments once they've been downloaded by all recipients isn't handle
 
 Ok awesome, so we have a system which has real-time delivery of messages, persistence to handle offline use-cases, and attachments. It just doesn't scale ... yet!
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
 
 With the core functional requirements met, it's time to dig into the non-functional requirements via deep dives and solve some of the issues we've earmarked to this point. This includes solving obvious scalability issues as well as auxiliary questions which demonstrate your command of system design.
 
@@ -357,6 +372,22 @@ The Pub/Sub implementation introduces additional latency because we need to ferr
 
 We also have connections required between each Chat Server and each Redis cluster server. This is surmountable because the number of instances we'll need is relatively small.
 
+The progression of routing approaches we walked through — from the broken options to the one we land on — looks like this:
+
+```mermaid
+graph LR
+    S["Single Chat Server<br/>in-memory socket map"] --> LB["Naive load balancer<br/>+ more hosts"]
+    LB -->|"can't reach clients<br/>on other hosts"| K["Kafka topic<br/>per user"]
+    K -->|"~50KB per topic<br/>50TB+ for 1B users"| CH["Consistent hashing<br/>ZooKeeper registry"]
+    CH -->|"N-to-N server links,<br/>rebalancing pain"| PS["Redis Pub/Sub<br/>sharded by userId"]
+
+    style S fill:#FFB6C1
+    style LB fill:#FFB6C1
+    style K fill:#FFB6C1
+    style CH fill:#FFE4B5
+    style PS fill:#90EE90
+```
+
 #### Should we partition by chat or by user?
 
 You may have the idea: "why do we have the pub/sub topics/channels be per user rather than per chat?", or maybe your interviewer asks you about this! The right choice is going to depend on (a) the number of chats per user, and (b) the size of those chats. Let's consider two scenarios to make this clear:
@@ -420,6 +451,23 @@ When the connection closes, the client reconnects and syncs any missed messages 
 Heartbeats add overhead—with 200M connected users and a 10-second heartbeat interval, that's 20M ping/pong exchanges per second. In practice this is fine (they're tiny messages), but it's worth noting.
 
 The heartbeats give you a guaranteed upper bound on detection time: if your heartbeat interval is 10s and timeout is 5s, you'll detect any dead connection within 15 seconds.
+
+Putting the ack-timeout and heartbeat mechanisms together, the WebSocket moves through these states:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Connected: client opens WebSocket
+    Connected --> AwaitingAck: server sends message
+    AwaitingAck --> Connected: ack within timeout
+    AwaitingAck --> Retrying: no ack in 500-2000ms
+    Retrying --> Connected: ack received
+    Retrying --> Closed: retries exhausted
+    Connected --> AwaitingPong: heartbeat ping every 10-30s
+    AwaitingPong --> Connected: pong within 5s
+    AwaitingPong --> Closed: no pong
+    Closed --> Reconnecting: client reconnects
+    Reconnecting --> Connected: sync missed messages from Inbox
+```
 
 ### 4) What happens if Redis fails to deliver a message?
 
@@ -509,13 +557,35 @@ In order to get the last seen for a given user:
 3. If the target user's Chat Server receives the `getLastSeen` _and_ the user is connected, it will publish an `updateLastSeen` message with `lastSeen` of "ONLINE" to the Pub/Sub channel for the `requestingUserId`.
 4. Finally, the client will merge the responses. If it receives an ONLINE message, the bubble is green. If it doesn't, it will show when the user last disconnected from the service.
 
+The two parallel paths — one reading the durable last-disconnect time, one asking the target's server whether they're online right now — come together at the requesting client:
+
+```mermaid
+sequenceDiagram
+    participant C as Requesting Client
+    participant S1 as Chat Server (requester)
+    participant DB as LastSeen Table
+    participant PS as Redis Pub/Sub
+    participant S2 as Chat Server (target)
+    C->>S1: getLastSeen for targetUserId
+    par Durable last-disconnect
+        S1->>DB: read last disconnect for targetUserId
+        DB-->>S1: last disconnect timestamp
+        S1->>PS: publish updateLastSeen to requester channel
+    and Live online check
+        S1->>PS: forward getLastSeen to target channel
+        PS->>S2: getLastSeen
+        S2->>PS: if connected, publish updateLastSeen ONLINE
+    end
+    PS-->>C: updateLastSeen, client merges (ONLINE wins)
+```
+
 This minimizes the storage required (we only need 1 record for every user) and the number of updates (we only need to update our durable storage when a user disconnects).
 
 It's possible for there to be some delay between the two responses for an online user. We'll need the client to be able to handle this, either by waiting a moment before displaying the result or being able to update the UI seamlessly.
 
 We are depending on Chat Servers to report disconnect times, which can be a problem if those Chat Servers fail. Fortunately, if the servers fail and the users are still connected, they'll reconnect shortly. If we want to be more robust, we can write to the `LastSeen` table when the connection happens as well.
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 Ok, that was a lot. You may be thinking, “how much of that is actually required from me in an interview?” Let’s break it down.
 
@@ -557,11 +627,33 @@ You should know which technologies to use, not just in theory but in practice, a
 
 **The Bar for Whatsapp:** For a staff+ candidate, expectations are high regarding depth and quality of solutions, particularly for the complex scenarios discussed earlier. Great candidates are going 2 or 3 levels deep to discuss failure modes, bottlenecks, and other issues with their design. There's ample discussion to be had around fault tolerance, database optimization, regionalization and cell-based architecture and more.
 
-## References
+## 📚 References
 
 - [What Happens When You Make a Move in Lichess](https://www.davidreis.me/2024/what-happens-when-you-make-a-move-in-lichess)
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **Durability first, real-time second.** Every message is written to the `Message` table and per-recipient `Inbox` entries before it's published for live delivery. Clients `ack` on receipt, which clears the Inbox — so even best-effort delivery can never lose a message.
+- **Use WebSockets, not REST.** A chat app has high-frequency bidirectional traffic, so a bi-directional socket (over TLS) carries the commands. An L4 load balancer is sufficient since no L7 routing is needed.
+- **Solve on a single host, then scale.** Starting with one Chat Server and an in-memory userId → socket map makes the mechanics clear before tackling routing across hundreds of servers.
+- **Route by assigning users to servers.** Consistent hashing (tracked in ZooKeeper) or, preferably, Redis Pub/Sub sharded by userId ferries messages between servers. Kafka's per-topic overhead (~50KB) makes a topic-per-user impractical at 1B users.
+- **Partition Pub/Sub by user for WhatsApp** because it's dominated by 1:1 chats; adaptively switch large chats (past ~25 users) to per-chat channels to avoid fan-out.
+- **Keep media off the socket.** Upload attachments directly to blob storage via pre-signed URLs with a 30-day TTL, sparing Chat Server bandwidth.
+- **Detect dead connections fast** with ack-timeouts plus heartbeats (ping/pong), and order messages by server-stamped NTP time rather than engineering strict ordering.
+
+## 📚 Related Concepts
+
+- [Real-Time Updates](../Patterns/Real-TimeUpdates.md) — the WebSocket + pub/sub delivery pattern at the core of this design.
+- [Redis](../DeepDives/Redis.md) — the in-memory store behind Pub/Sub message routing and atomic `INCR` sequence numbers.
+- [DynamoDB](../DeepDives/Dynamodb.md) — the key/value store for `Chat`, `ChatParticipant` (with GSI), `Inbox`, and `LastSeen` tables.
+- [Kafka](../DeepDives/Kafka.md) — why a topic-per-user doesn't scale here, and where streams do fit.
+- [ZooKeeper](../DeepDives/Zookeeper.md) — the registry that tracks Chat Server ownership of the consistent-hash space.
+- [Consistent Hashing](../../CoreConcepts/ConsistentHashing.md) — assigning users to specific Chat Servers deterministically.
+- [Sharding](../../CoreConcepts/Sharding.md) — partitioning Pub/Sub channels and tables by userId.
+- [Handling Large Blobs](../Patterns/HandlingLargeBlobs.md) — the pre-signed URL upload pattern for media attachments.
+- [Managing Long Running Tasks](../Patterns/ManagingLongRunningTasks.md) — background cleanup via TTLs on Inbox and Message tables.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/whatsapp](https://www.hellointerview.com/learn/system-design/problem-breakdowns/whatsapp)*

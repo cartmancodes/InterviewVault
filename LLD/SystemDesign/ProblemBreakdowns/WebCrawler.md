@@ -1,4 +1,18 @@
-# Web Crawler
+# 🕸️ Web Crawler
+
+> **Overview**: A web crawler automatically traverses the web by downloading pages and following their links, feeding search engines, research datasets, or LLM training pipelines. This breakdown designs a crawler whose goal is to extract text from ~10B pages in under 5 days while staying fault-tolerant and polite. The heart of the design is a pipelined, queue-driven architecture that isolates failures, respects `robots.txt`, and scales horizontally across millions of domains.
+
+## 📋 Table of Contents
+- [Understanding the Problem](#understanding-the-problem)
+- [Layman's Explanation](#laymans-explanation)
+- [The Set Up](#the-set-up)
+- [High-Level Design](#high-level-design)
+- [Potential Deep Dives](#potential-deep-dives)
+- [What is Expected at Each Level?](#what-is-expected-at-each-level)
+- [Key Takeaways](#key-takeaways)
+- [Related Concepts](#related-concepts)
+
+---
 
 Practice with guided hints and real-time feedback
 
@@ -6,7 +20,13 @@ Watch the author walk through the problem step-by-step
 
 Watch the author walk through the problem step-by-step
 
-## Understanding the Problem
+## 🧒 Layman's Explanation
+
+Imagine you want to photocopy every book in a giant, sprawling city library that has no central catalog — you only know the address of a few starting rooms (the **seed URLs**). You send out a team of assistants. Each assistant grabs an address from a shared to-do list (the **frontier queue**), walks to that room, photocopies the text, and jots down the addresses of every other room mentioned inside so those get added back to the to-do list. The library keeps growing, so this never quite ends — you just try to cover as much as possible before your deadline.
+
+Two rules keep this civilized. First, each room posts a sign at its door (`robots.txt`) saying which shelves are off-limits and how long to wait between visits — polite assistants obey it and don't barge in every second. Second, if an assistant faints mid-task (a crash), the address stays on the to-do list so another assistant picks it up — nothing is lost. And to avoid wasting effort, before copying a room you check whether you've already copied that exact text elsewhere (**deduplication**), and you stop wandering down endless hallways of self-referential doors (**crawler traps**) by refusing to go more than a set number of rooms deep.
+
+## 🎯 Understanding the Problem
 
 > 🕸️ What is a Web Crawler A web crawler is a program that automatically traverses the web by downloading web pages and following links from one page to another. It is used to index the web for search engines, collect data for research, or monitor websites for changes.
 
@@ -57,13 +77,13 @@ Here's how it might look on your whiteboard:
 
 ![Requirements](assets/_XavFgW10EA8.0cwzatoljt6zh.svg)
 
-## The Set Up
+## 🏗️ The Set Up
 
 ### Planning the Approach
 
 Given this system isn't a user-facing system, we'll instead focus on the abstract interface it has with the outside world and break down the data flow before proceeding to the high-level design. This will give us a good high-level picture of how the pieces should fit together which we can use as scaffolding for our design.
 
-### [API or System Interface](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#system-interface-2-minutes)
+### 🔌 [API or System Interface](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#system-interface-2-minutes)
 
 For data processing system design questions like this one, it helps to start by defining the system's interface. This includes clearly outline what data the system receives and what it outputs, establishing a clear boundary of the system's functionality.
 
@@ -72,7 +92,7 @@ For data processing system design questions like this one, it helps to start by 
 1. **Input**: Seed URLs to start crawling from.
 2. **Output**: Text data extracted from web pages.
 
-### [Data Flow](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#optional-data-flow-5-minutes)
+### 🔄 [Data Flow](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#optional-data-flow-5-minutes)
 
 The data flow is the sequential series of steps we'll cover in order to get from the inputs to our system to the outputs. Clarifying this flow early will help to align with our interviewer before the high-level design. For our crawler, we need to perform a sequence of steps before the page can be crawled:
 
@@ -83,9 +103,28 @@ The data flow is the sequential series of steps we'll cover in order to get from
 5. Extract any linked URLs from the web pages and add them to the list of URLs to crawl.
 6. Repeat steps 1-5 until all URLs have been crawled.
 
+The loop below captures this sequence — notice how the extracted links feed back into the frontier, making crawling an ever-repeating cycle rather than a one-shot pass:
+
+```mermaid
+graph LR
+    F["Frontier<br/>seed + new URLs"] --> D["Resolve IP<br/>via DNS"]
+    D --> H["Fetch HTML<br/>from external server"]
+    H --> T["Extract text<br/>from HTML"]
+    T --> S["Store text<br/>in database"]
+    H --> L["Extract linked URLs"]
+    L -->|"add back to frontier"| F
+
+    style F fill:#e1f5ff
+    style D fill:#f3e5f5
+    style H fill:#f3e5f5
+    style T fill:#FFE4B5
+    style S fill:#90EE90
+    style L fill:#FFE4B5
+```
+
 > Note that this is simple, we will improve upon as we go, but it's important to start simple and build up from there.
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes-1)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes-1)
 
 For our high-level design, we will focus on getting a simple system up and running that satisfies our core functional requirements by simply following the data flow we outlined above. We will improve upon this design in the next section.
 
@@ -103,13 +142,13 @@ The dotted rectangle represents the boundary of our system. Everything inside th
 
 > It's wise to ask your interviewer about the seed URLs. Are they provided to you, or do you need to come up with them yourself? In almost all cases, the seed URLs will be provided to you. But this question shows that you are thinking holistically about the problem. If they're not, you can discuss a few strategies for coming up with them, like starting with the most popular search engines, news sites, social media platforms, and/or web directories.
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes-1)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes-1)
 
 That should have been relatively straightforward so far. Now for the fun part. We are going to go 1-by-1 through our non-functional requirements and discuss how we can improve our design to meet them.
 
 > This is why defining good non-functional requirements is so important -- especially for more senior candidates! So often I see candidates rush through the requirements and then look at me, the interviewer, wide eyed, unsure of what to do next after they have a simple design. If you've taken your time to define quality non-functional requirements, then you shouldn't run out of things to talk about until your system has met all functional and non-functional requirements, at which point, you've likely passed the interview!
 
-### 1) How can we ensure we are fault tolerant and don't lose progress?
+### ⚠️ 1) How can we ensure we are fault tolerant and don't lose progress?
 
 The first thing we should notice is that our crawler service is doing a lot. It's hitting DNS, fetching web pages, extracting text data, and extracting new URLs to add to the frontier queue. When we introduce politeness and efficiency, we'll find that it ends up doing even more. While the server can handle all of these tasks, it's not ideal from a fault tolerance perspective. If there is a failure in any single task, all progress will be lost.
 
@@ -168,9 +207,29 @@ Given SQS's visibility timeout mechanism (which makes implementing exponential b
 
 ![SQS with Retry and DLQ](assets/Gx4Z7VMJTRW2.3yivnzwaun1qu.svg)
 
+Tracing a single URL message through SQS makes the fault-tolerance guarantees concrete — a message is only removed once its work is safely stored, and repeated failures eventually retire it to the dead-letter queue:
+
+```mermaid
+stateDiagram-v2
+    [*] --> InQueue: URL added to frontier
+    InQueue --> InFlight: crawler receives message<br/>visibility timeout starts
+    InFlight --> Stored: HTML stored in blob storage
+    Stored --> [*]: crawler deletes message
+    InFlight --> InQueue: crawler crashes<br/>timeout expires, becomes visible
+    InFlight --> Backoff: fetch fails<br/>ChangeMessageVisibility extends timeout
+    Backoff --> InFlight: retry after backoff
+    Backoff --> DLQ: maxReceiveCount exceeded<br/>(5 retries, site offline)
+    DLQ --> [*]
+
+    note right of Stored
+        Message never deleted
+        until work is durable
+    end note
+```
+
 > When it comes to choosing a technology, there is usually no right or wrong answer. It's all about trade-offs and your ability to justify your decision. Additionally, it's totally reasonable that you would not know the specifics of how Kafka or SQS handle retries. If that's the case, this may not be a place where you choose to go deep.
 
-### 2) How can we ensure politeness and adhere to robots.txt?
+### 🤝 2) How can we ensure politeness and adhere to robots.txt?
 
 First thing first, what is politeness and what is a `robots.txt` file?
 
@@ -230,7 +289,7 @@ Fortunately, there is a relatively simple solution to this problem: jitter. By i
 
 ![Robots.txt and Rate Limiting](assets/nWLDrf2heBzF.3820jal67m8vm.svg)
 
-### 3) How to scale to 10B pages and efficiently crawl them in under 5 days?
+### 📈 3) How to scale to 10B pages and efficiently crawl them in under 5 days?
 
 > I generally suggest you save any scaling discussion until the end of the interview. This is because you'll have a clearer picture of the full system and can make more informed decisions about where to scale. For example, had scaling been our first deep dive we would have missed bottlenecks like the parser workers introduced in subsequent deep dives.
 
@@ -305,7 +364,7 @@ Of course, I can't cover everything in this guide. Here are a few additional dee
 4. **How to handle continual updates**: While our requirements are for a one-time crawl, we may want to consider how we would handle continual updates to the data. This could be that we plan to re-train the model every month or that our crawler is for a search engine that needs to be updated regularly. I'd suggest adding a new component "URL Scheduler" that is responsible for scheduling URLs to be crawled. So rather than putting URLs on the queue directly from the parser workers, the parser workers would put URLs in the Metadata DB and the URL Scheduler would be responsible for scheduling URLs to be crawled by using some logic based on last crawl time, popularity, etc.
 5. **How to implement priority crawling**: If you need to prioritize certain URLs (e.g., popular domains first), you can use multiple SQS queues with different priorities and have crawlers poll the high-priority queue first. Kafka doesn't natively support priority-based consumption, but you can achieve a similar effect with separate topics per priority level.
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 Ok, that was a lot. You may be thinking, “how much of that is actually required from me in an interview?” Let’s break it down.
 
@@ -348,6 +407,25 @@ You should know which technologies to use, not just in theory but in practice, a
 **The Bar for Web Crawler:** For a staff+ candidate, expectations are high regarding depth and quality of solutions, particularly for the complex scenarios discussed earlier. Great candidates are diving deep into at least 3+ key areas, showcasing not just proficiency but also innovative thinking and optimal solution-finding abilities. A crucial indicator of a staff+ candidate's caliber is the level of insight and knowledge they bring to the table. A good measure for this is if the interviewer comes away from the discussion having gained new understanding or perspectives. If you did all the deep dives above (even if not to the same level of completeness), you're in a good spot.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **Pipeline over monolith:** Break the crawler into independent, queue-connected stages (URL Fetcher → Text & URL Extraction) so a failure in one stage retries without losing progress and each stage scales on its own.
+- **Let the queue guarantee progress:** Messages stay in SQS until the HTML is durably stored; visibility timeouts hide in-flight work, `ChangeMessageVisibility` implements exponential backoff, and a DLQ retires URLs after ~5 failed retries.
+- **Politeness is stateful:** Respect `robots.txt` (`Disallow`, `Crawl-delay`) and enforce a ~1 req/sec-per-domain limit using a Metadata DB Domain table plus a Redis per-domain lock and sliding window — add jitter to avoid synchronized retries.
+- **Scale is a bandwidth problem:** Crawling is I/O-bound; at ~2MB/page and ~30% of a 200 Gbps instance you get ~3,750 pages/sec, so ~8 network-optimized machines crawl 10B pages in under 5 days. High aggregate throughput comes from crawling millions of domains in parallel, not from hammering one.
+- **Avoid wasted work:** Deduplicate at the URL level (Metadata DB check) and the content level (hash comparison via an index or Bloom filter), and cap crawl depth (~15-20 hops from a seed) to escape crawler traps.
+- **Don't overlook DNS:** At thousands of lookups/sec across millions of domains, DNS becomes a bottleneck — mitigate with DNS caching and round-robining across multiple providers.
+
+## 📚 Related Concepts
+
+- [Managing Long-Running Tasks](../Patterns/ManagingLongRunningTasks.md) — the queue-worker pattern that underpins the crawler pipeline.
+- [Dealing with Contention](../Patterns/DealingWithContention.md) — per-domain locks and rate limiting to coordinate parallel crawlers.
+- [Handling Large Blobs](../Patterns/HandlingLargeBlobs.md) — why raw HTML and extracted text live in S3, not in the queue.
+- [Kafka](../DeepDives/Kafka.md) — the log-based queue alternative discussed for the frontier and retries.
+- [Redis](../DeepDives/Redis.md) — backs the per-domain lock, rate-limiting window, and RedisBloom content-dedup filter.
+- [Data Structures for Big Data](../DeepDives/DataStructuresForBigData.md) — Bloom filters and other probabilistic structures for large-scale deduplication.
+- [Consistent Hashing](../../CoreConcepts/ConsistentHashing.md) — distributing domains and work across crawler machines.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/web-crawler](https://www.hellointerview.com/learn/system-design/problem-breakdowns/web-crawler)*

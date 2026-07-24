@@ -1,8 +1,30 @@
-# Price Tracking Service
+# 📈 Price Tracking Service
 
 Practice with guided hints and real-time feedback
 
-## Understanding the Problem
+> **Overview**: A price tracking service (modeled on CamelCamelCamel) monitors Amazon product prices over time and alerts users when a price drops below their chosen threshold. The two headline challenges are *acquiring* price data at the scale of 500 million products despite Amazon's ~1 request/second rate limiting, and *delivering* price-drop notifications within an hour of a change. The elegant twist: a Chrome extension with 1 million active users doubles as a crowdsourced data-collection network.
+
+## 📋 Table of Contents
+
+- [Layman's Explanation](#laymans-explanation)
+- [Understanding the Problem](#understanding-the-problem)
+- [The Set Up](#the-set-up)
+- [High-Level Design](#high-level-design)
+- [Potential Deep Dives](#potential-deep-dives)
+- [Final Design](#final-design)
+- [What is Expected at Each Level?](#what-is-expected-at-each-level)
+- [Key Takeaways](#key-takeaways)
+- [Related Concepts](#related-concepts)
+
+---
+
+## 🧒 Layman's Explanation
+
+Imagine you want to buy a specific camera, but only if it goes on sale. You could walk into the store every single day to check the price tag, but with 500 million products and only so many hours in the day, you'd never keep up, and the store guard only lets you check one tag per second anyway.
+
+So instead, you do two clever things. First, you recruit the *other shoppers*: a million people already browsing the store are wearing a badge (the Chrome extension) that quietly notes the price of whatever they happen to be looking at and radios it back to you. You get fresh prices for exactly the popular items people care about, for free. Second, you keep a **notebook of price history** for each product so you can draw a chart of how the price moved over months. And you keep a **wish list** matching each shopper to the products they want and the price they'd pay, so the moment a matching price drop comes in, you can tap them on the shoulder and say "now's the time to buy." The only catch: a prankster shopper might radio in a fake "$0.01" price, so before you alert everyone you either wait for a few independent people to report the same thing, or you send your own runner to double-check.
+
+## 🎯 Understanding the Problem
 
 > 📈 What is CamelCamelCamel ? CamelCamelCamel is a price tracking service that monitors Amazon product prices over time and alerts users when prices drop below their specified thresholds. It also has a popular Chrome extension with 1 million active users that displays price history directly on Amazon product pages, allowing for one-click subscription to price drop notifications without needing to leave the Amazon product page.
 
@@ -43,7 +65,7 @@ Here is how your requirements might look on the whiteboard:
 
 ![CamelCamelCamel Requirements](assets/jE1H3ZvbQjXQ.3xgkjjdh3kpd7.svg)
 
-## The Set Up
+## 🧩 The Set Up
 
 ### Planning the Approach
 
@@ -101,9 +123,27 @@ In this case, the "hidden" requirement is that we need to be able to get the dat
 3. Price changes trigger events for notification processing
 4. User receives email notification when price drops below threshold
 
+```mermaid
+graph LR
+    A["Amazon<br/>product pages"] --> COL["Collect<br/>crawlers + extension"]
+    COL --> VAL["Validate<br/>+ store price"]
+    VAL --> DB[("Price<br/>Database")]
+    VAL --> EVT["Price-change<br/>event"]
+    EVT --> NOT["Notify users<br/>below threshold"]
+    NOT --> U["User<br/>email alert"]
+
+    style A fill:#f3e5f5
+    style COL fill:#FFE4B5
+    style VAL fill:#FFE4B5
+    style DB fill:#e1f5ff
+    style EVT fill:#FFE4B5
+    style NOT fill:#90EE90
+    style U fill:#90EE90
+```
+
 > Note that this is simple, we will improve upon as we go, but it's important to start simple and build up from there.
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
 
 We'll build our design incrementally, starting with the most fundamental requirement and adding complexity as we address each successive need. This ensures we deliver a working system first, then layer on additional capabilities.
 
@@ -174,7 +214,7 @@ When a user subscribes to price alerts:
 
 This simple approach makes sure we have a working subscription system that satisfies our functional requirements. Users get price drop alerts (just not immediately), and our system remains easy to understand and debug. The periodic nature also prevents notification processing from interfering with our core price tracking functionality.
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
 
 Time for the fun part. We'll take our existing, simple design and layer on complexity via our deep dives. When we're done, we'll have a system that satisfies all of our functional and non-functional requirements.
 
@@ -266,6 +306,26 @@ For really important products, we can wait for multiple users to report the same
 
 The nice thing is that most extension data gets processed immediately (fast notifications), but we catch the bad stuff quickly enough that it doesn't cause real damage. Users get fast alerts for legitimate deals, and we maintain trust by correcting the occasional mistake.
 
+```mermaid
+sequenceDiagram
+    participant Ext as Chrome Extension
+    participant API as Price Reporting API
+    participant N as Notification Service
+    participant V as Verification Crawler
+    Ext->>API: Report price change
+    API->>N: Accept immediately, send alerts
+    alt Change looks suspicious<br/>(huge drop, low-trust user, popular product)
+        API->>V: Queue high-priority verify crawl
+        V->>V: Check Amazon directly (1-5 min)
+        alt Extension data was wrong
+            V->>N: Send correction notifications
+            V->>API: Mark user less trustworthy
+        else Confirmed legitimate
+            V->>API: Confirm, boost user trust
+        end
+    end
+```
+
 This does add significant complexity to our crawling infrastructure, requiring priority queue management and rapid response capabilities that consume additional server resources. The verification crawling creates more load on Amazon's servers, potentially increasing our risk of rate limiting or IP blocking.
 
 This trust-but-verify approach strikes a really nice balance, providing immediate user value while maintaining the data integrity essential for long-term trust.
@@ -322,13 +382,69 @@ Alternatives like ClickHouse could provide even higher analytical performance, b
 
 The TimescaleDB approach provides the performance and flexibility needed for production-scale price chart serving while maintaining the real-time responsiveness users expect. By choosing the right tool for analytical workloads, we achieve both simplicity and performance without complex caching or pre-aggregation strategies.
 
-## Final Design
+## 🏁 Final Design
 
 Taking a step back, we've designed a scales system that can intelligently collect price data from Amazon, validate it, and notify users when prices drop all while serving price history charts to users in real-time. Not bad!
 
 As for the final diagram, I'll admit the drawing got a little out of hand with all the crossing arrows. But we end up with a final design that looks something like this!
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+```mermaid
+graph TB
+    subgraph "Clients"
+        C["Website /<br/>Chrome Extension"]
+    end
+
+    subgraph "Collection"
+        RA["Price Reporting API<br/>extension crowdsource"]
+        WC["Web Crawler Service<br/>priority-tiered queue"]
+        VC["Verification Crawler<br/>high priority"]
+    end
+
+    subgraph "Services"
+        GW["API Gateway<br/>auth, rate limit"]
+        PH["Price History Service"]
+        SUB["Subscription Service"]
+    end
+
+    subgraph "Streaming + Notify"
+        K["Kafka<br/>price-change events"]
+        NC["Notification<br/>Consumers, email"]
+    end
+
+    subgraph "Storage"
+        PDB[("Price Database<br/>TimescaleDB")]
+        MDB[("Primary DB<br/>Users, Products, Subscriptions")]
+    end
+
+    C -->|browse Amazon| RA
+    C -->|view chart / subscribe| GW
+    GW --> PH
+    GW --> SUB
+    RA --> PDB
+    WC --> PDB
+    VC --> PDB
+    RA -.suspicious.-> VC
+    PH --> PDB
+    SUB --> MDB
+    PDB -->|CDC / dual-write| K
+    K --> NC
+    NC --> MDB
+    NC -->|price drop alert| C
+
+    style C fill:#90EE90
+    style RA fill:#FFE4B5
+    style WC fill:#FFE4B5
+    style VC fill:#FFB6C1
+    style GW fill:#FFE4B5
+    style PH fill:#FFE4B5
+    style SUB fill:#FFE4B5
+    style K fill:#f3e5f5
+    style NC fill:#90EE90
+    style PDB fill:#e1f5ff
+    style MDB fill:#e1f5ff
+```
+
+## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 So, what am I looking for at each level when I ask candidates to design a price tracking system like CamelCamelCamel?
 
@@ -345,6 +461,25 @@ For senior candidates, I expect you to quickly identify that data collection is 
 For staff candidates, I'm evaluating your ability to see the bigger picture and balance technical elegance with operational reality. You should proactively recognize that the Chrome extension isn't just a user feature, but that it can be used to solve the fundamental data collection scaling problem. I expect you to discuss system evolution thoughtfully: how do we start simple but design for the scale we'll eventually need? You should understand the business implications of technical choices, for example, why data validation affects user trust and retention, not just technical correctness. Strong candidates often surface concerns I haven't asked about, like handling Amazon's anti-scraping measures, managing extension user privacy, or planning for what happens when Amazon changes their page structure. You demonstrate systems thinking by considering how different components affect each other and proposing solutions that prioritize long-term maintainability alongside immediate functionality.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **Data collection is the real problem.** Tracking 500M products against Amazon's ~1 req/sec rate limit makes naive crawling impossible (a single crawler needs ~15 years for one pass), so the design must be smart about *what* it collects, not just *how*.
+- **Turn the constraint into an advantage.** The 1M-user Chrome extension becomes a crowdsourced data-collection network, naturally prioritizing popular/trending products and discovering new ones, while crawlers backfill what the extension misses.
+- **Prioritize with a Pareto mindset.** A priority-scoring system (subscriptions, searches, notification success) tiers crawl frequency: hot products checked hourly, the long tail weekly — great coverage for a fraction of the infrastructure.
+- **Trust but verify.** Crowdsourced prices can be malicious ($0.01 iPhone) — accept extension data immediately for fast alerts, but auto-queue high-priority verification crawls for suspicious changes and adjust user reputation.
+- **Event-driven beats polling for notifications.** Replace the 2-hour cron scan with CDC or dual-writes to Kafka so price changes immediately answer "who cares about this?" — meeting the sub-1-hour delivery requirement without expensive table scans.
+- **Right tool for time-series reads.** Separate the append-only Price Database from the operational Primary DB, and lean on TimescaleDB for on-demand `time_bucket` aggregations to serve chart queries under 500ms without complex pre-aggregation jobs.
+
+## 📚 Related Concepts
+
+- [Web Crawler](WebCrawler.md) — the frontier-queue crawler design reused for product discovery and price monitoring.
+- [Time Series Databases](../DeepDives/TimeSeriesDatabases.md) — the workload model behind the TimescaleDB choice for price history.
+- [Postgresql](../DeepDives/Postgresql.md) — the operational database and the base TimescaleDB extends.
+- [Kafka](../DeepDives/Kafka.md) — the event stream carrying price-change events to notification consumers.
+- [Real-Time Updates](../Patterns/Real-TimeUpdates.md) — patterns for delivering price-drop alerts promptly.
+- [Managing Long Running Tasks](../Patterns/ManagingLongRunningTasks.md) — queue-driven processing for crawl and notification jobs.
+- [Caching](../../CoreConcepts/Caching.md) — reducing latency on read-heavy price history queries.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/camelcamelcamel](https://www.hellointerview.com/learn/system-design/problem-breakdowns/camelcamelcamel)*

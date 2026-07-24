@@ -1,4 +1,16 @@
-# Ad Click Aggregator
+# 🖱️ Ad Click Aggregator
+
+> **Overview**: An Ad Click Aggregator collects and aggregates data on ad clicks so advertisers can track the performance of their campaigns. The design must scale to a peak of 10k clicks per second, serve advertisers sub-second analytics queries at 1-minute granularity, never lose click data, and count each click exactly once. This is a textbook data-processing and write-scaling problem, solved by streaming clicks through Kafka/Kinesis, pre-aggregating with Flink, and storing results in an OLAP database.
+
+## 📋 Table of Contents
+- [Layman's Explanation](#laymans-explanation)
+- [Understanding the Problem](#understanding-the-problem)
+- [The Set Up](#the-set-up)
+- [High-Level Design](#high-level-design)
+- [Potential Deep Dives](#potential-deep-dives)
+- [What is Expected at Each Level?](#what-is-expected-at-each-level)
+
+---
 
 Practice with guided hints and real-time feedback
 
@@ -6,7 +18,13 @@ Watch the author walk through the problem step-by-step
 
 Watch the author walk through the problem step-by-step
 
-## Understanding the Problem
+## 🧒 Layman's Explanation
+
+Imagine a busy stadium where every ad click is a person walking through a turnstile. A sponsor wants to know how many people entered each gate, minute by minute. You *could* have every person sign a giant ledger and later flip through millions of lines to tally them up (this is **batch processing** — accurate but slow), but that's painful when the sponsor wants near-live numbers. Instead, you put a running counter at each turnstile that ticks up the moment someone passes through (this is **stream processing** with Flink), and you periodically cross-check those counters against the ledger to catch any miscounts (this is **reconciliation**, the Lambda architecture).
+
+Two more wrinkles: when a superstar shows up and one gate gets mobbed while others sit idle, you open extra lanes at that gate (splitting a **hot shard**). And to stop someone from walking back and forth to inflate the count, you hand each person a unique wristband when they enter — if the same wristband comes back, you ignore it (this is **idempotency** via signed impression IDs).
+
+## 🎯 Understanding the Problem
 
 > 🖱️ What is an Ad Click Aggregator An Ad Click Aggregator is a system that collects and aggregates data on ad clicks. It is used by advertisers to track the performance of their ads and optimize their campaigns. For our purposes, we will assume these are ads displayed on a website or app, like Facebook.
 
@@ -50,7 +68,7 @@ Here's how it might look on your whiteboard:
 
 ![Requirements](assets/DsFSKyPYkJK6.2iydlu5x85h_7.svg)
 
-## The Set Up
+## 🗺️ The Set Up
 
 ### Planning the Approach
 
@@ -74,7 +92,7 @@ The data flow is the sequential series of steps we'll cover in order to get from
 
 > Note that this is simple, we will improve upon as we go, but it's important to start simple and build up from there.
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
 
 ### 1) Users can click on ads and be redirected to the target
 
@@ -180,9 +198,21 @@ Astute readers may recognize that the latency from click to query between this s
 
 Even better, Flink has flush intervals that can be configured, so we can aggregate on a minute boundary but flush the results every couple of seconds. This way, we get the best of both worlds, and the latest minute's data will just be incomplete until the minute boundary is reached, which would be the expected behavior.
 
+The design evolves through three stages, each fixing the bottleneck of the last:
+
+```mermaid
+graph LR
+    A["Same DB<br/>store raw clicks<br/>GROUP BY on query"] -->|"GROUP BY too slow<br/>at 10k clicks/s"| B["Batch pre-aggregation<br/>Cassandra event store<br/>Spark to OLAP"]
+    B -->|"data always<br/>minutes stale"| C["Stream processing<br/>Kafka + Flink<br/>near real-time to OLAP"]
+
+    style A fill:#FFB6C1
+    style B fill:#FFE4B5
+    style C fill:#90EE90
+```
+
 Ad click aggregation is a textbook scaling writes problem. We're ingesting 10k clicks per second at peak, which dwarfs the read load from advertisers querying metrics. The entire architecture (stream buffering with Kafka/Kinesis, pre-aggregation in Flink, and partitioning by AdId) is driven by the need to handle high write throughput without losing data.
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
 
 ### 1) How can we scale to support 10k clicks per second?
 
@@ -255,6 +285,29 @@ Let's recap:
 4. The Click Processor verifies the signature of the impression ID.
 5. The Click Processor checks if the impression ID exists in a cache. If it does, then it's a duplicate, and we ignore it. If it doesn't, then we write to the stream first, then add the impression ID to the cache. Writing to the stream first ensures we don't lose clicks if the cache update fails—occasional duplicates from cache failures are caught by reconciliation, but lost clicks cannot be recovered.
 
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant APS as Ad Placement Service
+    participant CP as Click Processor
+    participant Cache as Redis Cache
+    participant S as Stream (Kafka/Kinesis)
+
+    APS->>B: Ad + signed impression ID (HMAC)
+    B->>CP: Click + impression ID
+    CP->>CP: Verify HMAC signature
+    CP->>Cache: Has this impression ID been seen?
+    alt Duplicate click
+        Cache-->>CP: Yes, already exists
+        CP-->>B: Ignore click, redirect
+    else New click
+        Cache-->>CP: No, unseen
+        CP->>S: Write click to stream
+        CP->>Cache: Add impression ID
+        CP-->>B: 302 redirect to advertiser
+    end
+```
+
 This solution is not without its challenges. We've added complexity, and the cache could potentially become a bottleneck if not properly scaled. That said, it's worth noting that the cache data should be relatively small. With 100 million per day, if these were all unique impressions, then that's only 100 million * 16 bytes (128 bits) = 1.6 GB. Tiny.
 
 Regardless, we can easily play it safe by using a distributed cache like Redis Cluster to scale. In the event the cache goes down, we would handle this by having a replica of the cache that could take over and by enabling Redis persistence (RDB or AOF) so the cache data is not lost.
@@ -273,7 +326,7 @@ Putting it all together, one final design could look like this:
 
 ![Final Design](assets/wFVrwNRjF00F.058abrnk00ukg.svg)
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 Ok, that was a lot. You may be thinking, “how much of that is actually required from me in an interview?” Let’s break it down.
 
@@ -316,6 +369,25 @@ You should know which technologies to use, not just in theory but in practice, a
 **The Bar for Ad Click Aggregator:** For a staff+ candidate, expectations are high regarding depth and quality of solutions, particularly for the complex scenarios discussed above. I expect a staff candidate to clearly weigh the trade offs between batch processing and real-time processing, and to be able to discuss the implications of each choice in detail. They should be able to propose a fault-tolerant solution and discuss the trade-offs involved in different database choices. They should also be able to discuss the implications of different data storage strategies and how they would impact the system's performance and scalability. While they may not choose the same 4 deep dives we did above, they should be able to drive deep into the areas they've chosen and, in the ideal case, teach the interviewer something new about the topic based on their experience.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **Pre-aggregate, don't query raw.** Storing every click and running `GROUP BY` at query time cannot meet a sub-second SLA at 10k clicks/s. Aggregate ahead of time into an OLAP database (Redshift, Snowflake, BigQuery, ClickHouse) whose columnar storage makes `COUNT`/`SUM` over millions of rows fast.
+- **Batch vs. stream is a latency lever.** The batch path (Cassandra event store → Spark → OLAP) is simple but always minutes stale. The streaming path (Kafka/Kinesis → Flink → OLAP) uses event-time windows and configurable flush intervals to get near real-time results, and Flink can decrease its window far more cheaply than Spark can increase its job frequency.
+- **Scale writes by sharding the stream on AdId, then fix hot shards.** A viral ad concentrates traffic on one shard; append a random suffix (`AdId:0-N`) for popular ads to spread the load, and strip the suffix before upserting to the OLAP DB so `SUM` aggregation recombines correctly.
+- **Never lose click data.** Streams give replayable, replicated, retained storage (e.g. 7 days); dump raw events to S3 and run a periodic Spark reconciliation job. This speed layer (Flink) plus batch layer (Spark) is a Lambda architecture where batch is the source of truth.
+- **Enforce idempotency before the stream.** Deduping must happen ahead of Flink so duplicates across minute boundaries are caught. Use signed (HMAC) impression IDs checked against a Redis cache — tiny (~1.6 GB/day) and fast, with microsecond signature verification to block forged clicks.
+- **Show seniority by removing complexity.** Flink checkpointing is unnecessary here because aggregation windows are tiny (at most a minute of loss, and the stream can be replayed) — pushing back on over-engineering signals depth.
+
+## 📚 Related Concepts
+
+- [Scaling Writes](../Patterns/ScalingWrites.md) — the core pattern this problem exercises: absorbing 10k writes/s without data loss.
+- [Kafka](../DeepDives/Kafka.md) — the distributed, replicated, retained stream that buffers clicks and enables replay.
+- [Flink](../DeepDives/Flink.md) — event-time windowed aggregation, watermarks, and exactly-once processing for the speed layer.
+- [Cassandra](../DeepDives/Cassandra.md) — the LSM-tree, write-optimized event store used in the batch design.
+- [Time Series Databases](../DeepDives/TimeSeriesDatabases.md) — the alternative to OLAP for time-range metrics, and why high ad cardinality favors OLAP.
+- [Sharding](../../CoreConcepts/Sharding.md) — partitioning the stream by AdId and mitigating hot shards.
+- [Redis](../DeepDives/Redis.md) — the distributed cache backing impression-ID deduplication.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/ad-click-aggregator](https://www.hellointerview.com/learn/system-design/problem-breakdowns/ad-click-aggregator)*

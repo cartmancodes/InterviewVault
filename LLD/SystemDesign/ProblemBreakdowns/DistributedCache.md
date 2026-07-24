@@ -1,8 +1,29 @@
-# Distributed Cache
+# 💾 Distributed Cache
 
 Practice with guided hints and real-time feedback
 
-## Understanding the Problem
+> **Overview**: A distributed cache stores data as key-value pairs in memory across many machines, scaling horizontally where a single-node cache would fall over. This breakdown starts from a bare in-memory hash table and evolves it — TTL expiry, LRU eviction, replication, consistent-hashing shards, and hot-key mitigation — into a system that holds 1TB of data and sustains 100k requests/second with low latency and high availability.
+
+## 📋 Table of Contents
+- [🧒 Layman's Explanation](#laymans-explanation)
+- [🎯 Understanding the Problem](#understanding-the-problem)
+- [📐 The Set Up](#the-set-up)
+- [🏗️ High-Level Design](#high-level-design)
+- [🔬 Potential Deep Dives](#potential-deep-dives)
+- [🔗 Tying it all together](#tying-it-all-together)
+- [🎤 What is Expected at Each Level?](#what-is-expected-at-each-level)
+
+---
+
+## 🧒 Layman's Explanation
+
+Imagine a giant coat-check counter at an arena. You hand over your coat (a **value**) and get a numbered ticket (a **key**); later you show the ticket and instantly get your coat back. That's a cache — instant lookups, nothing scanned.
+
+But one counter can only hold so many coats and serve so many people. So the arena opens dozens of counters and posts a simple rule at the door — *"tickets starting with these numbers go to counter 7"* — so every guest walks straight to the right one without asking anyone (**consistent hashing**). Each counter also keeps a **backup counter** copying its tickets, so if one closes, service continues (**replication**). When a coat rack fills up, the attendant tosses whatever nobody has touched in the longest time (**LRU eviction**), and coats left past closing time are cleared out overnight (**TTL expiry**). And when a single celebrity's coat gets mobbed by fans wanting a photo, the arena keeps several identical copies at different counters so the crowd spreads out (**hot-key copies**).
+
+That progression — one counter, then many, then backups, then handling the one coat everybody wants — is exactly the journey from a single hash table to a distributed cache.
+
+## 🎯 Understanding the Problem
 
 > 💾 What is a Distributed Cache? A distributed cache is a system that stores data as key-value pairs in memory across multiple machines in a network. Unlike single-node caches that are limited by the resources of one machine, distributed caches scale horizontally across many nodes to handle massive workloads. The cache cluster works together to partition and replicate data, ensuring high availability and fault tolerance when individual nodes fail.
 
@@ -41,7 +62,7 @@ If I were your interviewer, I would say we need to store up to 1TB of data and e
 
 > Note that I'm making quite a few strong assumptions about what we care about here. Make sure you're confirming this with your interviewer. Chances are you've used a cache before, so you know the plethora of potential trade-offs. Some interviewers might care about durability, for example, just ask.
 
-## The Set Up
+## 📐 The Set Up
 
 ### Planning the Approach
 
@@ -86,7 +107,7 @@ Deleting a key-value pair:
 DELETE /:key
 ```
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes-1)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes-1)
 
 We start by building an MVP that works to satisfy the core functional requirements. This doesn't need to scale or be perfect. It's just a foundation for us to build upon later. We will walk through each functional requirement, making sure each is satisfied by the high-level design.
 
@@ -275,13 +296,44 @@ class Cache:
 
 The clever part about this implementation is that all operations (`get`, `set`, and even `eviction`) remain `O(1)`. When we access or add an item, we move it to the front of the list. When we need to evict, we remove from the back.
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes-1)
+The lifecycle of a single entry ties together both mechanisms we just built — access order (LRU) and TTL — showing every way a key can leave the cache:
+
+```mermaid
+stateDiagram-v2
+    [*] --> MostRecentlyUsed: set(key, value, ttl)
+    MostRecentlyUsed --> MostRecentlyUsed: get(key) moves node to front
+    MostRecentlyUsed --> LeastRecentlyUsed: other keys accessed, node drifts toward tail
+    LeastRecentlyUsed --> MostRecentlyUsed: get(key) moves node back to front
+    LeastRecentlyUsed --> Evicted: over capacity, remove tail.prev
+    MostRecentlyUsed --> Expired: currentTime past expiry
+    LeastRecentlyUsed --> Expired: currentTime past expiry
+    Expired --> [*]: removed on get or by janitor cleanup
+    Evicted --> [*]
+```
+
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes-1)
 
 Ok, truth be told, up until this point this has been more of a low level design interview than pure system design, but the deep dives is where that changes and we discuss how we turn our single, in-memory cache instance into a distributed system that can meet our non-functional requirements.
 
 For these types of deeper infra questions, the same pattern applies where you should try to lead the conversation toward deep dives in order to satisfy your non-functional requirements. However, it's also the case that your interviewer will likely jump in and hit you with probing questions, so be prepared to be flexible.
 
 Here are some of the questions I'll usually ask (or a candidate could do this proactively).
+
+At a high level, the deep dives walk our single in-memory node through the transformations needed to meet the non-functional requirements — availability, then scale, then hot-key resilience, then performance:
+
+```mermaid
+graph LR
+    A["Single in-memory node<br/>hash table + LRU list"] --> B["Replication<br/>async / peer-to-peer<br/>high availability"]
+    B --> C["Sharding<br/>consistent hashing<br/>~50 nodes for 1TB"]
+    C --> D["Hot-key handling<br/>read copies, write batching<br/>key sharding"]
+    D --> E["Performance<br/>connection pooling<br/>request batching"]
+
+    style A fill:#FFB6C1
+    style B fill:#FFE4B5
+    style C fill:#FFE4B5
+    style D fill:#FFE4B5
+    style E fill:#90EE90
+```
 
 ### 1) How do we ensure our cache is highly available and fault tolerant?
 
@@ -462,7 +514,7 @@ Consistent hashing, which we talked about in our sharding solution, is also an e
 
 The only other thing I may consider mentioning in an interview if asking this question is connection pooling. Constantly tearing down and re-establishing network connections between the client and servers is a recipe for wasted time. Instead of spinning up a fresh connection for every request, clients should maintain a pool of open, persistent connections. This ensures there’s always a ready-to-use channel for requests, removing expensive round-trip handshakes and drastically reducing tail latencies (like those p95 and p99 response times that can make or break user experience).
 
-## Tying it all together
+## 🔗 Tying it all together
 
 Ok, tying it all together, on each node, we'll have two data structures:
 
@@ -480,7 +532,7 @@ Your final design might look something like this:
 
 ![Final Design](assets/et6YWnYAqy1g.2akvo4pf_gcv0.svg)
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 ### Mid-level
 
@@ -495,6 +547,24 @@ For senior candidates, I expect that the low-level design portion is relatively 
 I don't typically ask this of staff engineers because, by the time you are staff, these concepts likely come naturally, which means it isn't the best question to evaluate a staff engineer.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **A cache is a hash table at its core** — `get`, `set`, and `delete` are all `O(1)`. Pair it with a doubly-linked list to track access order and you get `O(1)` LRU eviction too, with TTLs handled by storing an expiry timestamp and a background "janitor" cleanup.
+- **Replication buys availability**, and the model you pick sets your trade-offs: synchronous (strong but slow), asynchronous single-primary (fast, eventually consistent — Redis's default), or peer-to-peer via gossip (max scalability, harder conflicts). For an eventually-consistent cache, async or peer-to-peer fit best.
+- **Sharding is how you reach 1TB / 100k RPS.** Size by the tighter constraint — here storage (~50 nodes) dominates throughput (~8 nodes) — and route with **consistent hashing** so adding/removing a node remaps only a small slice of keys instead of everything.
+- **Hot keys are the classic follow-up.** Handle hot *reads* with key copies (`user:123#1..#3` spread across nodes) or a dedicated hot-key tier; handle hot *writes* with write batching and key sharding (`views:video123:1..:10`, summed on read).
+- **Distributed performance is about the network, not the hash table.** Request batching, consistent hashing (no central routing hop), and connection pooling cut round trips and tame p95/p99 tail latency.
+- **Right-size the depth to the level:** mid-level leans on the LRU/data-structure design, senior spends most of the time on scale and hot-key trade-offs.
+
+## 📚 Related Concepts
+
+- [Caching](../../CoreConcepts/Caching.md) — cache fundamentals, eviction policies, and invalidation strategies.
+- [Consistent Hashing](../../CoreConcepts/ConsistentHashing.md) — the ring-based routing used to shard keys with minimal remapping.
+- [Sharding](../../CoreConcepts/Sharding.md) — partitioning data across nodes and its trade-offs.
+- [Scaling Reads](../Patterns/ScalingReads.md) — hot-key and read-distribution patterns that hot reads here are an instance of.
+- [Redis](../DeepDives/Redis.md) — the in-memory store whose async replication and `WAIT` semantics are referenced above.
+- [Cassandra](../DeepDives/Cassandra.md) — deep dive on consistent-hashing-based partitioning recommended in the sharding section.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/distributed-cache](https://www.hellointerview.com/learn/system-design/problem-breakdowns/distributed-cache)*

@@ -1,14 +1,34 @@
-# ChatGPT
+# 🤖 ChatGPT
 
 Practice with guided hints and real-time feedback
 
-## Understanding the Problem
+> **Overview**: ChatGPT is a conversational AI product where users send natural-language prompts and get responses streamed back token by token from a large language model, with conversations saved so they can be resumed later. We treat the LLM as a black box we call, so all the design lives in the serving system around it — how we stream tokens back fast, how we schedule scarce and expensive GPUs, and how we keep cost sane as conversations grow. This breakdown scopes to text-in, text-out at roughly 200M daily active users.
+
+## 📋 Table of Contents
+- [Layman's Explanation](#laymans-explanation)
+- [Understanding the Problem](#understanding-the-problem)
+- [The Set Up](#the-set-up)
+- [High-Level Design](#high-level-design)
+- [Potential Deep Dives](#potential-deep-dives)
+- [What is Expected at Each Level?](#what-is-expected-at-each-level)
+- [Key Takeaways](#key-takeaways)
+- [Related Concepts](#related-concepts)
+
+---
+
+## 🧒 Layman's Explanation
+
+Think of ChatGPT as a wildly popular restaurant with a tiny number of world-class chefs (the GPUs) who are absurdly expensive to hire. When you order (send a prompt), you don't want to stare at an empty table for 30 seconds while the whole meal is cooked — you want the first bite to land almost immediately and the rest to keep flowing smoothly. So the kitchen sends out your dish one spoonful at a time as it's plated (**streaming tokens**), instead of making you wait for the entire plate.
+
+Because there are so few chefs and everyone is hungry at once, orders line up on a rail (**a queue**), and each chef cooks many orders at the same time on one big stove rather than one plate at a time (**continuous batching**) — that's how you keep the expensive chefs busy every second. Regulars who pay for a membership get their tickets bumped toward the front when the kitchen is slammed (**tier priority**), and no single glutton ordering a 30-course banquet is allowed to starve everyone else (**per-user fairness**). Finally, a waiter who had to re-read your entire dinner conversation from the start before every new sentence would be painfully slow and costly, so instead the kitchen keeps a short summary of what you talked about earlier and only re-reads the last few things you said (**summarization + prefix caching**). Every trick in this doc is really just: get the first bite out fast, keep the chefs busy, share them fairly, and stop paying to re-read the whole conversation.
+
+## 🎯 Understanding the Problem
 
 > 💬 What is ChatGPT ? Unless you've been living under a rock, you know what ChatGPT is. It's a conversational AI product where users send prompts in natural language and get responses streamed back from a large language model. Conversations are saved, so users can come back to an old chat and pick up right where they left off.
 
 For this problem we treat the LLM as a black box we call, not something we train or run the internals of. All the design lives in the serving system around it, in how we stream tokens back fast, how we schedule scarce GPUs, and how we keep cost sane as conversations grow. We'll also scope this to text in, text out only, with no images, audio, or video, and no editing or branching of existing messages.
 
-### [Functional Requirements](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#1-functional-requirements)
+### ✅ [Functional Requirements](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#1-functional-requirements)
 
 **Core Requirements**
 
@@ -23,7 +43,7 @@ For this problem we treat the LLM as a black box we call, not something we train
 - Custom GPTs, tool / function calling, and web browsing.
 - Full-text search across a user's chat history.
 
-### [Non-Functional Requirements](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#2-non-functional-requirements)
+### ⚙️ [Non-Functional Requirements](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#2-non-functional-requirements)
 
 Non-functional requirements cover the properties of the system that matter to the user and the business.
 
@@ -50,13 +70,13 @@ Here's how it might look on your whiteboard:
 
 > Adding features that are out of scope is a "nice to have". It shows product thinking and gives your interviewer a chance to help you reprioritize based on what they want to see. That said, it's very much a nice to have. If extra features aren't coming to you quickly, don't waste time, just move on.
 
-## The Set Up
+## 🧭 The Set Up
 
-### Planning the Approach
+### 🗺️ Planning the Approach
 
 Before designing anything, take a moment to plan. This is a product-style question, so we'll build the design up sequentially, going one by one through the functional requirements. There are only two of them, so the high-level design will be short, and that's intentional. The request path is almost boring, because the work that actually makes this problem interesting lives in the non-functional requirements, where we have to stream tokens back fast, schedule scarce GPUs, and keep cost under control. Those are what become our deep dives.
 
-### [Defining the Core Entities](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#core-entities-2-minutes)
+### 🔑 [Defining the Core Entities](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#core-entities-2-minutes)
 
 I like to begin with a broad overview of the primary entities. At this stage we don't need every column, just the nouns we'll reason about for the rest of the interview. We'll flesh out fields during the high-level design.
 
@@ -72,7 +92,7 @@ In the actual interview, this can be as simple as a short list like this. Just m
 
 > As you move onto the design, your objective is to create a system that meets all functional and non-functional requirements. I recommend you start by satisfying the functional requirements and then layer in the non-functional requirements afterward. This keeps you focused and stops you from getting lost in the weeds.
 
-### [API or System Interface](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#api-or-system-interface-5-minutes)
+### 🔌 [API or System Interface](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#api-or-system-interface-5-minutes)
 
 The API is the contract between the client and our system, and it's the bridge into the high-level design. We'll define one or two endpoints per functional requirement and keep moving.
 
@@ -101,11 +121,11 @@ GET /chats/{chatId}/messages?cursor={cursor}&limit={n} -> Message[]
 
 > Notice the userId never shows up in a path or body. It comes from the session token or JWT, and chat ownership is checked server-side on every request. Passing userId in the body is a classic red flag, since anything the client sends can be forged. The streaming response uses SSE, which we'll justify in the deep dives, but the core CRUD surface is plain REST .
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
 
 We'll go one by one through the functional requirements. Both are short, and we're going to keep the design deliberately naive, with synchronous calls and no streaming or queues. The plan is to get a simple design that satisfies our functional requirements first, then layer on the complexity that satisfies our non-functional requirements through the deep dives. Starting with a working system and then breaking it is far better than starting with a "perfect" one that's hard to reason about.
 
-### 1) Users should be able to send a prompt and receive an AI-generated response
+### 💬 1) Users should be able to send a prompt and receive an AI-generated response
 
 When a user opens a chat, types a prompt, and hits enter, the client sends that prompt to our backend and eventually gets a response back. Let's lay out the minimum set of components to make that happen.
 
@@ -129,7 +149,7 @@ The split between Chat Service and Inference Service is the one design decision 
 
 Let me briefly acknowledge the elephant in the room. This is fully synchronous, so the client sits on that HTTP call until the entire response is generated, and a long response can take up to 30 seconds. That's 30 seconds of blank screen, which violates our TTFT requirement and feels broken. On top of that, the Chat Service is calling a GPU worker directly with no admission control (nothing deciding which requests to accept versus turn away when the workers are already saturated), which falls apart the moment GPUs become the bottleneck. We'll fix the first problem with streaming and the second with a scheduling layer, both in the deep dives. For now, it works.
 
-### 2) Users should be able to view past chats and resume a conversation with context carried across turns
+### 📜 2) Users should be able to view past chats and resume a conversation with context carried across turns
 
 Users expect to come back tomorrow, scroll their old conversations, open one, and keep going as if the model remembers everything. Two things have to happen here, a read path for past chats and context carry-over on the next turn.
 
@@ -153,11 +173,11 @@ This is the simplest thing that works. The model sees the whole conversation eve
 
 That gets us a working system. It's simple, it satisfies both functional requirements, and it has exactly the bottlenecks our non-functional requirements warned us about. Let's go fix them.
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
 
 With the functional requirements met, it's time to go back and earn the non-functional requirements. There's no single right set of deep dives here, or one correct order to tackle them in. In a real interview you'd have agreed on what matters with your interviewer when you outlined the non-functional requirements up front. These are the ones I'd expect to come up for this question, roughly in the order the design pushes you toward them, starting with streaming the response, then scheduling the GPUs, sharing them fairly, and keeping the cost from running away.
 
-### 1) How do we stream tokens back fast, and keep the stream smooth?
+### 📡 1) How do we stream tokens back fast, and keep the stream smooth?
 
 Our synchronous design makes the user wait up to 30 seconds for a blank screen to turn into a full answer. The non-functional requirement asked for two things, a low time-to-first-token and a continuous, smooth flow after that, and those are two different requirements that fail in two different ways. The first is about how quickly the very first token reaches the screen, which is a pure latency problem. The second is about whether the rest of the stream arrives in order and without visible gaps, even as Chat Service instances come and go underneath us, which is a reliability problem. The mechanisms that solve them have almost nothing to do with each other, so we'll take them one at a time. First, how do we get that first token back fast?
 
@@ -209,6 +229,22 @@ The reconnect case is now clean. When a client drops and reconnects to a differe
 
 To be clear about durability, the stream is not our system of record. When generation finishes, the worker writes the complete assistant message to Postgres, and that persisted message is the durable copy a client can always refetch. The Redis Stream exists only to make the live stream gapless across reconnects, which is why per-token durability stays below the line even though we briefly retain tokens here.
 
+The streaming design evolved through several transports before landing on SSE plus a Redis Stream. Each step fixed the flaw in the one before it:
+
+```mermaid
+graph LR
+    P["Polling<br/>client asks repeatedly"] -->|"gated by poll interval,<br/>wasteful, lumpy"| WS["WebSocket + gRPC<br/>server pushes tokens"]
+    WS -->|"bidirectional overhead<br/>we never use"| SSE["SSE + gRPC<br/>one-way push to browser"]
+    SSE -->|"stateless tier pins<br/>client to one instance"| PS["Redis Pub/Sub<br/>decouple via runId channel"]
+    PS -->|"fire-and-forget<br/>drops tokens on reconnect"| RS["Redis Stream<br/>replayable, gapless"]
+
+    style P fill:#FFB6C1
+    style WS fill:#FFE4B5
+    style SSE fill:#FFE4B5
+    style PS fill:#FFE4B5
+    style RS fill:#90EE90
+```
+
 After applying both "Great" solutions, here's the full flow on a send:
 
 1. The Chat Service persists the user's message and mints a fresh `runId`, returning it to the client right away.
@@ -220,7 +256,21 @@ After applying both "Great" solutions, here's the full flow on a send:
 
 That `runId` we keep minting deserves to be a first-class entity. A **Generation** is a single inference attempt for a message, carrying the `runId`, the `chatId` and `messageId` it belongs to, a status that moves through queued, streaming, and then done, cancelled, or failed, the model that served it, and the input and output token counts we'll lean on for billing and quotas. This is the extra entity we flagged back at the entities stage and deferred, since nothing in the basic request path needed it. Now that a run has its own lifecycle and its own stream, it's earned its place, and the scheduling and cancellation work still ahead is really a set of operations on a Generation rather than on a message.
 
-### 2) How do we route and schedule generation requests across GPU workers?
+The Generation's status moves through a small state machine that the scheduling and cancellation deep dives operate on:
+
+```mermaid
+stateDiagram-v2
+    [*] --> queued: Chat Service enqueues run
+    queued --> streaming: worker pulls, starts generating
+    streaming --> done: completion finished, written to Postgres
+    streaming --> cancelled: user hits stop, cancel signal
+    streaming --> failed: worker error
+    done --> [*]
+    cancelled --> [*]
+    failed --> [*]
+```
+
+### 🗓️ 2) How do we route and schedule generation requests across GPU workers?
 
 GPUs are the bottleneck, full stop. They're the most expensive resource in the system and the one in shortest supply, so how we route work to them decides both our cost and our latency under load. It's worth pausing on just how expensive. A frontier model is far too big to fit on a single GPU, so its weights get split across a whole box of them, and serving 120k concurrent streams means standing up thousands of those boxes. That puts you at tens of thousands of GPUs for this one model, and the labs running systems at this scale spend staggering amounts on compute, easily hundreds of millions to billions of dollars a year. When the hardware costs that much, every percentage point of utilization you leave on the table is real money, which is exactly what makes the scheduling decisions in this section worth the effort.
 
@@ -256,7 +306,7 @@ The cost is complexity in the serving layer, which now has to juggle variable-le
 
 > Why batching wins, in one analogy. A GPU keeps the model's weights resident in its high-bandwidth memory, but the compute units can't do math on them there. They work out of a tiny pool of on-chip memory that's nowhere near big enough to hold billions of weights, so every forward pass has to stream the entire weight set from high-bandwidth memory through the compute units just to produce a token. Picture the weights as parts in a warehouse and the compute as a tiny workbench. The parts never leave the building, but to build anything you still have to haul the full set from the warehouse over to the bench. For a single token you make that whole haul and then do a trivial amount of assembly, one vector's worth of math, so the bench sits idle most of the time waiting on the next load. That's what people mean when they call token generation memory-bandwidth bound. Batching makes each haul pay off. Bring the same parts to the bench once, then fill many orders before sending them back. The worker runs a batch of sequences together and each forward pass advances all of them by one token, so we stream the weights once and get dozens of tokens out of it instead of one. The "continuous" part keeps the batch full. A fixed batch would wait for every sequence to finish before starting the next, but a one-line reply can sit next to a 2,000-token essay, so the batch drains and the GPU drifts back to idle while the slowest sequence runs on alone. Continuous batching evicts a sequence the moment it finishes and slots in a queued one, which is how production inference servers like vLLM and TGI keep a replica busy with dozens of sequences at once.
 
-### 3) How do we keep heavy users from monopolizing GPUs while giving paid tiers a better experience?
+### ⚖️ 3) How do we keep heavy users from monopolizing GPUs while giving paid tiers a better experience?
 
 This is a multi-tenant system sharing one scarce GPU pool, and the costs are wildly uneven. One user firing a 30k-token prompt burns far more compute than a hundred users sending one-liners. We need fairness across users so nobody can starve everyone else, and we need business priority across tiers so paying customers get a better experience when things are tight. A flat requests-per-minute cap can't express either of those.
 
@@ -278,7 +328,7 @@ Finally, make degradation explicit. When demand still exceeds capacity even afte
 
 Estimating cost up front is imperfect, you don't know the true output length until generation finishes, so budgets work off an estimate and reconcile against actuals afterward. That's fine for quota accounting but means a user can occasionally overshoot a soft limit. There's also a fairness-vs-utilization tension, since strict tier priority can leave free users starved for long stretches during sustained peaks, so in practice you reserve some floor of capacity for free traffic rather than letting paid fully crowd them out. These are policy knobs that product and infra tune together.
 
-### 4) As conversations get longer, how do we control inference cost without making the assistant feel forgetful?
+### 💰 4) As conversations get longer, how do we control inference cost without making the assistant feel forgetful?
 
 Recall our high-level design replays the entire conversation into the model on every turn. That's the simplest thing that works, and it's also the expensive mistake, so rather than dwell on it as its own option we'll treat it as the baseline we're fixing. A 50-turn chat at ~500 tokens per turn means we're shipping ~25k input tokens on the next prompt, and since input tokens are billed per call, cost and latency climb with every single turn. Worse, it has a hard ceiling. Once the conversation grows past the model's context window the request simply can't fit. Real assistants usually just surface this, telling you the chat has gotten too long rather than failing silently, but leaning on that as your only answer means the product quietly stops working for exactly the power users who chat the most. It's fine for a five-turn chat and untenable as a general approach. What we want is to keep the assistant feeling like it remembers without paying to re-read the whole transcript each time.
 
@@ -305,7 +355,21 @@ You can stack one more lever if needed, like retrieving only the older facts rel
 
 Summarization isn't free, it's an extra (cheaper) model call, and a summary can lose a detail that turns out to matter later, so there's a real quality-vs-cost tension. The guiding principle is to protect the most recent turns and the most important user context first, and accept some lossiness on old history. Prefix caching also depends on the prefix actually staying stable; if we rewrite the summary every turn, we invalidate the cache, so we update it on a slower cadence to keep the prefix warm. Every cost lever here trades a little answer quality or memory fidelity for a lot of cost, and the design should spend that tradeoff on old, low-value context rather than recent, high-value context.
 
-#### Cancelling a run and reclaiming the GPU
+The context-cost strategy evolves from the naive baseline to a layered approach that keeps the assistant feeling like it remembers:
+
+```mermaid
+graph LR
+    F["Replay full history<br/>every turn"] -->|"cost grows each turn,<br/>hits context-window ceiling"| T["Truncate to recent N turns<br/>bounded prompt size"]
+    T -->|"assistant becomes<br/>obviously forgetful"| PC["Prefix caching<br/>reuse KV cache for<br/>stable prompt prefix"]
+    PC --> RS["Rolling summary<br/>compress old turns,<br/>keep recent verbatim"]
+
+    style F fill:#FFB6C1
+    style T fill:#FFE4B5
+    style PC fill:#90EE90
+    style RS fill:#90EE90
+```
+
+#### 🛑 Cancelling a run and reclaiming the GPU
 
 The one operation on a Generation we haven't shown yet is cancellation, and it's the clearest payoff for having made the run first-class. When the user hits stop, the client makes a plain HTTP call to `POST /chats/{chatId}/runs/{runId}/cancel`, exactly the side-channel we set aside when we chose SSE. The Chat Service flips that Generation's status to `cancelled` and publishes a cancel signal on a control channel keyed by the `runId`. The worker checks that channel between token batches, and the moment it sees the signal it drops the sequence and stops generating. This matters more than it first sounds. A cancelled 30-second generation that keeps running is pure wasted GPU, and GPU is the scarcest, most expensive thing in the whole system, so reclaiming it the instant the user stops caring is real money back.
 
@@ -315,7 +379,7 @@ After applying the "great" solutions, the design has grown from the naive synchr
 
 ![Final](assets/4CEsZdb3jLOQ.2wuaxl6oxhf0b.svg)
 
-### Some additional deep dives you might consider
+### 🔎 Some additional deep dives you might consider
 
 There's plenty we couldn't fit here. A few more directions worth thinking through on your own:
 
@@ -325,25 +389,44 @@ There's plenty we couldn't fit here. A few more directions worth thinking throug
 4. **Cheaper requests through routing and caching**: Not every prompt needs the biggest model. Routing simple queries to a smaller model, and caching responses for semantically similar prompts (keyed off an embedding rather than the exact string), both cut cost without the user noticing. This pairs naturally with the tiered fairness deep dive, where free traffic is the first to get routed down.
 5. **Multimodal input and cross-chat memory**: We scoped to text in, text out. Real ChatGPT also takes images and audio, which changes tokenization and bloats the prefill, and it remembers facts about you across separate conversations. That cross-chat memory is a retrieval problem, embedding past messages and pulling the relevant ones into the prompt, rather than the single-conversation summarization we did here.
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 Ok, that was a lot. You may be thinking, "how much of that is actually required from me in an interview?"
 
-### Mid-level
+### 🌱 Mid-level
 
 For this question, a mid-level candidate will have clearly defined the API endpoints and data model and landed on a working synchronous high-level design that handles sending a prompt and viewing past chats with context carried across turns. I want to see them recognize that a 30-second blank screen won't fly and reach for a push-based streaming model like SSE, even if it takes some prompting. They should understand that GPUs are the bottleneck and at least propose putting a queue in front of the workers, though they may not get to continuous batching or backpressure on their own.
 
-### Senior
+### 🌿 Senior
 
 For this question, senior candidates are expected to speed through the high-level design so they can spend time on at least 2 of the streaming fanout, GPU scheduling, and fairness deep dives in detail. You should be able to articulate the SSE-vs-WebSocket choice from the one-way nature of token streaming, and the queue-plus-continuous-batching tradeoff for GPU utilization. I also expect a senior candidate to recognize that cost grows with conversation length and to propose summarization or truncation, even if they don't reach prefix caching unaided.
 
-### Staff+
+### 🌳 Staff+
 
 For a staff+ candidate, expectations are high regarding depth and quality of solutions, particularly for the complex scenarios discussed above. Great candidates drive 3+ of the deep dives with real depth and bring the GPU economics into the conversation unprompted, the back-of-envelope that ~120k concurrent streams means tens of thousands of GPUs and a seven-figure daily bill, which is what justifies continuous batching and backpressure in the first place. They reach prefix caching for context cost on their own and cleanly separate fairness-across-users (cost-aware per-user budgets) from priority-across-tiers (tier-weighted queueing), which is a distinction weaker candidates blur. The hallmark is insight beyond the textbook, where a staff+ candidate leaves the interviewer understanding something new about serving LLMs at scale, whether that's continuous batching, KV-cache reuse, or how degradation should fall on free traffic first.
 
 Worth calling out that at this level interviewers often expect the more esoteric inference trivia too, things like speculative decoding. It's become widespread enough that a practicing engineer is assumed to have picked it up, so it's past the "curiosity" threshold and doesn't get the pass that, say, not knowing geohashes might get you just because you've never worked on that kind of problem.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **The LLM is a black box; the design is the serving system around it.** All the interesting work lives in streaming tokens fast, scheduling scarce GPUs, sharing them fairly, and controlling cost as conversations grow — not in the model itself.
+- **Low time-to-first-token beats low total latency.** A 30-second blank screen feels broken, so the system pushes the first token in milliseconds (SSE) and streams smoothly after, rather than optimizing for total completion time.
+- **Streaming is two problems, solved by two mechanisms.** SSE plus gRPC server-streaming gets the first token out fast; a `runId`-keyed Redis Stream (not fire-and-forget Pub/Sub) makes the stream gapless and replayable across deploys and reconnects.
+- **GPUs are the bottleneck, so keep them busy and protected.** A queue absorbs spiky traffic, continuous batching is the single biggest utilization lever, and bounded-depth backpressure caps wait time and lets the system fail fast instead of melting.
+- **Fairness and tier priority are two different goals.** Per-user cost budgets (metering tokens, not requests) stop one heavy user from starving others; tier-weighted queueing gives paid users a better experience only when capacity is tight.
+- **Cost grows with conversation length; fix it with truncation, prefix caching, and rolling summaries.** Reuse the KV cache for the stable prompt prefix and compress old turns, spending lossiness on old, low-value context while protecting recent turns.
+
+## 📚 Related Concepts
+
+- [Real-Time Updates](../Patterns/Real-TimeUpdates.md) — the streaming/fanout pattern behind pushing tokens to the browser.
+- [Managing Long-Running Tasks](../Patterns/ManagingLongRunningTasks.md) — the queue-plus-worker-pool shape used to schedule 30-second generations.
+- [Redis](../DeepDives/Redis.md) — Pub/Sub and Streams for token fan-out, plus the shared counters behind rate limiting.
+- [Networking](../../CoreConcepts/Networking.md) — SSE, WebSockets, and gRPC transports compared for the streaming hops.
+- [Caching](../../CoreConcepts/Caching.md) — the reuse-the-warm-prefix idea behind KV-cache / prefix caching.
+- [API Gateway](../DeepDives/ApiGateway.md) — the entry point that handles auth, rate limiting, and routing.
+- [Rate Limiter](RateLimiter.md) — per-user token buckets and shared counters used for fairness across users.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/chatgpt](https://www.hellointerview.com/learn/system-design/problem-breakdowns/chatgpt)*

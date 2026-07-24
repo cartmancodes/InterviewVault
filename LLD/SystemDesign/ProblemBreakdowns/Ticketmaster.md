@@ -1,4 +1,20 @@
-# Ticketmaster
+# 🎟️ Ticketmaster
+
+> **Overview**: Ticketmaster is an online platform for purchasing tickets to concerts, sports, theater, and other live events. This breakdown builds the system up one functional requirement at a time — viewing, searching, and booking events — then layers in the hard parts: preventing double bookings under high contention, scaling reads for popular on-sales, and keeping the seat map fresh in real time.
+
+## 📋 Table of Contents
+- [Layman's Explanation](#laymans-explanation)
+- [Understanding the Problem](#understanding-the-problem)
+- [The Set Up](#the-set-up)
+- [High-Level Design](#high-level-design)
+- [Potential Deep Dives](#potential-deep-dives)
+- [What is Expected at Each Level?](#what-is-expected-at-each-level)
+
+## 🧒 Layman's Explanation
+
+Imagine a hugely popular theater with a single box office. On a normal day, tons of people wander up just to *look* at the seating chart and ask "what's playing and where?" — that's the easy, high-volume part, and you handle it by pinning up copies of the show poster and seating map all over the lobby so nobody has to bother the one clerk (that's caching and read replicas).
+
+The hard part is the actual sale. Two fans can't walk away with the same seat. So when you point at a seat, the clerk puts a little "HELD — 10 minutes" sticky note on it while you dig out your wallet. If you pay, the seat is yours forever; if you dawdle, the sticky note falls off on its own and the seat goes back on sale. And when a superstar's tickets drop and 10 million people rush the door at once, you don't let them all crowd the counter — you hand out numbered tickets and let people into the room a batch at a time (the virtual waiting queue). That "hold a seat, expire it automatically, and meter the crowd" dance is the whole design.
 
 Practice with guided hints and real-time feedback
 
@@ -6,7 +22,7 @@ Watch the author walk through the problem step-by-step
 
 Watch the author walk through the problem step-by-step
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 > 🎟️ What is Ticketmaster ? Ticketmaster is an online platform that allows users to purchase tickets for concerts, sports events, theater, and other live entertainment.
 
@@ -51,7 +67,7 @@ Here's how it might look on your whiteboard:
 
 > Adding features that are out of scope is a "nice to have". It shows product thinking and gives your interviewer a chance to help you reprioritize based on what they want to see in the interview. That said, it's very much a nice to have. If additional features are not coming to you quickly, don't waste your time and move on.
 
-## The Set Up
+## 🔑 The Set Up
 
 ### Planning the Approach
 
@@ -110,7 +126,7 @@ POST /bookings/:eventId -> bookingId
 
 > It's ok to have simple APIs from the start that you evolve as your design progresses. As always, just communicate, "Here is a simple API to start, but as we get into the design, we'll likely need to evolve this to handle more complex scenarios."
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
 
 ### 1) Users should be able to view events
 
@@ -178,7 +194,7 @@ When a user goes to book a ticket, the following happens:
 
 You may have noticed there is a fundamental issue with this design. Users can get to the booking page, type in their payment details, and then find out that the ticket they wanted is no longer available. This would suck and is something that we are going to discuss how to avoid later on in our deep dives. For now, we have a simple implementation that meets the functional requirement.
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
 
 With the core functional requirements met, it's time to dig into the non-functional requirements via deep dives. These are the main deep dives I like to cover for this question:
 
@@ -202,6 +218,20 @@ When it comes to unlocking, there are two cases we need to consider:
 Why is this a bad idea? Well, database locks are meant to be used for short periods of time (a single, near-instant, transaction). Keeping a transaction open for a long period (like the 5-minute lock duration) is generally not advisable. It can strain database resources and increase the risk of lock contention and deadlocks. While PostgreSQL does support `lock_timeout` to fail transactions that wait too long for locks, this isn't a graceful solution for user-facing flows because users would see an error rather than being queued. Implementing a timeout would require application-level management and additional complexity. Finally, this approach may not scale well under high load, as prolonged locks can lead to increased wait times for other users and potential performance bottlenecks. Handling edge cases, such as application crashes or network issues, becomes more challenging, as these could leave locks in an uncertain state.
 
 A better solution is to lock the ticket by adding a status field and expiration time on the ticket table. The ticket can then be in 1 of 3 states: available, reserved, booked. This allows us to track the status of each ticket and automatically release the lock once the expiration time is reached. When a user selects a ticket, the status changes from "available" to "reserved", and the current timestamp is recorded.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Available: Event created,<br/>one ticket per seat
+    Available --> Reserved: User selects seat,<br/>timestamp recorded
+    Reserved --> Booked: Purchase finalized
+    Reserved --> Available: Expiration reached<br/>(user abandoned)
+    Booked --> [*]
+
+    note right of Reserved
+        Held for the checkout window
+        (e.g. 10 minutes)
+    end note
+```
 
 Now lets think about how we handle unlocking with this approach:
 
@@ -247,6 +277,20 @@ There's no race condition when acquiring the lock, Redis's `SET key value NX EX 
 **Failure handling:** If our lock goes down for any reason, then we have a period of time where user experience is degraded. Note that we will still never have a "double booking" since our database will use OCC (Optimistic Concurrency Control) or row-level locking to ensure this. The downside is just that users can get an error after filling out their payment details if someone beats them to it. This sucks, but I would argue that it is a better outcome than having all tickets appear unavailable (as would be the case if the cron job in our previous solution failed).
 
 **TTL expiration during payment:** What if the lock TTL expires while payment is being processed? If User A's lock expires at minute 10 but their payment completes at minute 11, User B could have grabbed the lock in between. In this rare scenario, the database transaction in step 7 will fail for one of them (OCC ensures only one write succeeds), and we issue an automatic refund via Stripe for the failed booking. Set the TTL generously to minimize this, and, even better, consider extending the lock when payment is initiated.
+
+The reservation design evolved through several options — from the naive long-held lock to the chosen distributed lock:
+
+```mermaid
+graph LR
+    A["Long-running DB lock<br/>SELECT FOR UPDATE<br/>held for minutes"] --> B["Status field + cron<br/>sweep expired<br/>reservations"]
+    B --> C["Short txns on two<br/>attributes: available<br/>OR reservation expired"]
+    C --> D["Redis distributed lock<br/>SET NX EX + TTL<br/>auto-expiry"]
+
+    style A fill:#FFB6C1
+    style B fill:#FFE4B5
+    style C fill:#FFE4B5
+    style D fill:#90EE90
+```
 
 In this case, let's go with the great solution and use distributed lock. We can now update our design to support this flow.
 
@@ -387,7 +431,7 @@ As you progress through the deep dives, you should be updating your design to re
 
 > Visual communication is important! Your interviewer is busy. They are likely going to wrap up the interview, go into a long day of meetings, go home tired, and then come back the next morning to remember that they need to write feedback for the interview they conducted the day before. They're then going to pull up your design and try to remember what you said. Make their life easier and improve your own chances by making your visual design as clear as possible.
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 Ok, that was a lot. You may be thinking, "how much of that is actually required from me in an interview?" Let's break it down.
 
@@ -430,6 +474,26 @@ You should know which technologies to use, not just in theory but in practice, a
 **The Bar for Ticketmaster:** For a staff+ candidate, expectations are high regarding depth and quality of solutions, particularly for the complex scenarios discussed earlier. Great candidates are diving deep into at least 2-3 key areas, showcasing not just proficiency but also innovative thinking and optimal solution-finding abilities. A crucial indicator of a staff+ candidate's caliber is the level of insight and knowledge they bring to the table. A good measure for this is if the interviewer comes away from the discussion having gained new understanding or perspectives.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **Split the problem by consistency needs:** viewing and searching events prioritize availability and can be cached/replicated aggressively, while booking prioritizes strong consistency to prevent double bookings.
+- **Reserve, don't lock the row:** avoid long-running `SELECT FOR UPDATE` transactions. Instead hold a temporary reservation — via a status field with expiration or, preferably, a Redis distributed lock (`SET NX EX`) whose TTL auto-releases abandoned checkouts.
+- **The database is the safety net:** even if Redis fails, OCC or row-level locking guarantees no double booking — the worst case is a degraded UX where a user is beaten to a ticket after paying (handled with an automatic refund).
+- **Scale the read path with caching + horizontal scaling:** the stateless Event Service, aggressive caching of event/venue/performer data, and load balancing absorb the 10M-users-on-one-event read storm (100:1 read/write).
+- **Search needs a search engine:** `LIKE '%...%'` forces full table scans; move to full-text indexes or Elasticsearch (kept in sync via CDC) for fuzzy, low-latency (<500ms) search, then cache hot queries.
+- **Real-time UX for popular events:** push seat-map changes with SSE, and for extreme demand gate access with a Redis-backed virtual waiting queue that admits users in controlled batches.
+
+## 📚 Related Concepts
+
+- [Dealing with Contention](../Patterns/DealingWithContention.md) — the pattern behind preventing double bookings under high concurrency.
+- [Distributed Locking](../../CoreConcepts/DistributedLocking.md) — how the Redis TTL lock for ticket reservations works.
+- [Redis](../DeepDives/Redis.md) — the in-memory store powering reservation locks and the waiting queue.
+- [PostgreSQL](../DeepDives/Postgresql.md) — the ACID transactional store chosen for bookings and tickets.
+- [Elasticsearch](../DeepDives/Elasticsearch.md) — full-text, fuzzy search for events kept in sync via CDC.
+- [Scaling Reads](../Patterns/ScalingReads.md) — caching, replicas, and CDN strategies for the read-heavy view/search paths.
+- [Real-Time Updates](../Patterns/Real-TimeUpdates.md) — SSE vs. WebSockets for live seat-map updates and queue positions.
+- [Caching](../../CoreConcepts/Caching.md) — read-through caching, TTLs, and invalidation used for event data.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/ticketmaster](https://www.hellointerview.com/learn/system-design/problem-breakdowns/ticketmaster)*

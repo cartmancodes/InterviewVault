@@ -1,4 +1,26 @@
-# FB News Feed
+# 📰 FB News Feed
+
+> **Overview**: Facebook pioneered the News Feed, a product that shows recent stories from users in your social graph. This breakdown designs a News Feed that lets users create posts, follow others, and view a reverse-chronological feed at massive scale (2B users). The central challenge is **fan-out** — efficiently delivering posts when users follow many accounts or are followed by many, which we solve by trading between computing feeds on read versus on write.
+
+## 📋 Table of Contents
+- [Layman's Explanation](#laymans-explanation)
+- [Understanding the Problem](#understanding-the-problem)
+- [The Set Up](#the-set-up)
+- [High-Level Design](#high-level-design)
+- [Potential Deep Dives](#potential-deep-dives)
+- [What is Expected at Each Level?](#what-is-expected-at-each-level)
+- [Key Takeaways](#key-takeaways)
+- [Related Concepts](#related-concepts)
+
+---
+
+## 🧒 Layman's Explanation
+
+Imagine every person has a **mailbox** (their feed). When you post, one option is to immediately drop a copy of your post into the mailbox of every follower — so when they open their mailbox it's already full and instant to read. This is **fan-out on write**. The other option is to leave your posts on your own shelf, and when a follower wants to read, they run around collecting the latest from everyone they follow and sort it all by time. This is **fan-out on read**.
+
+Stuffing mailboxes is great until someone like a celebrity has 90+ million followers — you'd spend forever delivering copies every time they post. So we use a **hybrid**: deliver copies to mailboxes for normal accounts, but for celebrities leave posts on the shelf and let each reader grab them at read time and merge them in. That single idea — choosing per-account whether to fan out on read or on write — is the heart of this design.
+
+---
 
 Practice with guided hints and real-time feedback
 
@@ -6,7 +28,7 @@ Watch the author walk through the problem step-by-step
 
 Watch the author walk through the problem step-by-step
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 > 📰 What is Facebook's News Feed Facebook is a social network which pioneered the News Feed , a product which shows recent stories from users in your social graph.
 
@@ -45,7 +67,7 @@ Here's how it might look on your whiteboard:
 
 ![Facebook News Feed Requirements](assets/0T5jOOhg98yD.0i4wk-zw-d2qf.svg)
 
-## The Set Up
+## 🏗️ The Set Up
 
 ### Planning the Approach
 
@@ -112,7 +134,7 @@ We'll avoid diving into the structure of Posts for the moment to give ourselves 
 
 Ok, we now have some API's, let's work on building the high-level design behind them.
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
 
 ### 1. Users should be able to create posts.
 
@@ -190,7 +212,7 @@ Great! We have a working system that allows a small number of users to follow a 
 
 Now let's circle back so some of the issues we flagged earlier in our deep dives.
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
 
 ### 1) How do we handle users who are following a large number of users?
 
@@ -254,6 +276,31 @@ This hybrid approach allows us to choose whether we fan out on read or fan out o
 
 Doing the merging of feeds at read time vs at write time means more computation needs to be done in the Feed Service. We can tune the threshold over which an account is ignored in precomputation.
 
+The hybrid approach ties the two deep dives together — the write path fans out on write for normal accounts, while high-follow accounts are skipped and merged in on the read path:
+
+```mermaid
+graph TB
+    subgraph "Write Path (Post Created)"
+        NP["New Post"] --> Q["SQS Queue<br/>postId + creatorId"]
+        Q --> W["Feed Workers"]
+        W -->|"normal account<br/>fan-out on write"| PF["Precomputed Feed Table<br/>~200 postIds per user"]
+        W -->|"high-follow account<br/>flagged, not precomputed"| SK["Skip precompute"]
+    end
+    subgraph "Read Path (Feed Requested)"
+        FS["Feed Service"] --> PF
+        FS -->|"merge recent posts from<br/>non-precomputed accounts"| PT["Post Table"]
+        PF --> M["Merge + sort<br/>reverse chronological"]
+        PT --> M
+        M --> U["User Feed"]
+    end
+
+    style PF fill:#e1f5ff
+    style PT fill:#e1f5ff
+    style SK fill:#FFB6C1
+    style M fill:#90EE90
+    style U fill:#90EE90
+```
+
 ### 3) How can we handle uneven reads of Posts?
 
 To this point, our feed service has been reading directly from the Post table whenever a user requests to get their feed. For the vast majority of posts, they will be read for a few days and never read again. For some posts (especially those from accounts with lots of followers), the number of reads the post experiences in the first few hours will be _massive_.
@@ -286,7 +333,7 @@ Both solve the problem, but this solution means we have N times the throughput f
 
 In this case, we will have a smaller number of posts across our cache than if we chose to distribute or partition the posts. This is probably ok since our DynamoDB backing store can handle _some_ variability in read throughput and is still fast.
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 Ok, that was a lot. You may be thinking, “how much of that is actually required from me in an interview?” Let’s break it down.
 
@@ -333,6 +380,25 @@ You should know which technologies to use, not just in theory but in practice, a
 - 2026/02/17: Fixed reverse chronological order terminology, corrected storage calculation, removed erroneous "Redis again" reference, clarified follow API endpoint, added fan-out on read/write terminology, improved cache strategy descriptions, noted DynamoDB single-table design best practice, and various grammar fixes.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **Fan-out is the whole problem.** Building a feed is trivial at small scale; the design lives or dies on how you handle users who follow many accounts (fan-out on read) and users who are followed by many (fan-out on write).
+- **Precompute on write, but cap it.** A `PrecomputedFeed` table keyed by `userId` holding ~200 post IDs turns feed reads into a single lookup — ~2KB/user, ~4TB for 2B users, a fraction of a cent per user.
+- **Async workers absorb the write amplification.** Blasting millions of feed writes from the Post Service directly fails; an SQS queue plus a worker fleet spreads the load and exploits the <1 minute staleness budget.
+- **Go hybrid per-account.** Flag high-follow accounts (e.g. Justin Bieber's 90M+) as *not precomputed*, skip them in the workers, and merge their recent posts in at read time. Choosing read-vs-write fan-out per account is the heart of the design.
+- **Hot posts break even caches.** A viral post creates a hot key; a *replicated* post cache (every instance serves any post behind a load balancer) beats a *sharded* one because a single shard can't absorb the traffic — N instances give N× throughput with no coordination.
+- **Lean on eventual consistency.** Prioritizing availability and tolerating up to 1 minute of staleness is what makes precomputation, queued fan-out, and aggressive caching viable.
+
+## 📚 Related Concepts
+
+- [Scaling Reads](../Patterns/ScalingReads.md) — pre-computing feeds and caching recent posts, the pattern this feed leans on.
+- [Scaling Writes](../Patterns/ScalingWrites.md) — the complementary side: fanning a single post out to millions of feeds.
+- [Managing Long-Running Tasks](../Patterns/ManagingLongRunningTasks.md) — queue + async worker fleets like the SQS-driven feed fan-out.
+- [Caching](../../CoreConcepts/Caching.md) — TTL/LRU eviction and cache strategies behind the Post Cache.
+- [Redis](../DeepDives/Redis.md) — the in-memory store for the post cache and its hot-key issues.
+- [DynamoDB](../DeepDives/Dynamodb.md) — the key-value store backing the Post, Follow, and PrecomputedFeed tables (GSIs, partitioning).
+- [Sharding](../../CoreConcepts/Sharding.md) — partitioning keys evenly to avoid the hot-partition problem DynamoDB and caches face here.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/fb-news-feed](https://www.hellointerview.com/learn/system-design/problem-breakdowns/fb-news-feed)*

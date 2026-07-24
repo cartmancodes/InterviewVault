@@ -929,8 +929,8 @@ graph TB
     end
     
     subgraph "Storage"
-        CT[Clients Table<br/>userId -> [clientIds]]
-        IT[Inbox Table<br/>clientId -> [messages]]
+        CT["Clients Table<br/>userId -> [clientIds]"]
+        IT["Inbox Table<br/>clientId -> [messages]"]
     end
     
     P -.->|connected| CS1
@@ -945,7 +945,7 @@ graph TB
     
     IT -.->|A1 inbox: empty| P
     IT -.->|A2 inbox: empty| L
-    IT -.->|A3 inbox: [msg1, msg2]| T
+    IT -.->|"A3 inbox: [msg1, msg2]"| T
     
     style CT fill:#e1f5ff
     style IT fill:#fff4e1

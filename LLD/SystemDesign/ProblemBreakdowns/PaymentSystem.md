@@ -1,12 +1,26 @@
-# Payment System
+# 💳 Payment System
 
 Practice with guided hints and real-time feedback
 
-## Understanding the Problem
+> **Overview**: A payment processing system like Stripe lets merchants accept card payments from customers without building their own payment infrastructure. The design centers on a `PaymentIntent` (the merchant's intention to collect money) and `Transaction` records (the actual money movements), and must be highly secure, durable/auditable, transaction-safe despite asynchronous payment networks, and scalable to 10,000+ TPS.
+
+## 📋 Table of Contents
+
+- [Understanding the Problem](#understanding-the-problem)
+- [Layman's Explanation](#laymans-explanation)
+- [The Set Up](#the-set-up)
+- [High-Level Design](#high-level-design)
+- [Potential Deep Dives](#potential-deep-dives)
+- [Bonus Deep Dives](#bonus-deep-dives)
+- [What is Expected at Each Level?](#what-is-expected-at-each-level)
+- [Key Takeaways](#key-takeaways)
+- [Related Concepts](#related-concepts)
+
+## 🎯 Understanding the Problem
 
 > 📸 What is Stripe ? Payment processing systems like Stripe allow business (referred to throughout this breakdown as merchants) to accept payment from customers, without having to build their own payment processing infrastructure. Customer input their payment details on the merchant's website, and the merchant sends the payment details to Stripe. Stripe then processes the payment and returns the result to the merchant.
 
-### [Functional Requirements](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#1-functional-requirements)
+### ✅ [Functional Requirements](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#1-functional-requirements)
 
 **Core Requirements**
 
@@ -23,7 +37,7 @@ Practice with guided hints and real-time feedback
 - Handling recurring payments (subscriptions).
 - Payouts to merchants.
 
-### [Non-Functional Requirements](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#2-non-functional-requirements)
+### ⚙️ [Non-Functional Requirements](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#2-non-functional-requirements)
 
 > Before defining your non-functional requirements in an interview, it's wise to inquire about the scale of the system as this will have a meaningful impact on your design. In this case, we'll be looking at a system handling about 10,000 transactions per second ( TPS ) at peak load.
 
@@ -43,9 +57,15 @@ Here's how it might look on your whiteboard:
 
 ![Payment System Requirements](assets/Wzg0bF3M2maU.3zh7__9wzk_5z.svg)
 
-## The Set Up
+## 🧒 Layman's Explanation
 
-### [Defining the Core Entities](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#core-entities-2-minutes)
+Think of the payment system as a trusted cashier standing between a shop (the **merchant**) and a shopper's bank. When you check out, the shop doesn't touch your card itself — it hands you off to the cashier, who takes your card details behind a soundproof glass booth (the **iframe**), so the shop never sees the sensitive numbers. The cashier writes down a receipt of *intent* first ("this shop wants to collect $24.99 from this shopper" — a **PaymentIntent**), then walks over to the bank's private back office (the **payment network**) to actually pull the money.
+
+The tricky part: that back office is slow and far away. Sometimes the cashier asks the bank "did it go through?" and gets no answer back before giving up. That doesn't mean it failed — the money may have moved anyway! So the cashier never throws away a receipt. Every step is written down in permanent ink in a ledger that is never erased (the **event stream / audit log**), and if an answer goes missing, a follow-up clerk (the **reconciliation service**) checks the bank's official daily records to find out what truly happened — so nobody gets charged twice and no payment silently vanishes.
+
+## 🔑 The Set Up
+
+### 🔑 [Defining the Core Entities](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#core-entities-2-minutes)
 
 Let's start by identifying the core entities we'll need. I prefer to begin with a high-level overview before diving into specifics as this helps establish the foundation we'll build upon. That said, if you're someone who finds value in outlining the complete schema upfront with all columns and relationships defined, that's perfectly fine too! There's no single "right" approach in an interview, just do what works best for you. The key is to have a clear understanding of the main building blocks we'll need.
 
@@ -69,7 +89,7 @@ In the actual interview, this can be as simple as a short list like this. Just m
 
 ![Payment Entities](assets/O5VUP9yCeEgC.3ayo3ko8_a5u7.svg)
 
-### [API or System Interface](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#api-or-system-interface-5-minutes)
+### 🔌 [API or System Interface](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#api-or-system-interface-5-minutes)
 
 The API is the main way merchants will interact with our payment system. Defining it early helps us structure the rest of our design. We'll start simple and, as always, we can add more detail as we go. I'll just create one endpoint for each of our core requirements.
 
@@ -126,7 +146,7 @@ POST {merchant_webhook_url}
 
 > Designing a webhook callback system is often a standalone question in system design interviews. Designing a payment system, complete with webhooks, would be a lot to complete in the time allotted. Have a discussing with your interviewer early on so you're on the same page about what you're building.
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
 
 For our high-level design, we're simply going to work one-by-one through our functional requirements.
 
@@ -211,15 +231,29 @@ The PaymentIntent can have various statuses throughout its lifecycle, such as:
 - `succeeded`: PaymentIntent successfully processed
 - `failed`: Payment processing failed (with reason)
 
+The merchant-facing PaymentIntent moves through this lifecycle:
+
+```mermaid
+stateDiagram-v2
+    [*] --> created: POST /payment-intents
+    created --> processing: transaction submitted, awaiting network
+    processing --> succeeded: payment network approves
+    processing --> failed: payment network declines
+    succeeded --> [*]
+    failed --> [*]
+```
+
+> ⚠️ These are the *merchant-facing* statuses returned by the polling endpoint. Internally, the PaymentIntent owns a richer state machine (created → authorized → captured / canceled / refunded) and a timeout can leave an attempt in `pending_verification` until reconciliation resolves it — covered in the deep dives below.
+
 While this polling approach works well for many use cases, it's not ideal for real-time updates or high-frequency status checks. In a deep dive later, we'll explore how webhooks can be implemented to provide push-based notifications that eliminate the need for polling and reduce latency between payment completion and fulfillment actions.
 
 Now that we've covered all three functional requirements, we have a basic payment processing system that can create payments, process payments securely, and provide status updates to merchants.
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
 
 At this point, we have a basic system that satisfies the core functional requirements of our payment processing system. Merchants can initiate payments by creating a PaymentIntent, customers can pay with credit/debit cards, and merchants can view payment status updates. However, our current design has significant limitations, particularly around transaction safety, durability, and scaling to handle high volumes. Let's look back at our non-functional requirements and explore how we can improve our system to handle 10,000+ TPS with strong consistency and guaranteed durability.
 
-### 1) The system should be highly secure
+### 🔒 1) The system should be highly secure
 
 Let's start with security. For a payment processing system, there are two main things we care about when it comes to guaranteeing the security of the system.
 
@@ -303,7 +337,7 @@ This multi-layered approach means that even if one security mechanism fails (e.g
 
 ![iframe with Encryption](assets/LPIM9j2O6n22.1dnx-eku--tfs.svg)
 
-### 2) The system should guarantee durability and auditability with no transaction data ever being lost, even in case of failures.
+### 💾 2) The system should guarantee durability and auditability with no transaction data ever being lost, even in case of failures.
 
 For a payment system, the worst thing you can do is lose transaction data. It would be both a financial and legal disaster. Every transaction represents real money moving between accounts, and regulations like PCI-DSS, SOX compliance, and financial auditing standards require us to maintain complete, immutable records of every payment attempt, success, and failure.
 
@@ -436,7 +470,7 @@ By implementing this hybrid approach, we achieve true durability and auditabilit
 
 > A savvy interviewer might ask: "Isn't CDC a single point of failure? What happens if your CDC system fails and you miss critical payment events?" This is a great question! CDC is technically a single point of failure - if it stops working, events stop flowing to Kafka even though database writes continue. Companies like Stripe handle this by running multiple independent CDC instances reading from the same database, each writing to different Kafka clusters. They also implement monitoring that alerts within seconds if CDC lag increases, and maintain recovery procedures to replay missed events from database logs if needed. For critical payment events, they might also implement application-level fallbacks that write directly to Kafka if CDC hasn't confirmed the event within a certain timeframe.
 
-### 3) The system should guarantee transaction safety and financial integrity despite the inherently asynchronous nature of external payment networks
+### ⚖️ 3) The system should guarantee transaction safety and financial integrity despite the inherently asynchronous nature of external payment networks
 
 Payment networks operate in a fundamentally different way than our internal systems. When we send a charge request to Visa, Mastercard, or a bank, we're crossing into systems we don't control. These networks process millions of transactions across global infrastructure, with their own retry mechanisms, queue delays, and batch processing windows. A payment we consider "timed out" might still be winding its way through authorization systems, while another might have succeeded instantly but lost its response packet on the way back to us.
 
@@ -461,6 +495,25 @@ This approach is a disaster waiting to happen, and for obvious reasons. Network 
 7. The customer now has $400 in charges for a $200 purchase
 
 Yikes!
+
+```mermaid
+sequenceDiagram
+    participant M as Merchant
+    participant TS as Transaction Service
+    participant N as Payment Network / Bank
+    M->>TS: Charge $200
+    TS->>N: Authorization request
+    N-->>N: Approves, debits customer $200
+    Note over N,TS: Response packet delayed / lost
+    TS--xTS: 30s timeout fires, mark FAILED
+    TS-->>M: "Payment failed, try again"
+    M->>TS: Retry charge $200
+    TS->>N: Second authorization request
+    N-->>N: Approves again, debits another $200
+    Note over M,N: Customer charged $400 for a $200 purchase
+```
+
+The fix is to treat a timeout as *uncertainty, not failure*: record every attempt, enforce idempotency on retries, and let a reconciliation service resolve the true outcome against the network's authoritative records.
 
 A better approach acknowledges that timeouts create uncertainty, not failure. Instead of guessing, we track unclear outcomes explicitly by expanding our payment status to include a "pending_verification" state specifically for timeouts. We also create a separate table to track every attempt we make to charge a payment network, recording what we sent, when we sent it, and what reference ID the network assigned.
 
@@ -498,7 +551,7 @@ This architecture acknowledges that payment networks are asynchronous partners, 
 
 The key to handling asynchronous payment networks is accepting that uncertainty is inevitable and building systems designed for eventual consistency. By combining a traditional database for synchronous merchant needs with an event stream for asynchronous network reality, we achieve both performance and correctness. This pattern, proven at companies like Stripe processing billions in payments, shows that the best distributed systems don't fight the nature of external dependencies — they embrace and design for them.
 
-### 4) The system should be scalable to handle high transaction volume (10,000+ TPS)
+### 📈 4) The system should be scalable to handle high transaction volume (10,000+ TPS)
 
 We've come a long way! We have a payment processing system that meets just about all of our functional and non-functional requirements. Now we just need to discuss how we would handle scale. I like to save scale for my last deep dive because then I have a clear understanding of the full system I need to scale. It's likely that you already talked about scale (as we did a bit) during other parts of the interview, but we'll do our best to tie it all together here.
 
@@ -526,7 +579,7 @@ For transactions older than a certain period (e.g., 3-6 months), we can move the
 
 For read scaling, we can implement read replicas of our database. Most payment queries are read operations (checking payment status, generating reports), so having multiple read replicas will distribute this load. We can also implement a caching layer using Redis or Memcached for frequently accessed data like recent payment statuses.
 
-## Bonus Deep Dives
+## 🔎 Bonus Deep Dives
 
 ### 1) How can we expand the design to support Webhooks?
 
@@ -574,7 +627,7 @@ Simple example of a webhook payload:
 
 If this were a dedicated webhook system design interview, we would explore more intricate challenges such as exactly-once delivery semantics, handling webhook queue backlogs during outages, webhook payload versioning, and adaptive rate limiting to prevent overwhelming merchant systems. However, for our payment processor design, this high-level overview captures the essential functionality that would complement our core payment flows.
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 You may be thinking, "how much of that is actually required from me in an interview?" Let's break it down.
 
@@ -601,6 +654,25 @@ As a staff+ candidate, I'd expect you to demonstrate deep expertise in payment s
 You should proactively identify and address the most challenging edge cases in payment processing. For example, you might discuss how to handle payment network outages through fallback processing paths or how to design resilient reconciliation processes that guarantee eventual consistency with external payment networks.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **Model intent separately from money movement.** A `PaymentIntent` tracks the merchant's intention and overall lifecycle, while one-to-many `Transaction` records capture individual money-movement attempts (charges, refunds, disputes, payouts).
+- **Sensitive card data must never touch merchant servers.** Layer defenses: an iframe loaded from your domain for browser isolation, plus client-side encryption with your public key so data is encrypted before it ever leaves the device. Authenticate merchants with request signing (HMAC + timestamp + nonce), not just static API keys.
+- **Durability comes from an immutable event stream, not application-written audit tables.** Change Data Capture (CDC) reads the DB write-ahead log and publishes every committed change to Kafka, so you can never "forget" to write an audit record; events flow to specialized consumers and archive to S3 for long-term compliance.
+- **Treat payment-network timeouts as uncertainty, not failure.** Record every attempt before calling out, enforce idempotency via a unique constraint on merchant ID + idempotency key, and let a reconciliation service resolve `pending_verification` states against authoritative network files — this is what prevents double-charging.
+- **Scale each layer independently.** Stateless services scale horizontally behind load balancers, Kafka needs 3–5 partitions keyed by `payment_intent_id` to preserve per-intent ordering, and the operational database shards by `merchant_id` with read replicas, caching, and cold-storage archival for ~180 TB/year of growth.
+- **Webhooks are the production-grade alternative to polling.** A Webhook Service consumes the same CDC event stream and pushes signed notifications to merchant callback URLs with exponential-backoff retries — server-to-server, not WebSockets/SSE.
+
+## 📚 Related Concepts
+
+- [Multi-Step Processes](../Patterns/Multi-StepProcesses.md) — the orchestration pattern behind authorize → capture → settle payment workflows.
+- [Dealing with Contention](../Patterns/DealingWithContention.md) — idempotency keys and race-condition handling that prevent double-charging.
+- [Kafka](../DeepDives/Kafka.md) — the immutable event stream fed by CDC, partitioned for ordering and throughput.
+- [PostgreSQL](../DeepDives/Postgresql.md) — the operational database serving sub-10ms merchant reads at 10k TPS.
+- [Sharding](../../CoreConcepts/Sharding.md) — sharding the transaction database by `merchant_id` for write scale.
+- [Scaling Reads](../Patterns/ScalingReads.md) — read replicas and Redis caching for status queries and reports.
+- [API Gateway](../DeepDives/ApiGateway.md) — the entry point handling authentication, rate limiting, and routing.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/payment-system](https://www.hellointerview.com/learn/system-design/problem-breakdowns/payment-system)*

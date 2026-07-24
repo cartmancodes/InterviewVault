@@ -1,10 +1,30 @@
-# Instagram
+# 📸 Instagram
 
 Practice with guided hints and real-time feedback
 
-## Understanding the Problem
+> **Overview**: Instagram is a social media platform focused on visual content, letting users share photos and videos with their followers. This breakdown designs the core experience — creating posts, following users, and viewing a chronological feed — for a system serving 500M DAU with 100M posts per day. The central challenges are feed generation at scale (fan-out strategies) and low-latency delivery of large media.
 
-> 📸 What is Instagram ? Instagram is a social media platform primarily focused on visual content, allowing users to share photos and videos with their followers.
+## 📋 Table of Contents
+- [Understanding the Problem](#understanding-the-problem)
+- [Layman's Explanation](#laymans-explanation)
+- [The Set Up](#the-set-up)
+- [High-Level Design](#high-level-design)
+- [Potential Deep Dives](#potential-deep-dives)
+- [What is Expected at Each Level?](#what-is-expected-at-each-level)
+- [Key Takeaways](#key-takeaways)
+- [Related Concepts](#related-concepts)
+
+---
+
+## 🧒 Layman's Explanation
+
+Imagine a giant neighborhood bulletin board where you only care about the flyers posted by friends you've chosen to follow. The naive way to read your board is to run to each friend's house, ask "posted anything new?", collect all their flyers, and sort them by date. That works when you follow a handful of people, but if you follow a thousand friends, you'd spend all day running around — this is **fan-out on read**.
+
+A smarter approach: every time someone posts a flyer, a helper immediately walks to the mailbox of each of their followers and drops a copy in. Now when you check your board, everything is already waiting in your mailbox — one quick look (**fan-out on write**). The catch is a celebrity with millions of followers: their helper would have to fill millions of mailboxes for a single flyer. So Instagram uses a **hybrid** — regular people get copies pushed to mailboxes, but for celebrities you just run to their (single) house at read time and mix their latest flyers in. Meanwhile the actual photos and videos live in a warehouse (S3), and copies are kept in neighborhood lockers around the world (a CDN) so nobody waits for them to ship across the globe.
+
+## 🎯 Understanding the Problem
+
+> 📖 **What is Instagram?** Instagram is a social media platform primarily focused on visual content, allowing users to share photos and videos with their followers.
 
 Designing Instagram is one of the most common system design interview questions asked not just at Meta, but across all FAANG and FAANG-adjacent companies. It has a lot of similarities with our breakdowns of [FB News Feed](https://www.hellointerview.com/learn/system-design/problem-breakdowns/fb-news-feed) and [Dropbox](https://www.hellointerview.com/learn/system-design/problem-breakdowns/dropbox), but given the popularity and demand, we decided this warranted its own breakdown.
 
@@ -48,7 +68,7 @@ Here's how it might look on your whiteboard:
 
 > Adding features that are out of scope is a "nice to have". It shows product thinking and gives your interviewer a chance to help you reprioritize based on what they want to see in the interview. That said, it's very much a nice to have. If additional features are not coming to you quickly, don't waste your time and move on.
 
-## The Set Up
+## 🔑 The Set Up
 
 ### [Defining the Core Entities](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#core-entities-2-minutes)
 
@@ -65,7 +85,7 @@ In the actual interview, this can be as simple as a short list like this. Just m
 
 ![IG Entities](assets/HTd2xaT9geUP.2puzaubsui__z.svg)
 
-### [API or System Interface](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#api-or-system-interface-5-minutes)
+### 🔌 [API or System Interface](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#api-or-system-interface-5-minutes)
 
 The API is the main way users will interact with Instagram. Defining it early helps us structure the rest of our design. We'll start simple and, as always, we can add more detail as we go. I'll just create one endpoint for each of our core requirements.
 
@@ -100,7 +120,7 @@ GET /feed?cursor={cursor}&limit={page_size} -> Post[]
 
 We'll use a `cursor` for pagination, and a `limit` to control the page size. I'm keeping the details of the posts array vague for now – we can fill that in later. The important thing is that we return an array of posts, and a `next_cursor` for getting the next page.
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
 
 For our high-level design, we're simply going to work one-by-one through our functional requirements.
 
@@ -186,7 +206,7 @@ So here is what happens with our simple approach.
 
 > You're probably thinking, "wait a minute, what if I'm following thousands of people? This will be crazy slow, even with indexes, right?" And you're right! This is exactly the kind of problem we'll solve in our deep dives.
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
 
 At this point, we have a basic, functioning system that satisfies the core functional requirements of Instagram - users can upload photos/videos, follow other users, and view a chronological feed. However, our current design has significant limitations, particularly around feed generation performance and media delivery at scale. Let's look back at our non-functional requirements and explore how we can improve our system to handle 500M DAU with low latency and global distribution.
 
@@ -219,7 +239,19 @@ This inefficiency is inherent to the fan-out on read model. The core issue is th
 
 Instagram showcases the perfect **scaling reads** scenario - users view hundreds of posts daily but post only occasionally. This extreme read-to-write ratio demands [sharding](https://www.hellointerview.com/learn/system-design/core-concepts/sharding) by user ID for posts, vertical partitioning for different data types (profiles, posts, analytics), and hierarchical storage for older content.
 
-Let's analyze some alternatives.
+Let's analyze some alternatives. The deep dive walks through a natural evolution — each step fixes a limitation of the previous one:
+
+```mermaid
+graph LR
+    A["Fan-out on read<br/>query every followee<br/>at read time"] -->|"read amplification<br/>unpredictable latency"| B["+ Redis cache<br/>feed:{user}:{cursor}<br/>-> postIds"]
+    B -->|"still fans out<br/>treats symptom"| C["Fan-out on write<br/>precompute feed<br/>into Redis ZSET"]
+    C -->|"celebrity<br/>write amplification"| D["Hybrid<br/>write for regulars<br/>read-merge for celebs"]
+
+    style A fill:#FFB6C1
+    style B fill:#FFE4B5
+    style C fill:#FFE4B5
+    style D fill:#90EE90
+```
 
 The most obvious improvement to the fan-out on read approach is adding a cache in front of the `Posts` table to cache each users recent posts. We can use Redis for this. The idea is simple: before querying the database for a user's followed users' posts, we check the cache. If the posts are in the cache, we return them. If not, we query the database and then store the results in the cache for future requests.
 
@@ -270,6 +302,37 @@ Then, when a user requests their feed, we:
 2. Hydrate the posts based on these `postId`s. We first check if the post metadata is in the Redis post cache. If it is, we use that. If it's not, we batch fetch from DynamoDB using BatchGetItem.
 3. Combine the results and return them to the user.
 
+The two halves of this flow — the asynchronous write path that precomputes feeds and the fast read path that hydrates them — look like this over time:
+
+```mermaid
+sequenceDiagram
+    participant Poster
+    participant PostSvc as Post Service
+    participant Queue
+    participant Fanout as Feed Fan-out Service
+    participant Follows as Follows Table
+    participant Redis as Redis (ZSET + post cache)
+    participant Ddb as Posts DB (DynamoDB)
+    participant Reader
+
+    Note over Poster,Ddb: Write path (asynchronous)
+    Poster->>PostSvc: create post
+    PostSvc->>Ddb: store post metadata
+    PostSvc->>Queue: enqueue postId
+    Queue->>Fanout: deliver postId
+    Fanout->>Follows: get followers of poster
+    Fanout->>Redis: prepend postId to each follower feed
+
+    Note over Reader,Ddb: Read path (single fast query + hydrate)
+    Reader->>Redis: read top N postIds from feed ZSET
+    Redis-->>Reader: postIds
+    Reader->>Redis: get post metadata from post cache
+    Redis-->>Reader: hits
+    Reader->>Ddb: BatchGetItem for cache misses
+    Ddb-->>Reader: metadata
+    Reader->>Reader: combine and return feed
+```
+
 This 'fan-out on write' approach significantly improves read performance, making feed retrieval a fast, single Redis query (plus metadata lookups). However, we've traded read-time complexity for write-time complexity and increased storage. The primary challenge is write amplification, especially the 'celebrity problem'. A single post by a user with millions of followers triggers millions of writes to Redis, potentially overwhelming our system and increasing write latency for popular users. This is because we need to update the feed cache for the millions of people following them.
 
 We can address the main limitation of the precompute approach, that celebrities will result in massive write amplification, by using a hybrid approach. We combine fanout-on-write for most users with fanout-on-read for popular accounts. This provides a good balance: fast reads for most users and manageable write amplification.
@@ -285,6 +348,26 @@ Thus, we end up with an effective mix between pre-computation and real-time merg
 
 1. Fanout-on-write for the majority of users (follower count < 100,000)
 2. Fanout-on-read for the few "celebrity" users (follower count > 100,000)
+
+```mermaid
+graph TB
+    P["New post created"] --> T{"Poster follower count<br/>&gt; 100,000?"}
+    T -->|"No (regular user)"| W["Fan-out on write<br/>prepend postId to each<br/>follower feed in Redis"]
+    T -->|"Yes (celebrity)"| S["Skip fan-out<br/>store in Posts table only"]
+
+    R["Feed request"] --> M["Read precomputed feed<br/>from Redis ZSET"]
+    M --> Q["Query Posts table for<br/>recent celebrity posts"]
+    S -.->|"read time"| Q
+    W -.->|"read time"| M
+    Q --> MG["Merge chronologically<br/>and return"]
+
+    style W fill:#90EE90
+    style S fill:#FFE4B5
+    style M fill:#e1f5ff
+    style Q fill:#e1f5ff
+    style MG fill:#90EE90
+    style T fill:#FFE4B5
+```
 
 As is always the case, more complexity comes with its own tradeoffs. The 100,000 follower threshold needs to be carefully tuned - set it too low and we don't solve the write amplification problem, set it too high and we impact read performance for too many users.
 
@@ -377,7 +460,7 @@ When it comes to throughput, as always, we can dynamically horizontally scale ou
 
 After all is said and done, you might have a design that looks something like this:
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 So, what am I looking for at each level?
 
@@ -394,6 +477,26 @@ For senior candidates, I expect you to nail the majority of the deep dives, part
 For staff candidates, I'm evaluating your ability to identify the true scalability bottlenecks and propose elegant solutions that balance complexity against real needs. You should quickly recognize that feed generation and media delivery are the key challenges and focus your design accordingly. I expect you to discuss system evolution over time - how would we handle growing from 1M to 500M users? Rather than immediately jumping to complex distributed systems, you should be able to articulate where simpler solutions suffice and precisely when we'd need to evolve to more sophisticated approaches. Staff candidates demonstrate a keen understanding of operational concerns, anticipate failure modes, and propose robust solutions that prioritize user experience above all.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **Feed generation is the core challenge.** With 500M DAU and an extreme read-to-write ratio, fan-out on read collapses under read amplification, repeated work, and unpredictable latency — precomputing feeds (fan-out on write) moves the work to write time when users aren't waiting.
+- **Precompute into Redis, but watch the celebrity problem.** Store each feed as a sorted set (ZSET of `postId`s scored by timestamp) and hydrate metadata via a hybrid Redis-cache + DynamoDB `BatchGetItem` lookup. A single celebrity post fans out to millions of writes.
+- **The hybrid model is the production answer.** Fan-out on write for users under ~100K followers, fan-out on read (merge at query time) for celebrities above the threshold — a tunable trade-off that Instagram uses in practice.
+- **Media needs its own pipeline.** Presigned URLs + S3 multipart (chunked) uploads handle large files (photos up to 8MB, videos up to 4GB); server-driven completion (S3 events) keeps metadata consistent.
+- **A CDN with dynamic media optimization is essential** for global, low-latency delivery — serve device- and network-appropriate variants (resolution, WebP, adaptive streaming) from edge locations instead of hitting S3 directly.
+- **Scale with the right primitives:** shard by user ID, index carefully (partition + sort keys), horizontally scale stateless services behind load balancers, and tier cold media/metadata down to cheaper storage (Glacier, S3) to control cost.
+
+## 📚 Related Concepts
+
+- [Scaling Reads](../Patterns/ScalingReads.md) — the pattern this design showcases; fan-out strategies and caching for read-heavy feeds.
+- [Managing Long-Running Tasks](../Patterns/ManagingLongRunningTasks.md) — the asynchronous fan-out-on-write pipeline (queue + fan-out service).
+- [Handling Large Blobs](../Patterns/HandlingLargeBlobs.md) — presigned URLs, chunked uploads, and CDN distribution for media.
+- [Sharding](../../CoreConcepts/Sharding.md) — sharding by user ID and partition/sort key design.
+- [Caching](../../CoreConcepts/Caching.md) — cache keys, TTLs, and invalidation used for feeds and post metadata.
+- [Redis](../DeepDives/Redis.md) — the ZSET-backed feed store, plus Sentinel/persistence for durability.
+- [DynamoDB](../DeepDives/Dynamodb.md) — the metadata store with GSIs powering the Follows and Posts tables.
+- [FB News Feed](FbNewsFeed.md) — the closely related feed-generation breakdown referenced throughout.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/instagram](https://www.hellointerview.com/learn/system-design/problem-breakdowns/instagram)*

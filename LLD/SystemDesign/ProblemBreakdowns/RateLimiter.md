@@ -1,4 +1,21 @@
-# Rate Limiter
+# 🚦 Rate Limiter
+
+> **Overview**: A rate limiter controls how many requests a client can make within a specific timeframe, rejecting excess requests with an HTTP 429 "Too Many Requests" response to prevent abuse and protect servers from traffic bursts. This breakdown designs a server-side, request-level rate limiter for a social media API targeting 1M requests/second across 100M daily active users. Most of the design effort goes into choosing a rate limiting algorithm (Token Bucket) and solving the distributed-systems challenges of scaling shared counter state with Redis.
+
+## 📋 Table of Contents
+- [Understanding the Problem](#understanding-the-problem)
+- [The Set Up](#the-set-up)
+- [High-Level Design](#high-level-design)
+- [Potential Deep Dives](#potential-deep-dives)
+- [What is Expected at Each Level?](#what-is-expected-at-each-level)
+
+---
+
+## 🧒 Layman's Explanation
+
+Think of an amusement park ride that hands every visitor a strip of tickets. Each ride costs one ticket, and the booth drips new tickets into your strip at a steady pace (say one per minute), up to a maximum you're allowed to hold. If you've saved up tickets you can take several rides back-to-back (a **burst**), but once you're out you have to wait for more to trickle in.
+
+A rate limiter works exactly the same way. Every API request "spends a ticket" (a **token**), tokens refill at a fixed rate, and when your bucket is empty the request is politely turned away with a "come back later" (HTTP 429). And just like a park needs one central ticket booth so you can't cheat by switching gates, a distributed rate limiter keeps everyone's ticket count in one shared place (**Redis**) so the limit holds no matter which server you happen to hit.
 
 Practice with guided hints and real-time feedback
 
@@ -6,7 +23,7 @@ Watch the author walk through the problem step-by-step
 
 Watch the author walk through the problem step-by-step
 
-## Understanding the Problem
+## 🎯 Understanding the Problem
 
 > 🚦 What is a Rate Limiter? A rate limiter controls how many requests a client can make within a specific timeframe. It acts like a traffic controller for your API - allowing, for example, 100 requests per minute from a user, then rejecting excess requests with an HTTP 429 "Too Many Requests" response. Rate limiters prevent abuse, protect your servers from being overwhelmed by bursts of traffic, and ensure fair usage across all users.
 
@@ -45,7 +62,7 @@ Here is how this might look on the whiteboard in an interview:
 
 ![Requirements](assets/vMe18pyDGiWW.2rz-xqdn_ctzw.svg)
 
-## The Set Up
+## 🔑 The Set Up
 
 ### Planning the Approach
 
@@ -77,7 +94,7 @@ isRequestAllowed(clientId, ruleId) -> { passes: boolean, remaining: number, rese
 
 This method takes a client identifier (user ID, IP address, or API key) and a rule identifier, then returns whether the request should be allowed based on current usage. It also provides information for response headers like `X-RateLimit-Remaining` and `X-RateLimit-Reset`.
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes-1)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes-1)
 
 We start by building an MVP that works to satisfy the core functional requirements. This doesn't need to scale or be perfect. It's just a foundation for us to build upon later. We will walk through each functional requirement, making sure each is satisfied by the high-level design.
 
@@ -149,6 +166,25 @@ In practice, you'll probably want a combination. Maybe authenticated users get h
 - **Endpoint-specific limits**: "The search API is limited to 10 requests/minute, but profile updates are 100/minute"
 
 Your rate limiter needs to check all applicable rules and enforce the most restrictive one. If Alice has used 50 of her 1000 requests but her IP has hit the 100 request limit, she gets blocked.
+
+```mermaid
+graph TB
+    REQ["Incoming Request<br/>user alice, IP 1.2.3.4<br/>GET /search"]
+    REQ --> U["Per-user limit<br/>1000/hour"]
+    REQ --> IP["Per-IP limit<br/>100/minute"]
+    REQ --> GL["Global limit<br/>50K/second"]
+    REQ --> EP["Endpoint limit<br/>search 10/minute"]
+    U --> DEC{"Enforce most<br/>restrictive rule"}
+    IP --> DEC
+    GL --> DEC
+    EP --> DEC
+    DEC -->|any rule exceeded| BLOCK["Reject with 429"]
+    DEC -->|all within limits| PASS["Allow request"]
+
+    style DEC fill:#FFE4B5
+    style BLOCK fill:#FFB6C1
+    style PASS fill:#90EE90
+```
 
 ### 2) The system should limit requests based on configurable rules
 
@@ -247,6 +283,24 @@ Why Redis works perfectly for this:
 
 The end result is precise, consistent rate limiting across all gateway instances. Whether Alice's 100th request goes to Gateway A, B, or C, they all see the same token bucket state and enforce the same limit.
 
+The race-condition-free flow, with the entire read-calculate-update sequence collapsed into a single atomic Lua script, looks like this:
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant G as Gateway A
+    participant R as Redis (Token Bucket)
+    C->>G: Request (user alice)
+    G->>R: Lua script - read tokens + last_refill
+    Note over R: Atomically refill by elapsed time,<br/>check tokens, decrement if allowed
+    R-->>G: allowed, remaining tokens
+    alt token available
+        G-->>C: Forward downstream, 200 OK
+    else bucket empty
+        G-->>C: 429 Too Many Requests
+    end
+```
+
 ### 3) When limits are exceeded, reject requests with HTTP 429 and helpful headers
 
 Now we need to decide what happens when a user hits their rate limit. This might seem straightforward (just return an error) but there are important design decisions that affect both user experience and system performance.
@@ -291,7 +345,7 @@ These headers allow well-behaved clients to implement proper backoff strategies.
 
 As far as the interview goes, you'll typically just want to callout that you know you'll respond with a 429 and the appropriate headers.
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes-1)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes-1)
 
 Up until this point we've designed a simple, single-node (meaning one Redis instance) rate limiter. But now we need to discuss how to scale it to handle 1M requests/second across 10M users while maintaining high availability and low latency.
 
@@ -402,7 +456,7 @@ This approach adds a lot more complexity. You need to handle connection failures
 
 The operational complexity is usually only justified for systems that need very fast rule updates, like those dealing with security incidents or high-frequency trading scenarios.
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 ### Mid-level
 
@@ -417,6 +471,26 @@ As a senior candidate, expectations shift toward more technical depth (60% bread
 Staff+ candidates should demonstrate deep understanding of distributed rate limiting in production environments (40% breadth, 60% depth) and draw from real experience with systems at similar scale. Exceptional proactivity is expected. You should identify edge cases, discuss observability requirements, and suggest operational procedures without guidance. You should have strong opinions about technology choices based on experience, naturally discuss multi-region deployments and data consistency across geographic boundaries, and handle questions about gradual rollouts and canary deployments as routine topics. Staff+ candidates often aren't asked this specific question because these concepts come naturally at this level, but if asked, you should quickly establish design fundamentals and spend most time on production operations, failure modes, and system integration challenges that only come from real-world experience.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **Placement drives everything.** In-process is fast but only sees local traffic; a dedicated service gives global state and rich context at the cost of a network hop; the API Gateway approach (chosen here) offers centralized control without extra round trips and is the most common production pattern.
+- **Token Bucket is the default algorithm.** Among Fixed Window, Sliding Window Log, Sliding Window Counter, and Token Bucket, the Token Bucket balances simplicity, memory efficiency, and natural handling of bursts, tracking just `(tokens, last_refill_time)` per client.
+- **Centralized state needs atomicity.** Storing buckets in Redis solves the cross-gateway coordination problem, but the read-calculate-update sequence must be one atomic Lua script or you hit the classic dealing-with-contention race where two requests both spend the last token.
+- **Scaling to 1M RPS means sharding Redis.** A single Redis instance tops out around 50K-100K checks/second, so shard by client identifier (user ID, IP, or API key) via consistent hashing, or lean on Redis Cluster's 16,384 hash slots, so each client's state always lives on exactly one shard.
+- **Fail-open vs fail-closed is a requirements call.** This social platform picks fail-closed because rate-limiter outages often coincide with traffic spikes, and failing open could cascade into total collapse; back it with master-replica replication and automatic failover to avoid the choice entirely.
+- **On a rejection, respond helpfully.** Return HTTP 429 with `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, and optionally `Retry-After` so well-behaved clients can back off instead of hammering the API.
+
+## 📚 Related Concepts
+
+- [Redis](../DeepDives/Redis.md) — the in-memory store holding token-bucket state, with atomic Lua scripting and `EXPIRE`-based cleanup.
+- [Consistent Hashing](../../CoreConcepts/ConsistentHashing.md) — how requests are routed to the correct Redis shard so each client's state stays on one node.
+- [Sharding](../../CoreConcepts/Sharding.md) — partitioning counter state across Redis instances to scale past a single node's throughput.
+- [Scaling Writes](../Patterns/ScalingWrites.md) — the dominant pattern here, millions of atomic counter updates per second across distributed shards.
+- [Scaling Reads](../Patterns/ScalingReads.md) — hot-key mitigation techniques for viral traffic hammering a single shard.
+- [Dealing with Contention](../Patterns/DealingWithContention.md) — expanding the atomic boundary to make read-modify-write race-condition free.
+- [API Gateway](../DeepDives/ApiGateway.md) — the edge component the rate limiter is embedded in.
+- [Zookeeper](../DeepDives/Zookeeper.md) — push-based distributed configuration for real-time rate-rule updates.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/distributed-rate-limiter](https://www.hellointerview.com/learn/system-design/problem-breakdowns/distributed-rate-limiter)*

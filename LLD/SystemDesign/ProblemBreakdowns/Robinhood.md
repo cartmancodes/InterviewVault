@@ -1,8 +1,28 @@
-# Robinhood
+# 📈 Robinhood
 
 Practice with guided hints and real-time feedback
 
-## Understanding the Problem
+> **Overview**: Robinhood is a commission-free trading platform for stocks, ETFs, options, and cryptocurrencies with real-time market data and order management. Critically, it is a *brokerage*, not an exchange — it routes trades through external exchanges/market makers rather than matching orders itself. This breakdown focuses on two capabilities: streaming live symbol prices to clients efficiently, and managing buy/sell orders with tight latency and strong consistency while minimizing expensive connections to the exchange.
+
+## 📋 Table of Contents
+- [Layman's Explanation](#laymans-explanation)
+- [Understanding the Problem](#understanding-the-problem)
+- [The Set Up](#the-set-up)
+- [High-Level Design](#high-level-design)
+- [Potential Deep Dives](#potential-deep-dives)
+- [What is Expected at Each Level?](#what-is-expected-at-each-level)
+- [Key Takeaways](#key-takeaways)
+- [Related Concepts](#related-concepts)
+
+---
+
+## 🧒 Layman's Explanation
+
+Imagine you want to buy something at a giant auction house, but you're not allowed on the trading floor yourself. Instead, you hire a **broker** who stands on the floor for you. You tell the broker "buy 10 shares of META at this price," and they walk your order to the floor, hand it over, and come back to tell you the ticket number. That broker is Robinhood — it never *is* the auction, it just talks to the auction on your behalf.
+
+Two things are happening at once. First, a giant scoreboard shows constantly-changing prices, and thousands of customers want to watch it. Rather than have every customer phone the auction house separately (wasteful and slow), the broker keeps *one* person listening to the floor and shouting price changes down a loudspeaker so everyone hears them at the same instant — that's **Server-Sent Events plus Redis pub/sub**. Second, when you place an order, the broker writes it in their own ledger *before* walking it to the floor, so that if they trip on the way, they still know they owe you a trade — that's the **write-first, then-submit** ordering workflow that keeps everything consistent even when something fails.
+
+## 🎯 Understanding the Problem
 
 > 📈 What is Robinhood ? Robinhood is a commission-free trading platform for stocks, ETFs, options, and cryptocurrencies. It features real-time market data and basic order management. Robinhood isn't an exchange in its own right, but rather a stock broker; it routes trades through market makers ("exchanges") and is compensated by those exchanges via payment for order flow .
 
@@ -61,13 +81,13 @@ Here's how it might look on a whiteboard:
 
 > For this question, given the small number of functional requirements, the non-functional requirements are even more important to pin down. They characterize the complexity of these deceptively simple live price / order placement capabilities. Enumerating these challenges is important, as it will deeply affect your design.
 
-## The Set Up
+## 🔑 The Set Up
 
 ### Planning the Approach
 
 Before you move on to designing the system, it's important to start by taking a moment to plan your strategy. Generally, we recommend building your design up sequentially, going one by one through your functional requirements. This will help you stay focused and ensure you don't get lost in the weeds as you go. Once you've satisfied the functional requirements, you'll rely on your non-functional requirements to guide you through the deep dives.
 
-### [Defining the Core Entities](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#core-entities-2-minutes)
+### 🔑 [Defining the Core Entities](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#core-entities-2-minutes)
 
 Let's go through each high level entity. I like to do this upfront before diving into other aspects of the system so we have a list of concepts to refer back to when talking about the details of the system. At this stage, it isn't necessary to enumerate every column or detail. It's all about laying the foundation.
 
@@ -81,7 +101,7 @@ In the actual interview, this can be as simple as a short list like this. Just m
 
 ![Core Entities](assets/3CAjRclwwosl.10lraae7mtffz.svg)
 
-### [The API](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#api-design-5-minutes)
+### 🔌 [The API](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#api-design-5-minutes)
 
 The API is the primary interface that users will interact with. It's important to define the API early on, as it will guide your high-level design. We just need to define an endpoint for each of our functional requirements.
 
@@ -125,7 +145,7 @@ Response: Order[] (paginated)
 
 > With each of these requests, the user information will be passed in the headers (either via session token or JWT). This is a common pattern for APIs and is a good way to ensure that the user is authenticated and authorized to perform the action while preserving security. You should avoid passing user information in the request body, as this can be easily manipulated by the client.
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
 
 ### 1) Users can see live prices of stocks
 
@@ -208,7 +228,7 @@ Additionally, to keep these orders up-to-date, we'll need some sort of trade pro
 
 > You might be wondering how we concretely reflect updates based on the exchange's trade feed. Stay tuned, as we'll dive into this in one of our deep dive sections.
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
 
 ### 1) How can the system scale up live price updates?
 
@@ -230,6 +250,26 @@ Let's walk through the full workflow for price updates:
 4. If a user unsubscribes from symbols or disconnects (detected via some heartbeat mechanism), the symbol service server will go through each symbol they were subscribed to and removes them from the `Set<userId>`. If the symbol service server no longer has any users subscribed to a symbol, it can unsubscribe from the Redis channel for that symbol.
 
 The above would scale as it would enable our users to evenly distribute load across the symbol service. Additionally, it would be self-regulating in managing what price updates are being propagated to symbol service servers.
+
+The temporal flow of a single price update, from the exchange all the way to the client's screen, looks like this:
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant S as Symbol Service
+    participant R as Redis Pub/Sub
+    participant P as Symbol Price Processor
+    participant E as Exchange
+
+    C->>S: GET /subscribe (symbols)
+    S->>S: track Symbol -> Set of userIds
+    S->>R: SUBSCRIBE to channel per symbol (if not already)
+    E-->>P: trade feed pushes new price
+    P->>R: PUBLISH price to symbol channel
+    R-->>S: deliver price to subscribed servers
+    S-->>C: fan-out price via SSE
+    Note over C,S: on unsubscribe or disconnect, remove userId,<br/>server unsubscribes from channel if no users remain
+```
 
 ### 2) How does the system track order updates?
 
@@ -273,6 +313,24 @@ Let's walk through different failures to ensure we are safe from inconsistency:
 - **Failure cancelling order**: If there's a failure cancelling the order via the exchange, we can respond with a failure to the client and rely on a "clean-up" process to scan `pending_cancel` orders (ensure they are cancelled).
 - **Failure storing `cancelled` status in DB**: If there's a failure updating the order status in the DB, we can rely on a "clean-up" process to `pending_cancel` orders (ensure they are cancelled, or no-op and just update status to `cancelled` if they have already been cancelled).
 
+Putting both workflows together, an order moves through the following lifecycle. Note how every state is written to our order DB *before* the corresponding exchange call, which is what lets the "clean-up" job reconcile any order stuck in an intermediate state:
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: order created, stored first
+    pending --> submitted: sent to exchange, externalOrderId returned
+    pending --> failed: exchange submission fails
+    submitted --> filled: trade processor matches a trade
+    submitted --> pending_cancel: user requests cancel
+    pending_cancel --> cancelled: exchange confirms cancellation
+    filled --> [*]
+    cancelled --> [*]
+    failed --> [*]
+
+    note right of pending: clean-up job scans stuck pending orders,<br/>queries exchange via clientOrderId
+    note right of pending_cancel: clean-up job scans stuck pending_cancel,<br/>ensures cancellation completed
+```
+
 Based on the above analysis, we have 1) a clear understanding of the order create and cancel workflows, and 2) identified the need for a "clean-up" background process to ensure our order state becomes consistent in the face of failures at different points in our order / cancel workflows. Below is the updated system diagram reflecting our changes:
 
 ![Order consistency deep dive](assets/MjkHbbtlxWxO.32ecldeiiplwp.svg)
@@ -286,7 +344,7 @@ Robinhood, like most fintech systems, is a complex and interesting application, 
 3. **Live order updates**: It might be worthwile to dive into how the system would propagate order updates to the user in real time (e.g. if the user is looking at orders in the app, they see their orders get filled in real time if they're waiting on the exchange).
 4. **Historical price / portfolio value data**: In this design, we didn't focus on historical price / portfolio data at all, but some interviewers might consider this a requirement. It's worthwhile to ponder how a system would enable showing historical price data (over different time windows) and historical user portfolio value.
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 Ok, that was a lot. You may be thinking, "how much of that is actually required from me in an interview?" Let’s break it down.
 
@@ -329,6 +387,24 @@ You should know which technologies to use, not just in theory but in practice, a
 **The Bar for Robinhood:** For a staff-level candidate, expectations are high regarding the depth and quality of solutions, especially for the complex scenarios discussed earlier. Exceptional candidates delve deeply into each of the topics mentioned above and may even steer the conversation in a different direction, focusing extensively on a topic they find particularly interesting or relevant. They are also expected to possess a solid understanding of the trade-offs between various solutions and to be able to articulate them clearly, treating the interviewer as a peer.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **Robinhood is a brokerage, not an exchange** — the core design challenge is *proxying* an external exchange efficiently, both for streaming prices in and for dispatching orders out, while minimizing expensive exchange connections.
+- **Live prices favor push over poll** — polling (the exchange directly or an internal cache) wastes calls and can't hit the sub-200ms SLA. Server-Sent Events (unidirectional, over HTTP) let servers push price updates, and require sticky sessions plus reconnect handling.
+- **Redis pub/sub fans out prices** — the price processor publishes per-symbol updates, symbol-service servers subscribe only to symbols their connected users care about (tracking `Symbol -> Set<userId>`), keeping the fan-out self-regulating and evenly distributed.
+- **Orders go through a gateway, not a queue** — a queued dispatcher can violate the tight order SLA during traffic spikes before it autoscales, so orders flow from the order service through a NAT/elastic-IP gateway so the exchange sees a small set of IPs.
+- **Consistency comes from write-first ordering** — the order is stored as `pending` *before* it hits the exchange, so a crash never loses an outstanding order. A background clean-up job reconciles stuck `pending` / `pending_cancel` orders via the exchange's `clientOrderId`.
+- **A separate key-value store maps `externalOrderId -> (orderId, userId)`** — because the order DB is partitioned by `userId`, the trade processor needs this index to look up which order a trade belongs to and update it.
+
+## 📚 Related Concepts
+
+- [Real-Time Updates](../Patterns/Real-TimeUpdates.md) — the SSE / pub/sub push pattern behind live price streaming.
+- [Redis](../DeepDives/Redis.md) — the pub/sub engine used to fan out per-symbol price updates.
+- [FB Live Comments](FbLiveComments.md) — deeper WebSocket-vs-SSE trade-off analysis referenced in this breakdown.
+- [Scaling Reads](../Patterns/ScalingReads.md) — broader strategies for serving high-volume reads like symbol prices.
+- [PostgreSQL](../DeepDives/Postgresql.md) — the relational store providing ACID guarantees for the order database.
+- [Sharding](../../CoreConcepts/Sharding.md) — partitioning the order DB by `userId` so per-user reads/writes hit one node.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/robinhood](https://www.hellointerview.com/learn/system-design/problem-breakdowns/robinhood)*

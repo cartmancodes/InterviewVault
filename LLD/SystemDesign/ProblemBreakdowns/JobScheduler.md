@@ -1,10 +1,28 @@
-# Job Scheduler
+# ⏰ Job Scheduler
 
 Practice with guided hints and real-time feedback
 
-## Understanding the Problem
+> **Overview**: A job scheduler automatically executes work at specified times or on a recurring schedule — running batch processes, maintenance, or one-off tasks like "send an email at 10 AM Friday". The core challenge is executing jobs within tight precision (2s of their scheduled time) at scale (10k jobs/second) while guaranteeing at-least-once execution, which we solve with a two-layered scheduler that pairs a durable database with a delayed-delivery message queue.
 
-> ⏰ What is a Job Scheduler A job scheduler is a program that automatically schedules and executes jobs at specified times or intervals. It is used to automate repetitive tasks, run scheduled maintenance, or execute batch processes.
+## 📋 Table of Contents
+- [Layman's Explanation](#laymans-explanation)
+- [Understanding the Problem](#understanding-the-problem)
+- [The Set Up](#the-set-up)
+- [High-Level Design](#high-level-design)
+- [Potential Deep Dives](#potential-deep-dives)
+- [What is Expected at Each Level?](#what-is-expected-at-each-level)
+
+---
+
+## 🧒 Layman's Explanation
+
+Think of a job scheduler like a very reliable personal assistant with a calendar and a to-do list. A **task** is a skill your assistant knows how to do ("send an email"). A **job** is a specific reminder you write down: "send *this* email to John at 10 AM every Friday". The assistant doesn't want to re-read your entire calendar every second to check what's due, so instead they keep a short list of everything happening in the next few minutes and set a kitchen timer for each item.
+
+When a timer goes off, the assistant hands the task to one of several helpers to actually do the work. If a helper drops the ball — spills coffee on the letter, or steps out of the room entirely — the timer quietly resets and another helper picks it up, so nothing gets silently forgotten. The trick is making sure that if the *same* letter accidentally gets sent twice, John doesn't end up with two identical emails — that is the idempotency problem, and it is why "at-least-once" delivery needs careful handling downstream.
+
+## 🎯 Understanding the Problem
+
+> ⏰ **What is a Job Scheduler**: A job scheduler is a program that automatically schedules and executes jobs at specified times or intervals. It is used to automate repetitive tasks, run scheduled maintenance, or execute batch processes.
 
 There are two key terms worth defining before we jump into solving the problem:
 
@@ -44,7 +62,7 @@ On the whiteboard, this might look like:
 
 ![Requirements](assets/4VuiBIp5Wrnm.0a-35n7ef3pqs.svg)
 
-## The Set Up
+## 🧰 The Set Up
 
 ### Planning the Approach
 
@@ -105,7 +123,7 @@ Understanding this flow early in our design process serves multiple purposes. Fi
 
 > Note that this is simple, we will improve upon as we go, but it's important to start simple and build up from there.
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes-1)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes-1)
 
 We start by building an MVP that works to satisfy the core functional requirements. This does not need to scale or be perfect. It's just a foundation for us to build upon later. We will walk through each functional requirement, making sure each is satisfied by the high-level design.
 
@@ -183,6 +201,29 @@ By using a time bucket (Unix timestamp rounded down to the nearest hour) as our 
 time_bucket = (execution_time // 3600) * 3600  # Round down to nearest hour
 ```
 
+This separation of the job *definition* from its *execution instances* gives us the following data model:
+
+```mermaid
+erDiagram
+    JOBS ||--o{ EXECUTIONS : "spawns instances of"
+    JOBS {
+        string job_id PK "Partition key"
+        string user_id
+        string task_id
+        string schedule_type "CRON or DATE"
+        string schedule_expression "e.g. 0 10 * * *"
+        map parameters
+    }
+    EXECUTIONS {
+        int time_bucket PK "Unix ts rounded to hour"
+        string execution_time SK "exact time + job_id"
+        string job_id
+        string user_id "GSI partition key"
+        string status "PENDING RETRYING COMPLETED FAILED"
+        int attempt
+    }
+```
+
 This gives us efficient reads, since we only need to query 1-2 partitions to find all upcoming jobs. When a recurring job completes, we can easily schedule its next occurrence by calculating the next execution time and creating a new entry in the `Executions` table. The job definition stays the same, but we keep creating new execution instances.
 
 > Concentrating all writes for a given hour into a single partition could create a hot partition under heavy load. We'll address this with write sharding in the scaling deep dive.
@@ -226,7 +267,7 @@ The GSI adds some write overhead and cost, but it's a worthwhile trade-off to su
 
 Now, users simply need to query the GSI by user_id and get a list of executions sorted by execution_time.
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes-1)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes-1)
 
 ### 1) How can we ensure the system executes jobs within 2s of their scheduled time?
 
@@ -371,6 +412,22 @@ This approach handles worker failures without requiring any additional infrastru
 
 ![Retries](assets/e3xLR-Ts5dD9.2i9mp_-2v3duu.svg)
 
+Putting the status transitions together, a single execution moves through the following lifecycle in the `Executions` table:
+
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING: cron enqueues to SQS
+    PENDING --> IN_PROGRESS: worker picks up message
+    IN_PROGRESS --> COMPLETED: task succeeds
+    IN_PROGRESS --> RETRYING: visible failure<br/>or worker crash
+    RETRYING --> IN_PROGRESS: re-enqueued with<br/>exponential backoff
+    RETRYING --> FAILED: 3 attempts exhausted
+    COMPLETED --> [*]
+    FAILED --> [*]
+```
+
+> ⚠️ A crashed worker never marks its job `FAILED` — the SQS visibility timeout simply expires and the message reappears for another worker. Only *visible* failures that exhaust 3 retries reach the terminal `FAILED` state.
+
 Lastly, one consequence of at-least-once execution is that we need to ensure our task code is idempotent. In other words, running the task multiple times should have the same outcome as running it just once.
 
 Here are a few ways we can handle idempotency:
@@ -387,7 +444,7 @@ Design jobs to be naturally idempotent by using idempotency keys and conditional
 
 This is the most robust approach, essentially offloading idempotency concerns to the task's implementation.
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 ### Mid-level
 
@@ -402,6 +459,26 @@ For senior candidates, I expect much more autonomy. They should lead the convers
 Staff candidates are the cream of the crop. I expect they breeze through the setup and the high-level design and spend most of their time leading deep dives. They should proactively lead the discussion and understand the major bottlenecks of the system, proposing well-justified solutions. Typically, they'll have a deep understanding of at least one technology in question and be able to explain, justified with hands-on experience, why one approach is better than another. As always, while not a strict requirement, the best staff candidates have the ability to teach the interviewer something, no matter how small.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **Separate the definition from the instance.** A `Jobs` table holds the reusable definition (task, schedule, parameters) while an `Executions` table holds each individual time a job should run — the same pattern used by calendars (event vs. occurrence) and notification systems (template vs. sent notification).
+- **Time-bucket partitioning enables efficient reads.** Partitioning `Executions` by an hourly `time_bucket` means the scheduler only queries 1-2 partitions to find upcoming work — at the cost of a hot partition, which write sharding (a random suffix on the key) resolves.
+- **A two-layered scheduler marries durability with precision.** A cron queries the DB every ~5 minutes for durability, then pushes jobs to a delayed-delivery queue (SQS) so workers can execute within the 2s window without hammering the database every few seconds.
+- **Use delayed delivery, not a log-based queue, for scheduling.** Kafka processes in-order within a partition, so a sooner-scheduled job would wait behind earlier ones; SQS `DelaySeconds` (capped at 15 min) keeps messages invisible until near their execution time.
+- **At-least-once means idempotency is your problem.** SQS visibility timeouts + heartbeating handle invisible worker crashes, `ApproximateReceiveCount` + a dead-letter queue cap visible-failure retries at 3 — but duplicate execution is still possible, so design tasks to be naturally idempotent.
+
+## 📚 Related Concepts
+
+- [Managing Long-Running Tasks](../Patterns/ManagingLongRunningTasks.md) — the general queue-plus-workers pattern this scheduler is built on.
+- [Dealing with Contention](../Patterns/DealingWithContention.md) — job leasing and distributed locks discussed for worker-failure detection.
+- [Scaling Writes](../Patterns/ScalingWrites.md) — write sharding to avoid the hot `time_bucket` partition.
+- [DynamoDB](../DeepDives/Dynamodb.md) — the key-value store chosen for the Jobs and Executions tables, including GSIs.
+- [Cassandra](../DeepDives/Cassandra.md) — the open-source alternative for the same access patterns.
+- [Kafka](../DeepDives/Kafka.md) — the log-based queue and why its in-partition ordering is unsuitable for scheduling.
+- [Redis](../DeepDives/Redis.md) — sorted-set (ZSET) priority queue as a self-managed alternative to SQS.
+- [Sharding](../../CoreConcepts/Sharding.md) — deeper treatment of partition-key design and write sharding.
+- [Distributed Locking](../../CoreConcepts/DistributedLocking.md) — the leasing mechanism behind job ownership.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/job-scheduler](https://www.hellointerview.com/learn/system-design/problem-breakdowns/job-scheduler)*

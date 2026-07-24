@@ -1,14 +1,31 @@
-# Tinder
+# ❤️ Tinder
 
-Practice with guided hints and real-time feedback
+> **Overview**: Tinder is a mobile dating app that helps people connect by allowing users to swipe right to like or left to pass on profiles, using location data and user-specified filters to suggest potential matches nearby. This breakdown focuses on the two hard problems: serving a low-latency stack of relevant, nearby profiles, and recording swipes with the strong consistency needed to detect mutual matches instantly. The design layers a profile service, a write-optimized swipe store, and a search/cache tier for feeds.
 
-Watch the author walk through the problem step-by-step
+## 📋 Table of Contents
 
-Watch the author walk through the problem step-by-step
+- [🧒 Layman's Explanation](#-laymans-explanation)
+- [🎯 Understand the Problem](#-understand-the-problem)
+- [🧭 The Set Up](#-the-set-up)
+- [🏗️ High-Level Design](#️-high-level-design)
+- [🔬 Potential Deep Dives](#-potential-deep-dives)
+- [🎤 What is Expected at Each Level?](#-what-is-expected-at-each-level)
+- [🎓 Key Takeaways](#-key-takeaways)
+- [📚 Related Concepts](#-related-concepts)
 
-## Understand the Problem
+---
 
-> ❤️ What is Tinder Tinder is a mobile dating app that helps people connect by allowing users to swipe right to like or left to pass on profiles. It uses location data and user-specified filters to suggest potential matches nearby.
+## 🧒 Layman's Explanation
+
+Imagine a matchmaker standing at the door of a huge party. Before you walk in, you tell them the kind of person you're hoping to meet (age range, interests) and that you only care about people who live nearby. The matchmaker hands you a small stack of cards, one person per card, already filtered to your taste and neighborhood — so you never waste time flipping through the whole room.
+
+You flip each card left ("no thanks") or right ("I'm interested"). The matchmaker quietly writes down every choice. Here's the clever part: if you flip right on someone who *already* flipped right on you earlier that evening, the matchmaker taps you both on the shoulder right away and says "you two should talk!" — even if the other person left the party hours ago (that's the push notification). To make this feel instant and never re-hand you a card you've already seen, the matchmaker keeps your recent choices in their pocket and pre-builds your next stack while you're still flipping the current one.
+
+---
+
+## 🎯 Understand the Problem
+
+> ❤️ **What is Tinder?** Tinder is a mobile dating app that helps people connect by allowing users to swipe right to like or left to pass on profiles. It uses location data and user-specified filters to suggest potential matches nearby.
 
 ### [Functional Requirements](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#1-functional-requirements)
 
@@ -45,7 +62,7 @@ Here's how it might look on a whiteboard:
 
 ![Non-Functional Requirements](assets/zp3zpO7Ek9lI.1wz8x-16c7pjd.svg)
 
-## The Set Up
+## 🧭 The Set Up
 
 ### Planning the Approach
 
@@ -108,7 +125,7 @@ Request:
 
 > With each of these requests, the user information will be passed in the headers (either via session token or JWT). This is a common pattern for APIs and is a good way to ensure that the user is authenticated and authorized to perform the action while preserving security. You should avoid passing user information in the request body, as this can be easily manipulated by the client. In the interview, you may want to just denote which endpoints require user authentication and which don't. In our case, all endpoints will require authentication.
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
 
 We'll start our design by going one-by-one through our functional requirements and designing a single system to satisfy them. Once we have this in place, we'll layer on depth via our deep dives.
 
@@ -211,9 +228,29 @@ Let's quickly recap the full swipe process again, now that we've introduced push
 4. We display a "You Matched!" message to `Person B` immediately after swiping.
 5. We send a push notification via APNS or FCM to `Person A` informing them that they have a new match.
 
+```mermaid
+sequenceDiagram
+    participant A as Person A
+    participant B as Person B
+    participant SS as Swipe Service
+    participant DB as Swipe DB
+    participant PN as APNS / FCM
+
+    Note over A,DB: Some time in the past
+    A->>SS: Swipe right on B
+    SS->>DB: Persist swipe (A - yes on B)
+    Note over A,PN: Later, Person B opens the app
+    B->>SS: Swipe right on A
+    SS->>DB: Check for inverse swipe (A on B)
+    DB-->>SS: Found, A already liked B
+    SS-->>B: Show You Matched, immediate
+    SS->>PN: Send push notification to A
+    PN-->>A: You have a new match
+```
+
 > Since this design is less concerned with the after-match flow, we can avoid diving into the match storage details. Additionally, we can make an assumption that an external service can support push notifications. Be sure to clarify these assumptions with your interviewer!
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
 
 At this point, we have a basic, functioning system that satisfies the functional requirements. However, there are a number of areas we could dive deeper into to improve the system's performance, scalability, etc. Depending on your seniority, you'll be expected to drive the conversation toward these deeper topics of interest.
 
@@ -344,6 +381,22 @@ Memory management is another consideration, but since we're using Cassandra as o
 
 This hybrid approach gives us the best of both worlds: Redis's strong consistency and atomic operations for real-time match detection, combined with Cassandra's durability and storage capabilities for historical data. The system remains highly available and scalable while meeting our core requirement of consistent, immediate match detection.
 
+The progression of approaches we considered for consistent, low-latency match detection:
+
+```mermaid
+graph LR
+    P["Periodic polling<br/>for reciprocal swipes"] --> LWT["Cassandra LWT<br/>Paxos, single partition<br/>only, high overhead"]
+    LWT --> BATCH["Cassandra single-partition<br/>batch, sort IDs into<br/>one user_pair partition"]
+    BATCH --> R["Redis atomic Lua script<br/>plus Cassandra as<br/>durable storage"]
+
+    style P fill:#FFB6C1
+    style LWT fill:#FFE4B5
+    style BATCH fill:#FFE4B5
+    style R fill:#90EE90
+```
+
+> ⚠️ Polling is a non-starter, it cannot notify the last swiper immediately. LWTs give linearizable consistency but only within a single partition, and at 2B+ swipes/day reciprocal swipes span partitions. Co-locating a pair's swipes in one partition (sorted `user_pair` key) unlocks single-partition atomicity, and Redis executes that atomically in memory while Cassandra keeps the durable record.
+
 ### 2) How can we ensure low latency for feed/stack generation?
 
 When a user open the app, they want to immediately start swiping. They don't want to have to wait for us to generate a feed for them.
@@ -414,6 +467,22 @@ A few user-triggered actions might also lead to stale profiles in the feed:
 
 All of the above are interactions that could trigger a feed refresh in the background, so that the feed is ready for the user if they choose to start swiping shortly after.
 
+The evolution of feed-generation strategies, ending in the hybrid we land on:
+
+```mermaid
+graph LR
+    SQL["Naive SQL query<br/>per request, slow<br/>geo + filter scan"] --> IDX["Indexed / search DB<br/>Elasticsearch, geospatial<br/>index, real-time"]
+    IDX --> CACHE["Pre-compute + cache<br/>feeds via background job<br/>instant on app open"]
+    CACHE --> COMBO["Hybrid, cached feed first<br/>then Elasticsearch for<br/>fresh matches on exhaustion"]
+    COMBO --> TTL["Short TTL + warm only<br/>active users to avoid<br/>stale feeds"]
+
+    style SQL fill:#FFB6C1
+    style IDX fill:#FFE4B5
+    style CACHE fill:#FFE4B5
+    style COMBO fill:#90EE90
+    style TTL fill:#e1f5ff
+```
+
 ### 3) How can the system avoid showing user profiles that the user has previously swiped on?
 
 It would be a pretty poor experience if users were re-shown profiles they had swiped on. It could give the user the impression that their "yes" swipes were not recorded, or it could annoy users to see people they previously said "no" to as suggestions again.
@@ -457,7 +526,7 @@ The main challenge here is managing the bloom filter cache. It will need to be u
 
 ![Final Design](assets/jO6rGghzbZot.0prqyrxp-ro90.svg)
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 Ok, that was a lot. You may be thinking, “how much of that is actually required from me in an interview?” Let’s break it down.
 
@@ -500,6 +569,26 @@ You should know which technologies to use, not just in theory but in practice, a
 **The Bar for Tinder:** For a staff-level candidate, expectations are high regarding the depth and quality of solutions, especially for the complex scenarios discussed earlier. Exceptional candidates delve deeply into each of the topics mentioned above and may even steer the conversation in a different direction, focusing extensively on a topic they find particularly interesting or relevant. They are also expected to possess a solid understanding of the trade-offs between various solutions and to be able to articulate them clearly, treating the interviewer as a peer.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **Split swipe from profile.** Profiles are read-heavy and change rarely, swipes are write-heavy (~4B/day, ~200GB/day). Separate services and databases let each scale and be optimized independently, with Cassandra's write-optimized engine backing swipes.
+- **Consistency is the crux of matching.** To notify the last swiper instantly, swipe-record and reciprocal-check must be atomic. Co-locate a pair's swipes in one partition (sorted `user_pair` key), then use Redis atomic Lua scripts for real-time detection with Cassandra as durable storage.
+- **Feeds need both pre-computation and real-time search.** Serve an instantly-available cached stack on app open, then fall back to a geospatial-indexed search DB (Elasticsearch) as the stack depletes, refreshing before it runs out so it feels infinite.
+- **Guard against stale feeds with tunable knobs.** Short TTLs (< 1h), warming only active users, and background refreshes on filter/location changes keep cached profiles relevant, TTL, cache size, and warmed-user set are all tunable without reworking the system.
+- **Avoid re-showing swiped profiles cheaply.** Filter with a client-side cache of recent swipes (single-device assumption), and for users with huge swipe histories, use a bloom filter, no false negatives means never re-showing a profile, at the cost of rare false positives.
+- **Notify the offline matcher via native push.** Person B sees the match instantly, Person A is reached later through APNS or FCM.
+
+## 📚 Related Concepts
+
+- [Cassandra](../DeepDives/Cassandra.md) — the write-optimized store behind swipe data, partitioning, LWTs, and single-partition batches.
+- [Redis](../DeepDives/Redis.md) — in-memory atomic operations (Lua scripts) powering real-time match detection.
+- [Proximity Search](../DeepDives/ProximitySearch.md) — geospatial indexing that makes location-filtered feed queries fast.
+- [Elasticsearch](../DeepDives/Elasticsearch.md) — the search-optimized index used for real-time feed generation.
+- [Data Structures for Big Data](../DeepDives/DataStructuresForBigData.md) — bloom filters for filtering out already-swiped profiles at scale.
+- [Consistent Hashing](../../CoreConcepts/ConsistentHashing.md) — keeps related swipes on the same Redis node as the cluster scales.
+- [Caching](../../CoreConcepts/Caching.md) — TTL, invalidation, and warming strategies behind pre-computed feeds.
+- [Sharding](../../CoreConcepts/Sharding.md) — partitioning the massive swipe dataset across nodes.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/tinder](https://www.hellointerview.com/learn/system-design/problem-breakdowns/tinder)*

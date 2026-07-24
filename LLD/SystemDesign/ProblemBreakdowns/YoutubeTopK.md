@@ -1,4 +1,4 @@
-# YouTube Top K
+# 📊 YouTube Top K
 
 Practice with guided hints and real-time feedback
 
@@ -6,7 +6,24 @@ Watch the author walk through the problem step-by-step
 
 Watch the author walk through the problem step-by-step
 
-## Understanding the Problem
+> **Overview**: Top-K is a classic, highly flexible system design problem. Here we design a system that answers, **precisely**, the top K most viewed YouTube videos over a set of time windows (last hour, day, month, and all-time) from a firehose of view events. The core tension is serving these queries in 10's of milliseconds while ingesting a massive write stream, which pushes us toward precomputation, caching, sharding, batching (Flink), and — if we relax precision — approximation with Count-Min Sketch.
+
+## 📋 Table of Contents
+- [Understanding the Problem](#understanding-the-problem)
+- [The Set Up](#the-set-up)
+- [High-Level Design](#high-level-design)
+- [Potential Deep Dives](#potential-deep-dives)
+- [What is Expected at Each Level?](#what-is-expected-at-each-level)
+
+---
+
+## 🧒 Layman's Explanation
+
+Imagine YouTube as a stadium with billions of turnstiles clicking every second, and you run the giant scoreboard that shows the "most-watched videos." Someone can walk up at any moment and ask for the top 100 videos of the last hour, the last day, the last month, or of all time — and they want the answer instantly. If you tried to recount every click each time someone asked, you'd never finish before the next person asked. So instead you keep a running leaderboard that's always up to date, and hand it out the moment it's requested.
+
+The tricky parts are all about scale and time. Because so many clicks come in at once (about 700,000 per second), you don't scribble each one into the ledger individually — you group clicks for the same popular video together and write them in batches. Because people ask about *windows* of time, you keep a separate scoreboard for each window and slide the boundaries as the clock ticks. And if being roughly right is good enough (the #1 video usually beats #2 by thousands of views, not one), you can use a clever memory-saving trick called a Count-Min Sketch that remembers *how many times* it has seen something without remembering *what* it saw — shrinking the scoreboard from tens of gigabytes down to hundreds of megabytes.
+
+## 🎯 Understanding the Problem
 
 Top-K is a classic system design problem which has a ton (!) of different variants. As such, each interview can be a little unique. In this writeup, we'll walk through the problem of designing a top-K system for YouTube video views. In our deep dives, we'll talk through some of the variants and alternatives that interviewers might guide you toward.
 
@@ -81,13 +98,31 @@ And with some brief notes that we're writing as we're discussing with the interv
 
 Let's keep going!
 
-## The Set Up
+## 🧩 The Set Up
 
 ### Planning the Approach
 
 Based on our requirements, we're going to sketch out a quick plan for your interviewer. Generally speaking, we'll start with a basic, suboptimal system that solves for our requirements. We'll start by building a system which can calculate the top K videos for all-time. Then we'll extend the system to support time windows.
 
 Once we have a basic system, we'll look for ways to optimize it. We'll earmark bottlenecks along the way that we'll address in our deep dives. Finally, if we have time, we'll try to solve some of the stretch requirements we talked about in the requirements section like making our system more efficient with approximations. Let's get started!
+
+The roadmap for this write-up looks like this — a deliberately simple starting point that we harden step by step:
+
+```mermaid
+graph LR
+    A["All-time Top K<br/>Postgres + views index"] --> B["Time-window queries<br/>tumbling windows"]
+    B --> C["Cache + precompute<br/>reads"]
+    C --> D["Shard + batch writes<br/>Flink"]
+    D --> E["Per-window<br/>aggregate tables"]
+    E --> F["Approximation<br/>Count-Min Sketch"]
+
+    style A fill:#FFE4B5
+    style B fill:#FFE4B5
+    style C fill:#90EE90
+    style D fill:#90EE90
+    style E fill:#90EE90
+    style F fill:#e1f5ff
+```
 
 ### [Defining the Core Entities](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#core-entities-2-minutes)
 
@@ -113,7 +148,7 @@ That's it. We're not going to dawdle here and keep moving on to the meat of the 
 
 > Especially for more senior candidates, it's important to focus your efforts on the "interesting" aspects of the interview. Spending too much time on obvious elements both deprives you of time for the more interesting parts of the interview but also signals to the interviewer that you may not be able to distinguish more complex pieces from trivial ones: a critical skill for senior engineers.
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
 
 To get started, we need to build a basic system which satisfies our functional requirements but might make some sacrifices in our non-functional requirements. It's far better for us to start with a _working system_ and optimize it, than to begin with an "optimal" system and try to make it work. (This pattern applies to real world engineering as well!)
 
@@ -184,7 +219,7 @@ Spoiler alert: processing billions of rows takes a while. We'll earmark this for
 
 But now we have a working a system! Let's start to chip away at the problems.
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
 
 ### 1) How can we cut down on the number of queries to the database?
 
@@ -287,6 +322,18 @@ Because we're batching, instead of a steady stream of writes we now have a big l
 We should also expect that the number of writes will be smaller than before (by anything from 2-100x) because we're summing many views that could have happened in one hour for a singular video.
 
 All told, by batching, we can probably bring the number of shards down in the 5-10 range. Still not great, but manageable. Let's keep going.
+
+The write path evolves like this — each step chips away at the throughput problem:
+
+```mermaid
+graph LR
+    S["Single Postgres<br/>~700k tps to<br/>one node"] -->|"shard by videoId"| SH["~70 shards<br/>~10k tps each"]
+    SH -->|"batch with Flink<br/>1-hour tumbling window"| BA["5-10 shards<br/>bulk hourly writes"]
+
+    style S fill:#FFB6C1
+    style SH fill:#FFE4B5
+    style BA fill:#90EE90
+```
 
 ### 3) How do we optimize our top K queries?
 
@@ -467,6 +514,22 @@ Notice there is not a `list` operation here, we've lost track of the ID of the i
 3. We'll add this view count to a sorted list or heap. We'll truncate this list periodically so we're not using excessive memory. Since our users can never query values higher than the top 1000, for all time we can keep the sorted list to 1000 entries.
 4. When we want to retrieve the top K items, we'll grab the top K items from the sorted list!
 
+Pairing the sketch with a trimmed sorted set gives us this pipeline per view event:
+
+```mermaid
+graph LR
+    V["View event"] --> ADD["CMS.INCRBY<br/>add to sketch"]
+    ADD --> EST["CMS.QUERY<br/>estimate count"]
+    EST --> Z["ZADD to sorted set<br/>trim to top 1000"]
+    Z --> Q["Read path:<br/>top K from<br/>sorted set"]
+
+    style V fill:#f3e5f5
+    style ADD fill:#e1f5ff
+    style EST fill:#e1f5ff
+    style Z fill:#e1f5ff
+    style Q fill:#90EE90
+```
+
 In order to solve our tumbling window top-K problem, we just need to keep sketches and sorted lists for each window that we want to query. There's two practical ways for us to do this in our design:
 
 Redis natively supports CMS and sorted sets. We can revert back to our `View Event Consumer` and have each view event trigger a `CMS.INCRBY` and then a `CMS.QUERY`. With the result, we can then `ZADD` the items to our sorted set. We'll keep our sorted set trimmed to 1000 entries, and, as an optimization, avoiding `ZADD` any item which is already below the top 1000 by keeping a lower bound in our view consumer.
@@ -527,7 +590,7 @@ Some of these systems can get flaky at scale in production (frankly, this is tru
 
 > Note how closely the "good" TimescaleDB solution resembles our existing solution! This isn't a coincidence. When you're thinking deeply about how to structure your data, you'll find that the right system design is often the one that allows you to most easily express the ideal data flow.
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 Ok, that was a lot. You may be thinking, "how much of that is actually required from me in an interview?" Let's break it down.
 
@@ -570,6 +633,28 @@ You should know which technologies to use, not just in theory but in practice, a
 **The Bar for Top K:** For a staff+ candidate, expectations are high regarding depth and quality of solutions, particularly for the complex scenarios discussed earlier. A staff candidate will expand to cover deep dives that we haven't enumerated and speak to various alternatives that they may not have time to go into. The big hallmark of a staff+ candidate is they can see the solution space clearly and speak to different options with clear judgement and confidence.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **Precompute, don't compute on read.** The 10's-of-milliseconds latency target plus a 1-minute freshness grace period means top-K reads should hit a warmed cache (Redis/Memcached), populated by a cron or a Flink sink — never a live database aggregation.
+- **Choose tumbling windows first; sliding is much harder.** Tumbling windows align to hour/day/month boundaries and are far simpler. Sliding windows require increment/decrement bookkeeping and keeping fine-grained data around for a full month.
+- **Writes are the real bottleneck.** 70B views/day ≈ 700k tps, well past a single node's ~10k tps. Shard by `videoId` (the topic is already partitioned that way), then batch popular videos with Flink to collapse ~70 shards down to 5-10.
+- **Keep one indexed aggregate table per window.** Maintaining `VideoViewsLastHour/Day/Month` (plus all-time) with an index on `views` makes top-K reads an `O(k)` index read — you push complexity onto the writes (4 tables instead of 1).
+- **Flink-native state can remove Postgres entirely.** Aggregation, rolling windows, and the top-K heap can all live in Flink's checkpointed state, writing results straight to Redis — elegant, but it leans heavily on the interviewer's Flink familiarity.
+- **Approximation buys huge memory savings.** When precision isn't required, a Count-Min Sketch plus a sorted set trimmed to 1000 entries cuts memory from ~64GB+ full hash tables to hundreds of megabytes — at the cost of durability concerns and losing exactness.
+
+## 📚 Related Concepts
+
+- [Kafka](../DeepDives/Kafka.md) — the partitioned `ViewEvent` stream the whole pipeline consumes from, and the replayable log Flink rewinds to on failure.
+- [Flink](../DeepDives/Flink.md) — stream processing for watermarks, tumbling-window aggregation, checkpointing, and native top-K state.
+- [Redis](../DeepDives/Redis.md) — the cache serving precomputed results, plus native Count-Min Sketch and sorted-set support.
+- [Postgresql](../DeepDives/Postgresql.md) — the aggregate store, its `views` index, and bulk-write tuning (unlogged tables, delayed fsync).
+- [Data Structures for Big Data](../DeepDives/DataStructuresForBigData.md) — Count-Min Sketch intuition and other approximation techniques.
+- [Time Series Databases](../DeepDives/TimeSeriesDatabases.md) — why high-cardinality `videoId` tags break InfluxDB/Prometheus, and where TimescaleDB fits.
+- [Scaling Reads](../Patterns/ScalingReads.md) — caching and precomputation strategies for the read path.
+- [Scaling Writes](../Patterns/ScalingWrites.md) — sharding, partitioning, and batching for high write volume.
+- [Caching](../../CoreConcepts/Caching.md) — cache warming, TTLs, and request coalescing behind the top-K service.
+- [Sharding](../../CoreConcepts/Sharding.md) — sharding by `videoId` and merging per-shard top-K results.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/top-k](https://www.hellointerview.com/learn/system-design/problem-breakdowns/top-k)*

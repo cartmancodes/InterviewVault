@@ -1,12 +1,26 @@
-# Bitly
+# 🔗 Bitly
 
-Practice with guided hints and real-time feedback
+> **Overview**: Bit.ly is a URL shortening service that turns long URLs into short, shareable links (and can provide analytics on them). This breakdown targets a junior audience and walks through the full delivery framework — requirements, entities, API, high-level design, and deep dives. The defining characteristic of the system is its extreme read-to-write skew (roughly 1000 reads per write), which shapes every downstream decision around short-code generation, indexing, caching, and how we scale reads versus writes.
 
-Watch the author walk through the problem step-by-step
+## 📋 Table of Contents
+- [Understanding the Problem](#understanding-the-problem)
+- [Layman's Explanation](#laymans-explanation)
+- [The Set Up](#the-set-up)
+- [High-Level Design](#high-level-design)
+- [Potential Deep Dives](#potential-deep-dives)
+- [What is Expected at Each Level?](#what-is-expected-at-each-level)
+- [Key Takeaways](#key-takeaways)
+- [Related Concepts](#related-concepts)
 
-Watch the author walk through the problem step-by-step
+---
 
-## Understanding the Problem
+## 🧒 Layman's Explanation
+
+Imagine a coat check at a busy theater. You hand over your bulky coat (the long URL) and get back a tiny numbered ticket (the short code) that fits in your pocket. Later, you show the ticket and the attendant instantly walks to the exact hook and returns your coat — no rummaging through every hanger. That instant lookup is only possible because tickets are handed out in a strict order (a **counter**) so no two are ever the same, and because the hooks are organized so the attendant jumps straight to the right one (an **index**), instead of checking every coat.
+
+Now picture opening night: thousands of people show up but almost all of them are *picking up* coats, not dropping new ones off (the read-heavy workload). So you keep the most-requested coats on a rack right by the door (a **cache**), and you even open pickup windows in other parts of the building (**CDN edges**) so guests near the back never walk all the way to the main closet. Handing out a new ticket is rare and cheap; returning a coat happens constantly — so you pour your energy into making pickups fast.
+
+## 🎯 Understanding the Problem
 
 > 🔗 What is Bit.ly ? Bit.ly is a URL shortening service that converts long URLs into shorter, manageable links. It also provides analytics for the shortened URLs.
 
@@ -58,7 +72,7 @@ Here is what you might write on the whiteboard:
 
 ![Bit.ly Non-Functional Requirements](assets/5RYoohUD8Vib.03jb3i4dzpdqv.svg)
 
-## The Set Up
+## 🔑 The Set Up
 
 ### [Defining the Core Entities](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#3-defining-the-core-entities)
 
@@ -115,7 +129,7 @@ GET /{short_code}
 
 > We'll talk more about which HTTP status codes to use during the high-level design.
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
 
 We'll start our design by going one-by-one through our functional requirements and designing a single system to satisfy them. Once we have this in place, we'll layer on depth via our deep dives.
 
@@ -183,11 +197,11 @@ For a URL shortener, a 302 redirect is often preferred because:
 - It prevents browsers from caching the redirect, which could cause issues if we need to change or delete the short URL in the future.
 - It allows us to track click statistics for each short URL (even though this is out of scope for this design).
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
 
 At this point, we have a basic, functioning system that satisfies the functional requirements. However, there are a number of areas we could dive deeper into to reduce the likelihood of collision, support scalability, and improve performance. We can now look back at our non-functional requirements and see which ones still need to be satisfied or improved upon.
 
-### 1) How can we ensure short urls are unique?
+### 🔑 1) How can we ensure short urls are unique?
 
 In our high-level design, we abstracted away the details of how we generate a short url but now it's time to get into the nitty-gritty! There are a handful of constraints we need to keep in mind as we design:
 
@@ -250,7 +264,30 @@ To determine whether we should be concerned about length, we can do a little mat
 
 This means that even with a billion URLs, our short codes would still be quite compact. At 62^6 (approximately 56 billion URLs), we'd need to move to 7-character codes, giving us capacity for 62^7 (over 3.5 trillion) URLs. This scalability allows us to handle a massive number of URLs while keeping the codes short.
 
-### 2) How can we ensure that redirects are fast?
+The progression of options we weighed, from unworkable to the one that guarantees uniqueness without extra checks:
+
+```mermaid
+graph LR
+    P["Prefix of URL<br/>first N chars"] --> R["Random number<br/>Math.random()"]
+    R --> H["Hash + base62<br/>SHA-256, take first N"]
+    H --> C["Counter + base62<br/>atomic INCR"]
+
+    P -. "fails uniqueness<br/>shared prefixes collide" .-> X1["✗"]
+    R -. "not enough entropy<br/>collisions" .-> X2["✗"]
+    H -. "collisions grow with n<br/>needs retries + checks" .-> X3["△"]
+    C -. "each value unique<br/>no checks needed" .-> X4["✓"]
+
+    style P fill:#FFB6C1
+    style R fill:#FFB6C1
+    style H fill:#FFE4B5
+    style C fill:#90EE90
+    style X1 fill:#FFB6C1
+    style X2 fill:#FFB6C1
+    style X3 fill:#FFE4B5
+    style X4 fill:#90EE90
+```
+
+### ⚡ 2) How can we ensure that redirects are fast?
 
 When dealing with a large database of shortened URLs, finding the right match quickly becomes crucial for a smooth user experience. Without any optimization, our system would need to check every single pair of short and original URLs in the database to find the one we're looking for. This process, known as a "full table scan," can be incredibly slow, especially as the number of URLs grows into the millions or billions.
 
@@ -290,6 +327,29 @@ This means memory access is about 1,000 times faster than SSD and 100,000 times 
 
 ![In-Memory Cache](assets/Kj7w8jXEtJLS.1p8g9j_86b-cs.svg)
 
+The read path with a cache in front of the database, showing both the fast hit and the slower miss that populates the cache for next time:
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant S as Primary Server
+    participant Ca as Cache (Redis)
+    participant DB as Database
+
+    B->>S: GET /abc123
+    S->>Ca: lookup abc123
+    alt Cache hit
+        Ca-->>S: long URL (from memory, ~100ns)
+        S-->>B: 302 Redirect to long URL
+    else Cache miss
+        Ca-->>S: not found
+        S->>DB: query short_code = abc123
+        DB-->>S: long URL (from disk, ~0.1ms)
+        S->>Ca: store abc123 -> long URL (TTL)
+        S-->>B: 302 Redirect to long URL
+    end
+```
+
 While implementing an in-memory cache offers significant performance improvements, it does come with its own set of challenges. Cache invalidation can be complex, especially when updates or deletions occur, though this issue is minimized since URLs are mostly read-heavy and rarely change. The cache needs time to "warm up," meaning initial requests may still hit the database until the cache is populated. Memory limitations require careful decisions about cache size, eviction policies (e.g., LRU - Least Recently Used), and which entries to store. Introducing a cache adds complexity to the system architecture, and you'll want to be sure you discuss the tradeoffs and invalidation strategies with your interviewer.
 
 Another thing we can do to reduce latency is to utilize Content Delivery Networks (CDNs) and edge computing. In this approach, the short URL domain is served through a CDN with Points of Presence (PoPs) geographically distributed around the world. The CDN nodes cache the mappings of short codes to long URLs, allowing redirect requests to be handled close to the user's location. Furthermore, by deploying the redirect logic to the edge using platforms like Cloudflare Workers or AWS Lambda@Edge, the redirection can happen directly at the CDN level without reaching the origin server.
@@ -300,7 +360,7 @@ However, this too presents some challenges. Ensuring cache invalidation and cons
 
 You're trading cost and complexity for performance here. Whether or not this is worth it depends on factors like company price sensitivity, user experience requirements, and traffic patterns.
 
-### 3) How can we scale to support 1B shortened urls and 100M DAU?
+### 📈 3) How can we scale to support 1B shortened urls and 100M DAU?
 
 We've done much of the hard work to scale already! We introduced a caching layer which will help with read scalability, now lets talk a bit about scaling writes.
 
@@ -352,7 +412,7 @@ For multi-region deployment, allocate disjoint counter ranges to each region (e.
 
 If Redis fails before replicating the latest counter, you might lose a few values, but since we only need uniqueness (not continuity), this is acceptable. The database's UNIQUE constraint on short_code provides the ultimate safety net.
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 URL shortener is considered an entry-level system design question, but that doesn't mean it's trivial. Here's what I look for at each level.
 
@@ -369,6 +429,25 @@ For senior candidates, I expect you to drive the conversation and proactively id
 For staff candidates, I'm evaluating your ability to see past the "textbook" solution and discuss real production concerns. You should quickly recognize this is a read-heavy system and structure your design accordingly from the start. I expect you to proactively discuss multi-region deployment, counter range allocation, and what happens during Redis failover without being prompted (if you took the counter batching approach). You should understand the security implications of predictable short codes and propose mitigations if relevant. Staff candidates also demonstrate product thinking by discussing custom alias collision prevention, URL expiration cleanup strategies, and how the system would evolve as requirements change. Rather than just solving the problem, you show you've thought about operating and maintaining the system at scale.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **The read-to-write skew defines the design.** With ~1000 reads per write, the whole architecture bends toward fast redirects — aggressive caching, indexing, and separating read from write services — while writes stay cheap and simple.
+- **Counters beat hashing for uniqueness.** Hashing (SHA-256 + base62) risks collisions that grow with scale and need retries; an atomic Redis `INCR` counter + base62 guarantees uniqueness with no extra checks. Even 1B URLs base62-encode to just 6 characters.
+- **Indexing makes redirects fast on disk; caching makes them fast in memory.** A B-tree/primary-key index on the short code turns a full table scan into O(log n); an in-memory cache (Redis/Memcached) then serves hot mappings ~1000x faster than SSD, with optional CDN edge caching for global reach.
+- **Scale reads and writes independently.** Split the Primary Server into a Read Service (redirects) and Write Service (creation), then horizontally scale each. A centralized Redis counter keeps short codes globally unique across write instances.
+- **Counter batching and range allocation tame coordination cost.** Handing out batches of 1000 counter values reduces network round-trips to Redis; disjoint counter ranges per region avoid cross-region coordination. Since we only need uniqueness (not continuity), losing a few values on failover is acceptable — the DB UNIQUE constraint is the safety net.
+- **Use 302 over 301 for redirects.** A temporary redirect keeps requests flowing through your server, preserving control over expiration and (out-of-scope) click tracking, whereas 301 lets browsers cache and bypass you.
+
+## 📚 Related Concepts
+
+- [Scaling Reads](../Patterns/ScalingReads.md) — the caching/replica/CDN progression that this system's extreme read skew relies on.
+- [Scaling Writes](../Patterns/ScalingWrites.md) — scaling the Write Service and the shared counter behind new short-code creation.
+- [Database Indexing](../CoreConcepts/DatabaseIndexing.md) — B-tree indexes and primary keys that make short-code lookups O(log n).
+- [Caching](../CoreConcepts/Caching.md) — cache placement, TTLs, and invalidation for the short-code to long-URL mapping.
+- [Redis](../DeepDives/Redis.md) — the single-threaded, atomic `INCR` store behind the global counter and the cache layer.
+- [Postgresql](../DeepDives/Postgresql.md) — a solid default for the low-write mapping store, with replication for availability.
+- [Sharding](../CoreConcepts/Sharding.md) — how to split the mapping table across servers if a single instance ever hits hardware limits.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/bitly](https://www.hellointerview.com/learn/system-design/problem-breakdowns/bitly)*

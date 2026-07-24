@@ -1,8 +1,27 @@
-# Yelp
+# 🍽️ Yelp
 
 Practice with guided hints and real-time feedback
 
-## Understanding the Problem
+> **Overview**: Yelp is an online platform that lets users search for local businesses by name, location, and category, view businesses and their reviews, and leave a 1-5 star review with optional text. The design is dominated by a massive read:write imbalance (as high as 1000:1) — searching and viewing are enormously more frequent than reviewing — which lets us keep the write path simple while investing effort in efficient geospatial and full-text search.
+
+## 📋 Table of Contents
+
+- [Understanding the Problem](#understanding-the-problem)
+- [The Set Up](#the-set-up)
+- [High-Level Design](#high-level-design)
+- [Potential Deep Dives](#potential-deep-dives)
+- [Final Design](#final-design)
+- [What is Expected at Each Level?](#what-is-expected-at-each-level)
+
+---
+
+## 🧒 Layman's Explanation
+
+Imagine a giant, well-organized phone book for every restaurant, bar, and shop in town — except this phone book can also tell you, at a glance, how good each place is. You can flip to it three ways: by name ("that coffee shop called Blue Bottle"), by where you are ("anything near me"), or by what kind of place it is ("pizza"). Once you find a spot, you can read what other people thought and add your own star rating and a short note.
+
+The tricky part is that millions of people are *flipping through the book* every day, but only a tiny handful actually *write in it*. So the whole system is built to make looking things up lightning-fast — the way a librarian keeps separate card catalogs for titles, for shelf locations, and for genres — while treating the rare act of leaving a review as something simple that just needs to stay honest (one review per person per place, and a star rating that updates the moment you vote).
+
+## 🎯 Understanding the Problem
 
 > 🍽️ What is Yelp ? Yelp is an online platform that allows users to search for and review local businesses, restaurants, and services.
 
@@ -50,7 +69,7 @@ Depending on the interview, your interviewer may introduce a set of additional c
 
 When I ask yelp, I'll introduce the constraint that **each user can only leave one review per business.**
 
-## The Set Up
+## 🔑 The Set Up
 
 ### [Defining the Core Entities](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#core-entities-2-minutes)
 
@@ -111,7 +130,7 @@ POST /businesses/:businessId/reviews
 }
 ```
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
 
 We'll start our design by going one-by-one through our functional requirements and designing a single system to satisfy them. Once we have this in place, we'll layer on depth via our deep dives.
 
@@ -175,7 +194,7 @@ When a user leaves a review:
 
 > Should we separate the review data into its own database? Aren't all microservices supposed to have their own database? The answer to this question is a resounding maybe. There are some microservice zealots who will argue this point incessantly, but the reality is that many systems, use the same database for multiple purposes and it's often times the simpler and, arguably, correct answer. In this case, we have a very tiny amount of data, 10M businesses x 100 reviews each = 1TB . Modern databases can handle this easily in a single instance, so we don't even need to worry about sharding . Additionally, reviews and businesses are tightly coupled and we don't want to have to join across services to get the business details and reviews. The counter argument is typically related to fault isolation and operational responsibility. We want to make sure that if the review database goes offline, we aren't left unable to search or view businesses. While this is a valid concern, we can mitigate it via other means like simple replication . At the end of the day, it's a discussion of trade-offs with no single correct answer. I bias toward simplicity unless I can articulate a clear benefit to adding complexity and suggest you do the same if not already strongly principled on the matter.
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
 
 At this point, we have a basic, functioning system that satisfies the functional requirements. However, there are a number of areas we could dive deeper into to improve the system's performance, scalability, and fault tolerance. Depending on your seniority, you'll be expected to drive the conversation toward these deeper topics of interest.
 
@@ -239,6 +258,24 @@ new_avg = (4.0 * 100 + 3) / 101 ≈ 3.99
 
 The final state (num_reviews = 101, avg_rating = 3.99) is incorrect because it doesn't account for User 1's 5-star review. The correct average should be:
 (4.0 * 100 + 5 + 3) / 102 ≈ 4.00
+
+The lost-update race plays out like this — both users read the same starting state, then one write silently clobbers the other:
+
+```mermaid
+sequenceDiagram
+    participant U1 as User 1 (5 star)
+    participant U2 as User 2 (3 star)
+    participant DB as Business Row<br/>(num_reviews, avg_rating)
+
+    Note over DB: Start, num_reviews=100, avg=4.0
+    U1->>DB: read (100, 4.0)
+    U2->>DB: read (100, 4.0)
+    U1->>U1: compute (4.0*100+5)/101 = 4.01
+    U2->>U2: compute (4.0*100+3)/101 = 3.99
+    U1->>DB: write (101, 4.01)
+    U2->>DB: write (101, 3.99)
+    Note over DB: Final (101, 3.99), WRONG, U1 lost
+```
 
 To solve this issue, we can use optimistic locking. Optimistic locking is a technique where we first read the current state of the business and then attempt to update it. If the state has changed since we read it, our update fails. We'll often add a version number to the table you want to lock on, but in our case, we can just check if the number of reviews has changed.
 
@@ -314,6 +351,28 @@ Instead, there are 3 different types of indexing strategies we'll need in order 
 2. **Name**: To efficiently search by name we need to use a full text search index which uses a technique called [inverted indexes](https://en.wikipedia.org/wiki/Inverted_index) to quickly search for terms in a document.
 3. **Category**: To efficiently search by category we can use a simple [B-tree index](https://en.wikipedia.org/wiki/B-tree).
 
+Each filter type demands a different index — one reason a single search-optimized store that supports all three is so appealing:
+
+```mermaid
+graph TB
+    Q["Search query<br/>name + location + category"] --> L["Location filter"]
+    Q --> N["Name filter"]
+    Q --> C["Category filter"]
+
+    L --> LI["Geospatial index<br/>geohash / quadtree / R-tree"]
+    N --> NI["Full-text index<br/>inverted index"]
+    C --> CI["B-tree index"]
+
+    LI --> R["Ranked business results"]
+    NI --> R
+    CI --> R
+
+    style LI fill:#e1f5ff
+    style NI fill:#e1f5ff
+    style CI fill:#e1f5ff
+    style R fill:#90EE90
+```
+
 There are several technologies which support all three of these indexing strategies (and more). One common example is [Elasticsearch](https://www.hellointerview.com/learn/system-design/deep-dives/elasticsearch).
 
 Elasticsearch is a search optimized database that is purpose built for fast search queries. It's optimized for handling large datasets and can handle complex queries that traditional databases struggle with making it a perfect fit for our use case.
@@ -359,6 +418,18 @@ The main challenge you want to be aware of when introducing Elasticsearch is tha
 As a result, we need a way to ensure the data in Elasticsearch remains in sync (consistent) with our primary database. The best way to do this is to use a [Change Data Capture](https://en.wikipedia.org/wiki/Change_data_capture) (CDC) system to capture changes to the primary database and then apply them to Elasticsearch.
 
 This works by having all DB changes captured as events and written to a queue or stream. We then have a consumer process that reads from the queue or stream and applies the same changes to Elasticsearch.
+
+```mermaid
+graph LR
+    DB[("Primary Database<br/>businesses + reviews")] -->|"change events"| CDC["CDC capture"]
+    CDC --> Q["Queue / Stream"]
+    Q --> CO["Consumer"]
+    CO -->|"apply same changes"| ES[("Elasticsearch<br/>search index")]
+
+    style DB fill:#e1f5ff
+    style Q fill:#FFE4B5
+    style ES fill:#f3e5f5
+```
 
 One way we can get around the consistency issue all together is to just use Postgres with the appropriate extensions enabled.
 
@@ -459,13 +530,13 @@ Now all we need is an inverted index on the `location_names` field via a "keywor
 
 By pre-computing the encompassing areas we avoid doing them on every request and only need to do them once when the business is created.
 
-## Final Design
+## 🏁 Final Design
 
 After applying all the deep dives, we may end up with a final design that looks like this:
 
 ![Yelp Final Design](assets/k_WKOn0_PJEG.0bzesd_q3poc-.svg)
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 So, what am I looking for at each level?
 
@@ -482,6 +553,25 @@ For senior candidates, I expect that you nail the majority of the deep dives wit
 For staff candidates, I'm really evaluating your ability to recognize key insights and use them to derive simple solutions. Things like using Postgres extensions to avoid introducing a new technology (like Elasticsearch) and avoid the consistency issues, recognizing that the write throughput is tiny and thus we don't need a message queue. Identifying that the amount of data is also really small, so a simple read replica and/or cache is enough, no need to worry about sharding. Staff candidates are able to acknowledge what a complex solution could be and under what conditions it may be necessary, but articulate why, in this situation, the simple option suffices.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **The read:write imbalance drives every decision.** With searches/views vastly outnumbering reviews (as much as 1000:1, ~1 write/sec at 100M users), the write path stays simple — no message queue needed — and effort goes into fast reads.
+- **Keep average rating fresh incrementally.** Precomputing via a daily cron is stale; instead store `num_reviews` and update the average synchronously per review with `(old_rating * num_reviews + new_rating) / (num_reviews + 1)`, guarded by **optimistic locking** to avoid lost updates.
+- **Enforce constraints at the persistence layer.** "One review per user per business" belongs in a database `UNIQUE (user_id, business_id)` constraint, not an application-layer check that new services or backfills can bypass.
+- **Geospatial search needs specialized indexes.** A plain B-tree on lat/long forces full scans; use geohashes, quadtrees, or R-trees for location, an inverted index for name, and a B-tree for category.
+- **Elasticsearch vs. Postgres extensions is a simplicity trade-off.** Elasticsearch covers all three index types but can't be a source of truth and needs CDC to stay in sync; PostGIS + pg_trgm avoid the consistency problem entirely for this small dataset (~10GB businesses, ~1TB reviews).
+- **Predefined locations mean polygons, not radii.** Map location names to polygons (GeoJSON) and pre-compute each business's encompassing `location_names` at creation so requests hit a simple inverted index instead of per-request bounding-box math.
+
+## 📚 Related Concepts
+
+- [Proximity Search](../DeepDives/ProximitySearch.md) — geohashes, quadtrees, and R-trees for location-based queries.
+- [Elasticsearch](../DeepDives/Elasticsearch.md) — the search-optimized store behind multi-faceted name/location/category search.
+- [Postgresql](../DeepDives/Postgresql.md) — PostGIS and pg_trgm extensions that avoid a separate search service.
+- [Scaling Reads](../Patterns/ScalingReads.md) — the read-heavy pattern that fits viewing/searching businesses.
+- [Dealing with Contention](../Patterns/DealingWithContention.md) — optimistic locking for concurrent rating updates.
+- [Database Indexing](../CoreConcepts/DatabaseIndexing.md) — B-tree, inverted, and geospatial index fundamentals.
+- [Sharding](../CoreConcepts/Sharding.md) — why this small dataset avoids sharding on a single instance.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/yelp](https://www.hellointerview.com/learn/system-design/problem-breakdowns/yelp)*

@@ -1,8 +1,28 @@
-# News Aggregator
+# 📰 News Aggregator
 
 Practice with guided hints and real-time feedback
 
-## Understanding the Problem
+> **Overview**: Google News is a read-heavy news aggregator that continuously ingests articles from thousands of publishers worldwide and serves a scrollable, regionally-tailored feed to up to 100M+ daily users with sub-200ms latency. This breakdown splits the system into two halves — an ingestion pipeline (RSS polling, web scraping, and webhooks) that fills a database, and a delivery path (a stateless Feed Service backed by pre-computed Redis regional feeds) tuned for massive read throughput. The deep dives tackle cursor pagination, caching for freshness, faster content discovery, media/CDN delivery, breaking-news traffic spikes, category feeds, and personalization.
+
+## 📋 Table of Contents
+- [Layman's Explanation](#laymans-explanation)
+- [Understanding the Problem](#understanding-the-problem)
+- [The Set Up](#the-set-up)
+- [High-Level Design](#high-level-design)
+- [Potential Deep Dives](#potential-deep-dives)
+- [Bonus Deep Dives](#bonus-deep-dives)
+- [Key Takeaways](#key-takeaways)
+- [Related Concepts](#related-concepts)
+
+---
+
+## 🧒 Layman's Explanation
+
+Think of Google News as the world's fastest newsstand clerk. Every few minutes the clerk walks past thousands of newspaper stands (the **publishers**), notes each new headline and cover photo, and pins them onto one giant board arranged by neighborhood (the **region**), newest on top. When you walk up, you don't wait for the clerk to re-read every paper — the board is already arranged, so you just scroll. If a headline catches your eye, the clerk hands you directions to the original stand (a redirect to the **publisher's website**) rather than reading you the whole story, because the aggregator never keeps the full article — only the headline, a thumbnail, and a pointer.
+
+And because a million people crowd the same board during breaking news, the clerk keeps pre-printed copies of the most popular boards right by the door (the **Redis cache**), and opens identical newsstands in each neighborhood (**regional deployments** and **read replicas**) so nobody waits in one giant line. The whole design is this trade: spend effort up front arranging and copying the popular boards, so that reading is instant even at enormous scale.
+
+## 🎯 Understanding the Problem
 
 > 📰 What is Google News ? Google News is a digital service that aggregates and displays news articles from thousands of publishers worldwide in a scrollable interface for users to stay updated on current events.
 
@@ -40,7 +60,7 @@ Here's how it might look on your whiteboard:
 
 ![IG Requirements](assets/G83AvuACS4D3.3txf8hx2_4asr.svg)
 
-## The Set Up
+## 🔑 The Set Up
 
 ### Planning the Approach
 
@@ -77,7 +97,7 @@ GET /feed?page={page}&limit={limit}&region={region} -> Article[]
 
 For users to view a specific article we don't need an API endpoint, since their browser will navigate to the publisher's website once they click on the article based on the `url` field in the article object.
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
 
 We'll build our design progressively, addressing each functional requirement one by one and adding the necessary components as we go. For Google News, we need to handle both the ingestion of content from thousands of publishers and the efficient delivery of that content to millions of users.
 
@@ -154,7 +174,7 @@ Sites like Google News are aggregators, and they don't actually host the content
 
 Ok, pretty straightforward so far. Let's layer on a little complexity with our deep dives.
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
 
 At this point, we have a basic, functioning system that satisfies the core functional requirements of Google News - users can view aggregated news articles, scroll through feeds infinitely, and click through to publisher websites. However, our current design has significant limitations, particularly around pagination consistency and feed delivery performance at scale. Let's look back at our non-functional requirements and explore how we can improve our system to handle 100M DAU with low latency and global distribution.
 
@@ -197,6 +217,20 @@ The primary limitation is that this requires planning the ID strategy upfront du
 For distributed systems, you need to coordinate ID generation across multiple instances to maintain ordering, though solutions like ULID generation or centralized ID services can handle this effectively. Despite these considerations, this is often the simplest and most performant solution for chronological data like news feeds.
 
 By implementing cursor-based pagination with monotonically increasing article IDs, we ensure consistent pagination that handles new content gracefully while maintaining the sub-200ms latency requirement for feed requests.
+
+The evolution of our pagination strategy, from the naive offset approach to the simplest performant one:
+
+```mermaid
+graph LR
+    A["Offset pagination<br/>page + limit<br/>OFFSET / LIMIT"] -->|"drift: duplicates<br/>and skipped articles"| B["Timestamp cursor<br/>published_at &lt; cursor"]
+    B -->|"identical timestamps<br/>leave gaps"| C["Composite cursor<br/>(published_at, article_id)"]
+    C -->|"plan IDs up front"| D["Monotonic ID cursor<br/>ULID / auto-increment<br/>article_id &lt; cursor"]
+
+    style A fill:#FFB6C1
+    style B fill:#FFE4B5
+    style C fill:#FFE4B5
+    style D fill:#90EE90
+```
 
 ### 2) How do we achieve low latency (< 200ms) feed requests?
 
@@ -296,6 +330,27 @@ The primary limitation is that webhooks require coordination and buy-in from pub
 
 By implementing a hybrid approach that combines frequent RSS polling for cooperative publishers, intelligent web scraping for sites without feeds, and webhooks for premium real-time partnerships, we can ensure that breaking news appears in user feeds within minutes rather than hours.
 
+All three discovery mechanisms converge on a single ingestion pipeline, so downstream processing stays identical regardless of how an article was found:
+
+```mermaid
+graph TB
+    subgraph "Discovery Strategies"
+        RSS["Tiered RSS Polling<br/>high: 5-10 min<br/>medium: 30 min<br/>low: 2-3 hr"]
+        SCR["Web Scraping<br/>publishers without RSS<br/>CSS selectors + fingerprints"]
+        WH["Publisher Webhooks<br/>POST /webhooks/article-published<br/>push-based, within seconds"]
+    end
+    RSS --> PIPE["Content Ingestion Pipeline<br/>normalize to standard<br/>article format"]
+    SCR --> PIPE
+    WH --> PIPE
+    PIPE --> DB[(Database)]
+
+    style RSS fill:#FFE4B5
+    style SCR fill:#FFE4B5
+    style WH fill:#90EE90
+    style PIPE fill:#e8f5e9
+    style DB fill:#e1f5ff
+```
+
 ### 4) How do we handle media content (images/videos) efficiently?
 
 Since we link users to publisher websites rather than hosting full articles, our media requirements are much simpler - we only need to display thumbnails in the news feed to make articles visually appealing and help users quickly identify content. However, with 100M+ daily users viewing feeds, even thumbnail delivery needs to be fast and cost-effective.
@@ -380,7 +435,7 @@ This handles our traffic spikes efficiently while keeping operational complexity
 
 This regional approach provides users with sub-50ms cache response times from their nearest cluster, traffic spikes in one region don't affect others, and we can scale each region independently based on local usage patterns. During breaking news events, the affected regions can add more read replicas while others remain at baseline capacity.
 
-## Bonus Deep Dives
+## 🔎 Bonus Deep Dives
 
 Many users in the comments called out that when they were asked this question, they were asked about both categorization and personalization. I figured, given the interest, it was worth amending the breakdown to include these topics.
 
@@ -471,6 +526,26 @@ Reduced personalization depth compared to full recommendation engines. Assembly 
 By implementing hybrid personalization with dynamic feed assembly, we deliver personalized news experiences that scale to 100M+ users while maintaining our sub-200ms response time requirements. The approach balances individual user interests with editorial importance and trending content, ensuring users get both relevant and globally significant news in their feeds.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **Split ingestion from delivery.** The write-heavy Data Collection Service and the read-heavy Feed Service have different scaling, update-frequency, and operational needs, so they are separate services from the start.
+- **Google News is a read-scaling problem.** With 100M DAU (spikes to 500M) reading far more than publishers write, sub-200ms latency comes from aggressive caching of pre-computed regional feeds in Redis sorted sets, not from querying the database per request.
+- **Prefer monotonic-ID cursors for infinite scroll.** Offset pagination drifts (duplicates/skips) as new articles arrive; timestamp cursors collide; composite `(published_at, article_id)` cursors or ULID/auto-increment IDs give stable, gap-free pagination.
+- **CDC beats TTL for freshness.** Change Data Capture pushes new articles into regional caches immediately (bounded by `ZADD` + `ZREMRANGEBYRANK` to the latest ~1-2K articles), avoiding both 30-minute staleness and cache-expiry thundering herds.
+- **Freshness needs a hybrid ingestion pipeline.** Tiered RSS polling, web scraping for feed-less sites, and publisher webhooks all normalize into one pipeline so breaking news lands in minutes, not hours.
+- **Lean on regional locality to absorb spikes.** News consumption is regional, so per-region deployments plus stateless Feed Service auto-scaling and Redis read replicas handle breaking-news traffic without one global bottleneck; thumbnails ride S3 + CloudFront CDN.
+
+## 📚 Related Concepts
+
+- [Scaling Reads](../Patterns/ScalingReads.md) — the read-heavy caching/replica playbook this whole design is built on.
+- [Caching](../../CoreConcepts/Caching.md) — cache-aside, TTLs, and invalidation behind the regional feed caches.
+- [Redis](../DeepDives/Redis.md) — sorted sets (`ZADD`, `ZREVRANGE`, `ZREMRANGEBYRANK`), replicas, and Sentinel used for feed storage.
+- [Database Indexing](../CoreConcepts/DatabaseIndexing.md) — the composite `(published_at, article_id)` index enabling efficient cursor queries.
+- [Sharding](../../CoreConcepts/Sharding.md) — consistent hashing to distribute cache/data across instances when a region outgrows one node.
+- [Real-Time Updates](../Patterns/Real-TimeUpdates.md) — CDC-driven feed propagation for immediate content freshness.
+- [Web Crawler](WebCrawler.md) — the scraping infrastructure reused to ingest publishers without RSS feeds.
+- [Handling Large Blobs](../Patterns/HandlingLargeBlobs.md) — why thumbnails belong in object storage + CDN, not the database.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/google-news](https://www.hellointerview.com/learn/system-design/problem-breakdowns/google-news)*

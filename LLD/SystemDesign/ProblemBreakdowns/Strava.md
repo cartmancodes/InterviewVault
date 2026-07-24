@@ -1,8 +1,27 @@
-# Strava
+# 🏃 Strava
 
 Practice with guided hints and real-time feedback
 
-## Understanding the Problem
+> **Overview**: Strava is a fitness tracking application that lets users record and share physical activities — primarily running and cycling — with their network. The design centers on accurately recording GPS-based route, distance, and time during an activity, then sharing completed activities with friends. The defining insight is that the client (a modern smartphone) can do most of the heavy lifting: tracking activities locally and syncing to the server only on completion, which enables offline use and slashes backend load.
+
+## 📋 Table of Contents
+- [Layman's Explanation](#laymans-explanation)
+- [Understanding the Problem](#understanding-the-problem)
+- [The Set Up](#the-set-up)
+- [High-Level Design](#high-level-design)
+- [Potential Deep Dives](#potential-deep-dives)
+- [Key Takeaways](#key-takeaways)
+- [Related Concepts](#related-concepts)
+
+---
+
+## 🧒 Layman's Explanation
+
+Imagine you go for a run with a notebook in your pocket. Every few seconds you jot down exactly where you are. You don't phone a friend after every single step to tell them where you are — that would drain your phone battery and be pointless out in the woods where there's no signal anyway. Instead, you keep all your scribbles in your own notebook, and only when you get home and finish the run do you type the whole thing up and post it for your friends to see.
+
+That is essentially how Strava works. Your phone is the notebook: it records your GPS coordinates locally, adds up the distance, and shows you your stats in real time — all without needing the internet. Once the run is done (and you have signal), it uploads everything in one go. The only time you'd want to "phone a friend" mid-run is if they're following along live — and even then, rather than a constant open call, they just check in every few seconds to see where you are. A leaderboard of who ran the farthest this week is like a scoreboard on the gym wall that gets updated as new results come in.
+
+## 🎯 Understanding the Problem
 
 > 🏃‍♂️🚴‍♀️ What is Strava ? Strava is a fitness tracking application that allows users to record and share their physical activities, primarily focusing on running and cycling, with their network. It provides detailed analytics on performance, routes, and allows social interactions among users.
 
@@ -40,7 +59,7 @@ Here is how it might look on the whiteboard:
 
 ![Strava Non-Functional Requirements](assets/tqwxafTj_nBn.2jgzn_d45pafc.svg)
 
-## The Set Up
+## 🔑 The Set Up
 
 ### [Defining the Core Entities](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#core-entities-2-minutes)
 
@@ -121,7 +140,7 @@ When we click on an activity, we'll want to see more details about like the maps
 GET /activities/:activityId -> Activity
 ```
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
 
 Let's address each functional requirement and design components to satisfy them. The best strategy here, especially if it's a question you've never seen before, is to start with the simplest possible system that satisfies the functional requirements and then layer on complexity to satisfy the non-functional requirements during your deep dives.
 
@@ -164,6 +183,20 @@ One common way we could handle this, we can maintain time via a log of status up
 When the user clicks "Stop Activity", we can calculate the elapsed time by summing the durations between each pair of timestamps, excluding pauses. In the example above, the elapsed time would be 15 minutes (10 minutes + 5 minutes).
 
 This may seem like overkill for our simple requirement, but it would allow for natural expansions into a feature that shows athletes when they were paused and for how long, as well as a breakdown of "total time" vs "active time."
+
+The activity moves through a small state machine driven by our `PATCH /activities/:activityId` endpoint:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Started: POST /activities<br/>then PATCH state=STARTED
+    Started --> Paused: PATCH state=PAUSED
+    Paused --> Resumed: PATCH state=RESUMED
+    Resumed --> Paused: PATCH state=PAUSED
+    Started --> Stopped: user clicks Stop
+    Resumed --> Stopped: user clicks Stop
+    Stopped --> Complete: PATCH state=COMPLETE
+    Complete --> [*]: shared with friends
+```
 
 ### 2) While running or cycling, users should be able to view activity data, including route, distance, and time.
 
@@ -223,7 +256,7 @@ The full flow is thus,
 
 For showing the map, we can use a combination of the route data and the Google Maps API. We can pass the array of coordinates to the Google Maps API and it will draw a line connecting all the points.
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
 
 At this point, we have a basic, functioning system that satisfies the functional requirements. However, there are a number of areas we could dive deeper into to improve efficiency, offline functionality, scalability, and realtime-sharing.
 
@@ -320,6 +353,22 @@ One of the most important things to understand about the realtime updates patter
 
 Informed by these insights, we can implement a simple polling mechanism where friends' clients periodically request updates at the same interval that the athlete's device is sending updates to the server (offset by a few seconds to account for latency).
 
+```mermaid
+sequenceDiagram
+    participant A as Athlete Client
+    participant S as Activity Service
+    participant DB as Database
+    participant F as Friend Client
+    A->>S: POST location update (every 2-5s)
+    S->>DB: persist location, broadcast to friends
+    loop Poll every 2-5s (offset for latency)
+        F->>S: GET latest locations
+        S->>DB: read recent locations
+        DB-->>S: locations
+        S-->>F: buffered locations (lagged 5-10s for smooth animation)
+    end
+```
+
 We can further enhance the user experience by implementing a smart buffering system. This approach involves intentionally lagging the displayed location data by one or two update intervals (e.g., 5-10 seconds). By buffering the data, we can create a smoother, more continuous animation of the athlete's movement. This eliminates the jarring effect of sudden position changes that can occur with real-time updates. To friends viewing the activity, the athlete will appear to be in constant motion, creating a more engaging, "live-stream-like" experience. While this approach sacrifices absolute real-time accuracy, it provides a significantly improved visual experience that better matches users' expectations of how a live tracking feature should look and feel. The intentional lag also helps compensate for any network latency, ensuring a more consistent experience across different network conditions.
 
 ### 4) How can we expose a leaderboard of top athletes?
@@ -345,6 +394,17 @@ ORDER BY total_distance DESC
 ```
 
 Naturally, this query will be pretty slow given it is running an aggregation over millions of activities. There are several ways we can optimize this.
+
+The leaderboard design evolves through three stages, each addressing the weakness of the last:
+
+```mermaid
+graph LR
+    N["Naive query<br/>GROUP BY + SUM over<br/>millions of activities"] -->|"slow, high DB load"| P["Periodic aggregation<br/>pre-computed table<br/>daily batch job"]
+    P -->|"stale, eventual<br/>consistency"| R["Redis Sorted Sets<br/>ZINCRBY on write<br/>ZRANGE on read"]
+    style N fill:#FFB6C1
+    style P fill:#FFE4B5
+    style R fill:#90EE90
+```
 
 This approach faces significant scalability issues. As the number of activities increases, query performance will degrade rapidly. The system would need to scan and aggregate millions of records for each leaderboard request, leading to high latency and increased database load. Additionally, this method doesn't account for the dynamic nature of leaderboards, where rankings can change frequently as new activities are logged.
 
@@ -416,6 +476,25 @@ This approach allows us to efficiently filter by time range and aggregate distan
 The main challenge with this approach is ensuring data consistency between Redis and our primary database. We need to implement a robust system to handle failures and retries when updating Redis. Additionally, we must consider Redis's memory limitations – storing complete leaderboard data for all possible combinations of activity types, time ranges, and geographical filters could consume significant memory. To mitigate this, we might need to implement a caching strategy where we only keep the most frequently accessed leaderboards in Redis and calculate less common ones on-demand.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **The client is an active participant.** Recording GPS, computing distance (Haversine), and buffering data locally on the phone means activities can be tracked fully offline and synced only on completion — the single biggest design lever in this problem.
+- **Offloading writes to the client collapses backend load ~100x.** Because location updates no longer stream to the server every few seconds, a simple client-server architecture (no microservices) comfortably scales the writes and reads that remain.
+- **Model elapsed time as a status/timestamp log, not a single start timestamp.** Summing the durations between STARTED/PAUSED/RESUMED/STOPPED pairs correctly handles pauses and unlocks "total time" vs "active time" features.
+- **Storage is large but manageable (~547.5 TB/year).** Handle it with time-based sharding (recent activities are queried most), data tiering (hot → warm → cold/S3), and caching only if read latency becomes a problem.
+- **Realtime friend-following favors polling over WebSockets.** Updates are predictable (every 2-5s) and second-level staleness is acceptable, so polling with intentional 5-10s buffering gives a smooth "live" experience without the complexity of persistent connections.
+- **Leaderboards evolve naive → periodic aggregation → Redis Sorted Sets**, using `ZINCRBY`/`ZRANGE` for real-time ranking and separate sorted sets per country/time-range filter.
+
+## 📚 Related Concepts
+
+- [Sharding](../../CoreConcepts/Sharding.md) — time-based sharding of activity data so recent-activity queries stay fast.
+- [Caching](../../CoreConcepts/Caching.md) — optional read cache for hot activities and short-TTL leaderboard results.
+- [Data Modelling](../../CoreConcepts/DataModelling.md) — the User, Activity, Route, and Friend entities and the bi-directional friends table.
+- [Redis](../DeepDives/Redis.md) — Sorted Sets and hashes powering the real-time leaderboard.
+- [Scaling Writes](../Patterns/ScalingWrites.md) — the sharding/tiering pattern applied to the growing activity store.
+- [Real-Time Updates](../Patterns/Real-TimeUpdates.md) — deciding between polling, SSE, and WebSockets for friend-following.
+- [FB Live Comments](FbLiveComments.md) · [Whatsapp](Whatsapp.md) — related realtime systems referenced for live activity sharing.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/strava](https://www.hellointerview.com/learn/system-design/problem-breakdowns/strava)*

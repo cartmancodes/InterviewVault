@@ -1,4 +1,28 @@
-# YouTube
+# 📹 YouTube
+
+> **Overview**: YouTube is a video-sharing platform that lets users upload, view, and interact with video content — the second most visited website in the world. This breakdown focuses on the video-sharing core: uploading multi-gigabyte videos and streaming them smoothly to any device, even over low-bandwidth connections. The design leans on blob storage with presigned uploads, a video post-processing pipeline, adaptive bitrate streaming, and CDNs.
+
+## 📋 Table of Contents
+- [Layman's Explanation](#laymans-explanation)
+- [Understand the Problem](#understand-the-problem)
+- [The Set Up](#the-set-up)
+- [High-Level Design](#high-level-design)
+- [Potential Deep Dives](#potential-deep-dives)
+- [What is Expected at Each Level?](#what-is-expected-at-each-level)
+- [Key Takeaways](#key-takeaways)
+- [Related Concepts](#related-concepts)
+
+---
+
+## 🧒 Layman's Explanation
+
+Imagine you record a huge home movie and want friends around the world to watch it on all kinds of devices — phones, laptops, TVs. Handing each friend the entire multi-gigabyte file is a nightmare: the download takes forever, and if their internet hiccups halfway, they start over from scratch. So YouTube does two clever things.
+
+First, when you upload, it chops your movie into thousands of tiny few-second clips and re-records each clip at several quality levels (crisp HD, medium, low). It also writes an "index card" (a *manifest*) listing where every clip lives.
+
+Second, when a friend hits play, their app reads the index card, grabs just the first few seconds at a quality that matches their connection, and starts playing immediately while quietly fetching the next clips — automatically dropping to lower quality if their WiFi gets shaky and climbing back up when it recovers. Copies of the popular clips are also kept in a warehouse near each viewer (a **CDN**) so the data doesn't have to travel across the world. That's the whole trick: split, re-encode, index, and stream adaptively from a nearby copy.
+
+---
 
 Practice with guided hints and real-time feedback
 
@@ -6,9 +30,7 @@ Watch the author walk through the problem step-by-step
 
 Watch the author walk through the problem step-by-step
 
-## Understand the Problem
-
-> 📹 What is YouTube? YouTube is a video-sharing platform that allows users to upload, view, and interact with video content. As of this writing, it is the second most visited website in the world 🤯.
+## 🎯 Understand the Problem
 
 > There's some conceptual overlap between this question and designing Dropbox . If you're less familiar with system design principles for file upload / download designs, I'd recommend reading that guide first.
 
@@ -52,13 +74,13 @@ Here's how it might look on a whiteboard:
 
 > For this question, given the small number of functional requirements, the non-functional requirements are even more important to pin down. They characterize the complexity of these deceptively simple "upload" and "watch" interactions. Enumerating these challenges is important, as it will deeply affect your design.
 
-## The Set Up
+## 🏗️ The Set Up
 
 ### Planning the Approach
 
 Before you move on to designing the system, it's important to start by taking a moment to plan your strategy. Generally, we recommend building your design up sequentially, going one by one through your functional requirements. This will help you stay focused and ensure you don't get lost in the weeds as you go. Once you've satisfied the functional requirements, you'll rely on your non-functional requirements to guide you through the deep dives.
 
-### [Defining the Core Entities](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#core-entities-2-minutes)
+### 🔑 [Defining the Core Entities](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#core-entities-2-minutes)
 
 I like to start with a broad overview of the primary entities. At this stage, it is not necessary to know every specific column or detail. We will focus on these intricacies later when we have a clearer grasp of the system (during the high-level design). Initially, establishing these key entities will guide our thought process and lay a solid foundation as we progress towards defining the API.
 
@@ -72,7 +94,7 @@ In the actual interview, this can be as simple as a short list like this. Just m
 
 ![Defining the Core Entities](assets/6lKALPAPQGib.3nbi-j7ycp_1e.svg)
 
-### [The API](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#api-design-5-minutes)
+### 🔌 [The API](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#api-design-5-minutes)
 
 The API is the primary interface that users will interact with. It's important to define the API early on, as it will guide your high-level design. We just need to define an endpoint for each of our functional requirements.
 
@@ -95,9 +117,9 @@ GET /videos/{videoId} -> Video & VideoMetadata
 
 > Be aware that your APIs may change or evolve as you progress. In this case, our upload and stream APIs actually evolve significantly as we weigh the trade-offs of various approaches in our high-level design (more on this later). You can proactively communicate this to your interviewer by saying, "I am going to outline some simple APIs, but may come back and improve them as we delve deeper into the design."
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
 
-### Background: Video Streaming
+### 📖 Background: Video Streaming
 
 Before jumping into each requirement, it's worth laying out some fundamental information about video storage and streaming that is worth knowing.
 
@@ -133,6 +155,18 @@ At this point, the system will look like this:
 ![Users can upload videos](assets/uBv5zirLywhy.1_6vpnx5lz2u5.svg)
 
 Finally, when it comes to storing video, it's worthwhile to consider what we'll be storing. Understanding this will inform what deep dives we'll need to do later to clarify how we'll process videos to enable our system to successfully service our functional and non-functional requirements. Let's look at some options.
+
+The storage design evolves in three steps, each strictly better than the last:
+
+```mermaid
+graph LR
+    A["Store raw file only<br/>no post-processing"] --> B["Store multiple formats<br/>transcode per device"]
+    B --> C["Store segments per format<br/>few-second playable units"]
+
+    style A fill:#FFB6C1
+    style B fill:#FFE4B5
+    style C fill:#90EE90
+```
 
 This approach basically ignores the fact that we'll need to do any video post-processing. We store just the file the user provides and don't perform any post-processing.
 
@@ -185,11 +219,29 @@ The client will execute the following logic when streaming the video:
 4. The client will play that segment and begin downloading more segments.
 5. If the client detects that network conditions are slowing down (or improving), it will vary the format of the video segments it is downloading. If network conditions get worse (e.g. the bitrate is lower), the client will attempt to download more compressed, lower resolution segments to avoid any interruption in streaming.
 
+Viewed as an interaction over time, the client drives the whole stream:
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant M as VideoMetadata DB
+    participant S as S3 / CDN
+    C->>M: Fetch VideoMetadata
+    M-->>C: Manifest file URL
+    C->>S: Download manifest file
+    S-->>C: List of segments per format
+    C->>S: Download first segment in chosen format
+    S-->>C: Segment data
+    Note over C: Play segment, begin loading more
+    C->>S: Download next segments, adapt format to network
+    S-->>C: Segment data at higher or lower bitrate
+```
+
 ![Adaptive bitrate streaming](assets/hBNsAqWyt_jb.25syn702_we5r.svg)
 
 This approach is the most complex and involves the client being a more active participant in the system (which isn't a bad thing). It also relies on upstream design decisions involving video splitting by segments, variance of format storage, and the creation of manifest files.
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
 
 ### 1) How can we handle processing a video to support adaptive bitrate streaming?
 
@@ -237,6 +289,26 @@ If you've read our Dropbox guide, you'll recognize this deep dive has strong ove
 6. Once the client calls `CompleteMultipartUpload`, S3 emits an object-level notification (e.g. `ObjectCreated:CompleteMultipartUpload`) exactly once per object. That single event can kick off downstream processing, but chunk-level progress tracking remains client-driven as described above.
 7. If the client stops uploading, it can resume by fetching the `VideoMetadata` to see the uploaded chunks and to skip chunks that had been uploaded already.
 
+The chunk-by-chunk interaction that makes uploads resumable looks like this:
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant B as Backend
+    participant S as S3
+    C->>C: Split file into 5-10MB chunks with fingerprints
+    C->>B: POST VideoMetadata with chunks (status NotUploaded)
+    loop For each chunk
+        C->>S: Upload chunk
+        S-->>C: Part number and ETag
+        C->>B: PATCH chunks, verify fingerprint/ETag
+        B-->>C: Chunk marked Uploaded
+    end
+    C->>S: CompleteMultipartUpload
+    S-->>B: ObjectCreated event, once per object
+    Note over B: Kick off downstream processing
+```
+
 Below is how the system looks after we implement resumable uploads:
 
 ![How do we support resumable uploads?](assets/kF2saLqi4V1H.42rz7c7ppm-w-.svg)
@@ -274,7 +346,7 @@ YouTube is a complex and interesting application, and it's hard to cover every p
 2. **Resume streaming where the user left off**: A lot of applications offer the ability to resume watching a video where the user previously left off. This would require storing more data per user per video.
 3. **View counts**: If the interviewer wishes to include more features in scope for the system, you might consider discussing the different options for maintaining video counts, either exact or estimated. This can easily be a dedicated deep-dive on its own.
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 Ok, that was a lot. You may be thinking, "how much of that is actually required from me in an interview?" Let’s break it down.
 
@@ -317,6 +389,25 @@ You should know which technologies to use, not just in theory but in practice, a
 **The Bar for YouTube:** For a staff-level candidate, expectations are high regarding the depth and quality of solutions, especially for the complex scenarios discussed earlier. Exceptional candidates delve deeply into each of the topics mentioned above and may even steer the conversation in a different direction, focusing extensively on a topic they find particularly interesting or relevant. They are also expected to possess a solid understanding of the trade-offs between various solutions and to be able to articulate them clearly, treating the interviewer as a peer.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **Split metadata from blob data.** Store `VideoMetadata` in a horizontally-partitioned store like Cassandra, partitioned by `videoId` for point lookups and high availability, and store the actual video bytes in S3.
+- **Never route video bytes through your servers.** Multi-gigabyte uploads go directly to S3 via presigned URLs and multipart upload — which is why `POST /upload` evolves into `POST /presigned_url`. This is the large-blobs pattern.
+- **Store segments in multiple formats, not raw files.** Splitting a video into few-second playable units, each transcoded into several codec/container formats, is the foundation everything else depends on.
+- **Post-processing is a DAG.** Split → transcode each segment (plus audio/transcript) → generate manifest files → mark complete. Segment transcoding is CPU-bound and parallelized across workers, orchestrated by a system like Temporal, with S3 holding intermediate files.
+- **Streaming is adaptive and client-driven.** The client reads a manifest file (an index of every segment in every format) and switches segment quality up or down as network conditions change, avoiding buffering.
+- **Scale for an extreme read skew.** Guard against hot video partitions with replication plus an LRU metadata cache partitioned by `videoId`, and push popular segments and manifest files to CDN edges so streams are served close to viewers.
+
+## 📚 Related Concepts
+
+- [Handling Large Blobs](../Patterns/HandlingLargeBlobs.md) — presigned URLs, multipart uploads, and CDN delivery for multi-gigabyte files.
+- [Scaling Reads](../Patterns/ScalingReads.md) — caching, CDNs, and replicas for the extreme read-to-write skew of viral videos.
+- [Managing Long-Running Tasks](../Patterns/ManagingLongRunningTasks.md) — orchestrating the video post-processing pipeline.
+- [Cassandra](../DeepDives/Cassandra.md) — the leaderless, horizontally-partitioned store behind video metadata.
+- [Dropbox](Dropbox.md) — the companion large-file upload/download breakdown referenced throughout.
+- [Sharding](../../CoreConcepts/Sharding.md) — partitioning strategies like the `videoId` partition key.
+- [Caching](../../CoreConcepts/Caching.md) — the LRU metadata cache that insulates the database from hot videos.
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/youtube](https://www.hellointerview.com/learn/system-design/problem-breakdowns/youtube)*

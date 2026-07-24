@@ -1,4 +1,18 @@
-# Dropbox
+# ☁️ Dropbox
+
+> **Overview**: Dropbox is a cloud-based file storage service that allows users to store and share files, providing a secure and reliable way to store and access files from anywhere, on any device. This breakdown builds the design up sequentially — upload, download, share, and sync — then dives into the hard parts: supporting 50GB files with resumable chunked uploads, making transfers fast with CDNs and compression, and keeping files secure with encryption and signed URLs.
+
+## 📋 Table of Contents
+- [Layman's Explanation](#laymans-explanation)
+- [Understanding the Problem](#understanding-the-problem)
+- [The Set Up](#the-set-up)
+- [High-Level Design](#high-level-design)
+- [Potential Deep Dives](#potential-deep-dives)
+- [What is Expected at Each Level?](#what-is-expected-at-each-level)
+- [Key Takeaways](#key-takeaways)
+- [Related Concepts](#related-concepts)
+
+---
 
 Practice with guided hints and real-time feedback
 
@@ -6,9 +20,15 @@ Watch the author walk through the problem step-by-step
 
 Watch the author walk through the problem step-by-step
 
-## Understanding the Problem
+## 🧒 Layman's Explanation
 
-> ☁️ What is Dropbox Dropbox is a cloud-based file storage service that allows users to store and share files. It provides a secure and reliable way to store and access files from anywhere, on any device.
+Imagine you keep a magic folder on every device you own — laptop, phone, tablet. Whatever you drop into the folder on one device magically appears in the same folder on all the others, and you can hand a copy to a friend just by giving them a special key.
+
+Behind the magic there are really two things: the **actual box of stuff** (the raw file bytes, kept in a giant warehouse) and a **little index card** describing it (the name, size, type, and who owns it, kept in a filing cabinet). When you add a file, we tuck the bytes into the warehouse and file a fresh index card. When a friend wants it, we don't drag the whole box across the country — we keep copies of popular boxes in warehouses near them (a CDN) so pickup is fast, and we only hand out time-limited keys (signed URLs) so a leaked key stops working after a few minutes.
+
+For a truly huge box, we don't try to ship it in one piece — we cut it into labelled chunks, send them one by one, and if the truck breaks down halfway we just resume from the chunk we left off at instead of starting over. And to keep every device's folder in sync, each device keeps a lookout and asks "anything new since I last checked?" — sometimes getting an instant tap on the shoulder (WebSocket), sometimes checking in periodically just in case a message was missed.
+
+## 🎯 Understanding the Problem
 
 ### [Functional Requirements](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#1-functional-requirements)
 
@@ -47,7 +67,7 @@ Here's how it might look on your whiteboard:
 
 > Many candidates struggle with the CAP theorem trade-off for this question. Remember, you prioritize consistency over availability only if every read must receive the most recent write; otherwise, the system will break. For example, with a stock trading app, if a user buys a share of AAPL in Germany and then another user immediately tries to buy a share of AAPL in the US, you need to be sure that the first transaction has been replicated to the US before you can proceed. However, for a file storage system like Dropbox, it's okay if a user in Germany uploads a file and a user in the US can't see it for a few seconds.
 
-## The Set Up
+## 🏗️ The Set Up
 
 ### Planning the Approach
 
@@ -112,7 +132,7 @@ Each `ChangeEvent` includes the `fileId`, the type of change (created, updated, 
 
 > With each of these requests, the user information will be passed in the headers (either via session token or JWT). This is a common pattern for APIs and is a good way to ensure that the user is authenticated and authorized to perform the action while preserving security. You should avoid passing user information in the request body, as this can be easily manipulated by the client.
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
 
 ### 1) Users should be able to upload a file from any device
 
@@ -167,6 +187,18 @@ Request:
 ![Users should be able to upload a file from any device](assets/Xg32uhoSv_I4.3pgzhz6o0-9hi.svg)
 
 The direct upload approach using presigned URLs is a classic example of handling large file transfers efficiently. This pattern of bypassing application servers for data transfer, using signed URLs for security, and implementing chunked uploads for reliability appears across many distributed systems that handle substantial file uploads and downloads.
+
+The upload design evolves through three stages, each fixing the previous stage's bottleneck:
+
+```mermaid
+graph LR
+    A["Upload to backend<br/>store on local disk<br/>won't scale, not reliable"] -->|"offload storage"| B["Upload to backend<br/>then to Blob Storage<br/>file uploaded twice"]
+    B -->|"skip the backend hop"| C["Presigned URL<br/>client uploads direct to S3<br/>backend saves metadata via S3 notification"]
+
+    style A fill:#FFB6C1
+    style B fill:#FFE4B5
+    style C fill:#90EE90
+```
 
 ### 2) Users should be able to download a file from any device
 
@@ -299,7 +331,7 @@ Let's take a step back and look at our system as a whole. At this point, we have
 - **S3**: This is where the files are actually stored. We upload files directly to S3 using presigned URLs generated by the file service.
 - **CDN**: This is a content delivery network (like CloudFront) that caches files close to the user to reduce latency. For downloads, instead of giving users a direct S3 presigned URL, the file service generates a CDN signed URL. The CDN fetches the file from S3 on the first request (cache miss) and serves it from the edge on subsequent requests (cache hit). This means users download from the nearest CDN edge location rather than from the S3 region directly.
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
 
 ### 1) How can you support large files?
 
@@ -350,6 +382,17 @@ The next question is: **how will we handle resumable uploads?** We need to keep 
 
 When the user resumes the upload, we can check the `chunks` field to see which chunks have been uploaded and which haven't. We can then start uploading the chunks that haven't been uploaded yet. This way, the user doesn't have to start the upload from scratch if they lose their internet connection or close the browser.
 
+Each chunk moves through a small lifecycle, and the overall file is only marked uploaded once every chunk reaches `uploaded`:
+
+```mermaid
+stateDiagram-v2
+    [*] --> not_uploaded: chunk created in metadata
+    not_uploaded --> uploading: client starts PUT to S3
+    uploading --> uploaded: ETag verified via ListParts
+    uploading --> not_uploaded: interruption, resume later
+    uploaded --> [*]: all chunks uploaded then CompleteMultipartUpload
+```
+
 **But how should we ensure this `chunks` field is kept in sync with the actual chunks that have been uploaded?**
 
 There are two approaches we can take:
@@ -399,6 +442,32 @@ Taking a step back, we can tie it all together. Here is what will happen when a 
 
 All throughout this process, the client is responsible for keeping track of the progress of the upload and updating the user interface accordingly so the user knows how far in they are and how much longer it will take.
 
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant B as File Service
+    participant S as S3
+
+    C->>C: Chunk file, fingerprint each chunk and whole file
+    C->>B: Check if fingerprint already exists
+    B-->>C: Not found (or resume with existing chunk statuses)
+    C->>B: Initiate multipart upload
+    B->>S: CreateMultipartUpload
+    S-->>B: uploadId
+    B-->>C: uploadId, presigned URL per chunk, metadata status uploading
+    loop For each chunk
+        C->>S: PUT chunk via presigned URL
+        S-->>C: ETag
+        C->>B: PATCH chunk status and ETag
+        B->>S: ListParts to verify
+        B->>B: Mark chunk uploaded
+    end
+    C->>B: All chunks uploaded
+    B->>S: CompleteMultipartUpload with parts and ETags
+    S-->>B: Object assembled
+    B->>B: Mark file uploaded
+```
+
 > The approach we just described is not novel. In fact, this is a problem that has been solved by cloud storage providers like Amazon S3. They have a feature called Multipart Upload that allows you to upload large objects in parts. This is exactly what we just described. The client breaks the file into parts and uploads each part to S3. S3 then combines the parts into a single object. They even provide a handy JavaScript SDK which will handle all of the chunking and uploading for you. With S3 multipart uploads, event notifications only trigger when the entire multipart upload is completed (when all parts are assembled), not for individual part uploads. For tracking individual part progress, you'd need to use S3's ListParts API, which returns all uploaded parts with their ETags for an in-progress upload. In practice, you'd rely on this API when designing a system like Dropbox. However, it's almost certainly the case that you could not get away with just saying, "I'd use the S3 Multipart Upload API" in your interview without being able to explain how it works and how you would implement it yourself if you had to. Making the interviewer aware that you are familiar with multipart upload is a good idea, however, as it shows hands on experience.
 
 > You might wonder whether chunked uploads mean we also need chunked downloads. Not quite. With S3 multipart upload, once CompleteMultipartUpload is called, S3 assembles all the parts into a single object. From that point on, downloads work like any normal file. The client gets a single presigned URL (or CDN signed URL) and downloads the complete file. For very large files, S3 and HTTP natively support Range requests , which let the client download different byte ranges in parallel or resume an interrupted download without starting over. The client doesn't need to know anything about the original chunk boundaries.
@@ -437,7 +506,7 @@ They also work with modern CDNs like CloudFront and are a feature of S3. Here is
 2. Distribution: The signed URL is distributed to an authorized user, who can use it to access the specified resource directly from the CDN.
 3. Validation: When the CDN receives a request with a signed URL, it verifies the signature using the corresponding public key (which was registered with CloudFront), checks the expiration timestamp and any other restrictions. If the signature is valid and the URL has not expired, the CDN serves the requested content. If not, it denies access.
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 Ok, that was a lot. You may be thinking, “how much of that is actually required from me in an interview?” Let’s break it down.
 
@@ -480,6 +549,26 @@ You should know which technologies to use, not just in theory but in practice, a
 **The Bar for Dropbox:** For a staff-level candidate, expectations are high regarding the depth and quality of solutions, especially for the complex scenarios discussed earlier. Exceptional candidates delve deeply into each of the topics mentioned above and may even steer the conversation in a different direction, focusing extensively on a topic they find particularly interesting or relevant. They are also expected to possess a solid understanding of the trade-offs between various solutions and to be able to articulate them clearly, treating the interviewer as a peer.
 
 Answer the question below to find your gaps.
+
+## 🎓 Key Takeaways
+
+- **Split storage from metadata:** raw bytes live in Blob Storage (S3), while a lightweight metadata record (name, size, MIME type, owner, status) lives in a NoSQL store like DynamoDB — a SQL DB like PostgreSQL works just as well here.
+- **Keep files out of the app data path:** clients upload and download directly to/from S3 via **presigned URLs**, avoiding the wasteful double transfer of routing bytes through your backend; the File Service is just a control plane that signs URLs and records metadata.
+- **CDN for fast, global downloads:** serve files from the nearest edge via CDN signed URLs, and be strategic with cache-control headers and invalidation since CDN storage is expensive.
+- **Large files demand chunking:** break files into 5-10MB chunks on the client for progress indicators, resumable uploads, parallel transfer, and delta sync — backed by S3 multipart upload with server-side ETag verification (trust but verify).
+- **Fingerprints enable dedup and resume:** a content hash (e.g. SHA-256) identifies file content independent of name; content-defined chunking keeps delta sync efficient when bytes are inserted mid-file.
+- **Sync is a hybrid:** a per-device WebSocket/SSE connection pushes real-time change events, with periodic polling of `GET /files/changes?since={timestamp}` as a safety net so no change is ever lost; conflicts resolve last-write-wins.
+- **Availability over consistency:** it's fine if a freshly uploaded file takes a few seconds to appear on another device, so the system favors availability per the CAP trade-off.
+
+## 📚 Related Concepts
+
+- [Handling Large Blobs](../Patterns/HandlingLargeBlobs.md) — the presigned-URL, chunking, and direct-transfer pattern generalized.
+- [Managing Long Running Tasks](../Patterns/ManagingLongRunningTasks.md) — coordinating multi-step, resumable uploads.
+- [Real-Time Updates](../Patterns/Real-TimeUpdates.md) — WebSocket/SSE push plus polling fallback, as used for sync.
+- [Scaling Reads](../Patterns/ScalingReads.md) — CDN and caching strategies for read-heavy download paths.
+- [Dynamodb](../DeepDives/Dynamodb.md) — the NoSQL store chosen for file metadata.
+- [Api Gateway](../DeepDives/ApiGateway.md) — the LB/gateway layer, including payload-size limits that motivate chunking.
+- [Data Modeling](../CoreConcepts/DataModeling.md) — modeling the share relationship (sharelist vs. normalized SharedFiles table).
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/dropbox](https://www.hellointerview.com/learn/system-design/problem-breakdowns/dropbox)*
