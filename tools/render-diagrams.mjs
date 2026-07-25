@@ -99,6 +99,8 @@ async function main() {
   }
   await browser.close();
   console.log(`rendered ${ok}, failed ${fail}`);
+  // a diagram that will not render is a broken doc — fail the build
+  if (fail) process.exitCode = 1;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) main();

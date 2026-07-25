@@ -7,3 +7,6 @@ node_modules/
 
 # local preview
 .wrangler/
+
+# generated site — CI builds and deploys it (see .github/workflows/deploy.yml)
+site/

@@ -1,0 +1,90 @@
+name: Build and deploy
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # baked into sitemap.xml
+  SITE_ORIGIN: https://cartmancodes.com
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: tools/package-lock.json
+
+      - name: Install build dependencies
+        working-directory: tools
+        run: npm ci
+
+      # Puppeteer needs a browser. render-diagrams.mjs falls back to Puppeteer's
+      # own Chrome when CHROME_PATH is unset, so just make sure one is installed.
+      - name: Install Chrome for Puppeteer
+        working-directory: tools
+        run: npx puppeteer browsers install chrome
+
+      # Diagrams are content-hashed, so an exact hit skips rendering entirely and
+      # a partial hit re-renders only the diagrams that actually changed.
+      - name: Restore rendered diagrams
+        uses: actions/cache@v4
+        with:
+          path: site/assets/diagrams
+          key: diagrams-${{ hashFiles('LLD/**/*.md', 'DSA/**/*.md') }}
+          restore-keys: |
+            diagrams-
+
+      - name: Check Python samples parse
+        run: python3 tools/check-python.py
+
+      - name: Render diagrams
+        working-directory: tools
+        run: node render-diagrams.mjs
+
+      - name: Build site
+        working-directory: tools
+        run: node build-site.mjs
+
+      - name: Check links, assets and anchors
+        run: node tools/check-site.mjs
+
+      - name: Upload site
+        uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: site
+          retention-days: 7
+
+  deploy:
+    # Pull requests build and validate, but only master publishes.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: site
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy site --project-name=interviewvault --branch=master

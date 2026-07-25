@@ -87,7 +87,7 @@ When you type a URL into your browser, several layers of networking protocols sp
 
 ![Simple HTTP Request](assets/xg3g8QJ39g-5.3a0k4yxa13lif.svg)
 
-1. **DNS Resolution**: The client starts by resolving the domain name of the website to an IP address using DNS (Domain Name System)[1](#user-content-fn-dns).
+1. **DNS Resolution**: The client starts by resolving the domain name of the website to an IP address using DNS (Domain Name System)<a id="user-content-fnref-dns"></a>[1](#user-content-fn-dns).
 2. **TCP Handshake**: The client initiates a TCP connection with the server using a three-way handshake:
   - **SYN**: The client sends a SYN (synchronize) packet to the server to request a connection.
   - **SYN-ACK**: The server responds with a SYN-ACK (synchronize-acknowledge) packet to acknowledge the request.
@@ -308,7 +308,7 @@ SSE is a great upgrade to long-polling because it eliminates the issues around h
 
 A very popular use-case for SSE today is AI chat apps which frequently involve the need to stream new tokens (words) to the user as they are generated to keep the UI responsive.
 
-An example of an infra gap is that many proxies and load balancers don't support streaming responses. In these cases, the proxy will try to buffer the response until it completes - which effectively blocks our stream in an annoying, opaque way that is hard to debug! [2](#user-content-fn-sse)
+An example of an infra gap is that many proxies and load balancers don't support streaming responses. In these cases, the proxy will try to buffer the response until it completes - which effectively blocks our stream in an annoying, opaque way that is hard to debug! <a id="user-content-fnref-sse"></a>[2](#user-content-fn-sse)
 
 As an aside: most interviewers will not be familiar with the [infrastructure considerations associated with SSE](https://dev.to/miketalbot/server-sent-events-are-still-not-production-ready-after-a-decade-a-lesson-for-me-a-warning-for-you-2gie) and aren't going to ask you detailed questions about them. But if the role you're interviewing for is very frontend-centric be prepared in case they expect you to know your stuff!
 
@@ -717,8 +717,8 @@ Get a quick-reference sheet for this topic, perfect for last-minute review.
 
 ## Footnotes
 
-1. DNS technically can run over TCP or UDP, but we'll exclude that for simplicity in this illustration. [↩](#user-content-fnref-dns)
-2. We use SSE extensively for Hello Interview and the amount of time we've spent dealing with networking edge cases is mind boggling. [↩](#user-content-fnref-sse)
+1. <a id="user-content-fn-dns"></a>DNS technically can run over TCP or UDP, but we'll exclude that for simplicity in this illustration. [↩](#user-content-fnref-dns)
+2. <a id="user-content-fn-sse"></a>We use SSE extensively for Hello Interview and the amount of time we've spent dealing with networking edge cases is mind boggling. [↩](#user-content-fnref-sse)
 
 ---
 *Source: [https://www.hellointerview.com/learn/system-design/patterns/realtime-updates](https://www.hellointerview.com/learn/system-design/patterns/realtime-updates)*

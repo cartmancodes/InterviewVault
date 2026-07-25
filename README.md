@@ -43,7 +43,23 @@ Diagrams are pre-rendered to SVG at build time, so pages ship with **no client-s
 JavaScript for rendering** — they load instantly and work without JS. The only scripts
 are a small search filter on the home page and a table-of-contents highlighter.
 
-Deployment (Cloudflare Pages + a GoDaddy domain) is documented in **[DEPLOY.md](DEPLOY.md)**.
+`site/` is **not committed** — GitHub Actions builds it on every push and deploys to
+Cloudflare Pages. Deployment and one-time secret setup are documented in
+**[DEPLOY.md](DEPLOY.md)**.
+
+### CI gates
+
+Every push and pull request runs the same three checks you can run locally:
+
+```bash
+python3 tools/check-python.py    # every ```python block parses
+cd tools && node render-diagrams.mjs   # every mermaid block renders
+node build-site.mjs && cd ..
+node tools/check-site.mjs        # no broken links, missing assets or dead anchors
+```
+
+A failure in any of them fails the build, so a broken diagram or a dangling cross-link
+cannot reach the published site.
 
 ### How the build works
 
