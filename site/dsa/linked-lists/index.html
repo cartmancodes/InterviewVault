@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Linked List. — InterviewVault</title>
+<meta name="description" content="Linked List.: The algorithm and data-structure notes that back the coding rounds.">
+<meta property="og:title" content="Linked List. — InterviewVault">
+<meta property="og:description" content="Linked List.: The algorithm and data-structure notes that back the coding rounds.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+</head>
+<body class="">
+<header class="hdr"><div class="hdr-in">
+<a class="brand" href="/"><span class="brand-mark">IV</span><span class="brand-name">Interview<span>Vault</span></span></a>
+<nav class="hdr-nav"><a href="/#in-a-hurry">In a Hurry</a><a href="/#notes">Deep Notes</a><a href="/#concepts">Core Concepts</a><a href="/#patterns">Patterns</a><a href="/#deep-dives">Deep Dives</a><a href="/#breakdowns">Problem Breakdowns</a><a href="/#in-the-wild">In the Wild</a><a href="/#answers">Interview Answers</a><a href="/#dsa" aria-current="page">Data Structures</a></nav>
+</div></header>
+<div class="doc-shell">
+<nav class="side"><h4>Data Structures</h4><ol><li><a href="/dsa/bfs/">BFS</a></li><li><a href="/dsa/dsu/">DSU</a></li><li><a href="/dsa/heap/">Heap</a></li><li><a href="/dsa/lrucache/">LRUCache</a></li><li><a href="/dsa/linked-lists/" aria-current="page">Linked List.</a></li><li><a href="/dsa/segment-tree/">SegmentTree</a></li><li><a href="/dsa/ternary-search/">TernarySearch</a></li><li><a href="/dsa/trie/">Trie</a></li></ol></nav>
+<main>
+<article class="art">
+<div class="art-head">
+<div class="art-kicker">Data Structures</div>
+<h1>Linked List.</h1>
+<div class="art-meta"><span>496 words</span></div>
+</div>
+<div class="prose"><p>Detect cycle or loop in a linkedlist:</p>
+<ol>
+<li>Naive hashing pointer approach in O(n) time and space:</li>
+</ol>
+<pre><code>/**
+ * Definition for singly-linked list.
+ * struct ListNode {
+ *     int val;
+ *     ListNode *next;
+ *     ListNode(int x) : val(x), next(NULL) {}
+ * };
+ */
+class Solution {
+public:
+    bool hasCycle(ListNode *head) {
+        unordered_set&lt;ListNode*&gt; st;
+        while(head != nullptr) {
+            if (st.find(head) != st.end())
+                return true;
+            st.insert(head);
+            head = head -&gt; next;
+        }
+        return false;
+    }
+};
+</code></pre>
+<ol start="2">
+<li>Fast and slow pointer/ Floyd&#39;s Cycle finding method in O(n) time and O(1) space, fast_pointer always gains +1 on slow pointer hence is bound to meet it incase of a loop:</li>
+</ol>
+<pre><code>/**
+ * Definition for singly-linked list.
+ * struct ListNode {
+ *     int val;
+ *     ListNode *next;
+ *     ListNode(int x) : val(x), next(NULL) {}
+ * };
+ */
+class Solution {
+public:
+    bool hasCycle(ListNode *head) {
+
+        ListNode *slow_pointer = head, *fast_pointer = head;
+
+        while(slow_pointer != nullptr &amp;&amp; fast_pointer != nullptr &amp;&amp; fast_pointer-&gt; next != nullptr) {
+            slow_pointer = slow_pointer-&gt;next;
+            fast_pointer = fast_pointer-&gt;next-&gt;next;
+
+            if (slow_pointer == fast_pointer)
+                return true;
+        }
+        return false;
+    }
+};
+</code></pre>
+<p>Find middle node in a liked list:</p>
+<p>NAive approach using counting method: </p>
+<pre><code>/**
+ * Definition for singly-linked list.
+ * struct ListNode {
+ *     int val;
+ *     ListNode *next;
+ *     ListNode() : val(0), next(nullptr) {}
+ *     ListNode(int x) : val(x), next(nullptr) {}
+ *     ListNode(int x, ListNode *next) : val(x), next(next) {}
+ * };
+ */
+class Solution {
+public:
+    ListNode* middleNode(ListNode* head) {
+        int node_count = 0;
+        ListNode *temp_head = head;
+
+        while(temp_head != nullptr) {
+            temp_head = temp_head-&gt;next;
+            node_count++;
+        }
+        
+        int middle = node_count / 2;
+        while(middle--) {
+            head = head -&gt;next;
+        }
+        
+        return head;
+    }
+};
+</code></pre>
+<p>USing tortoise hare algorithm(fast/slow pointer method):</p>
+<pre><code>/**
+ * Definition for singly-linked list.
+ * struct ListNode {
+ *     int val;
+ *     ListNode *next;
+ *     ListNode() : val(0), next(nullptr) {}
+ *     ListNode(int x) : val(x), next(nullptr) {}
+ *     ListNode(int x, ListNode *next) : val(x), next(next) {}
+ * };
+ */
+class Solution {
+public:
+    ListNode* middleNode(ListNode* head) {
+        ListNode *slow_pointer = head, *fast_pointer = head;
+
+        while(slow_pointer != nullptr &amp;&amp; fast_pointer != nullptr &amp;&amp; fast_pointer -&gt; next != nullptr) {
+            slow_pointer = slow_pointer -&gt; next;
+            fast_pointer = fast_pointer -&gt; next -&gt; next;
+        }
+
+        return slow_pointer;
+    }
+};
+</code></pre>
+<p>Reverse a linkedlist:</p>
+<pre><code>/**
+ * Definition for singly-linked list.
+ * struct ListNode {
+ *     int val;
+ *     ListNode *next;
+ *     ListNode() : val(0), next(nullptr) {}
+ *     ListNode(int x) : val(x), next(nullptr) {}
+ *     ListNode(int x, ListNode *next) : val(x), next(next) {}
+ * };
+ */
+class Solution {
+public:
+    ListNode* reverseList(ListNode* head) {
+        // Maintain three pointers, prev, curr and next 
+        ListNode *prev = nullptr, *curr = head, *next;
+
+        while(curr != nullptr) {
+            // Store next pointer temporraily 
+            next = curr -&gt; next;
+
+            // Update next to store previous 
+            curr -&gt; next = prev;
+
+            // Copy newly prepared curr to prev 
+            prev = curr;
+
+            // Update curr with next value
+            curr = next;
+        }
+        return prev;
+
+    }
+};
+</code></pre>
+</div>
+</article>
+<nav class="pager">
+<a href="/dsa/lrucache/"><span>Previous</span><b>LRUCache</b></a>
+<a class="nx" href="/dsa/segment-tree/"><span>Next</span><b>SegmentTree</b></a>
+</nav>
+</main>
+<aside class="toc"></aside>
+</div>
+<script src="/assets/doc.js" defer></script>
+<footer class="foot"><div class="foot-in">
+<span>InterviewVault — system design study vault</span>
+<span>122 documents · 607 diagrams</span>
+</div></footer>
+</body>
+</html>

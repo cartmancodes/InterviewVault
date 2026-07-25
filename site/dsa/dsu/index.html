@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DSU — InterviewVault</title>
+<meta name="description" content="DSU: The algorithm and data-structure notes that back the coding rounds.">
+<meta property="og:title" content="DSU — InterviewVault">
+<meta property="og:description" content="DSU: The algorithm and data-structure notes that back the coding rounds.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+</head>
+<body class="">
+<header class="hdr"><div class="hdr-in">
+<a class="brand" href="/"><span class="brand-mark">IV</span><span class="brand-name">Interview<span>Vault</span></span></a>
+<nav class="hdr-nav"><a href="/#in-a-hurry">In a Hurry</a><a href="/#notes">Deep Notes</a><a href="/#concepts">Core Concepts</a><a href="/#patterns">Patterns</a><a href="/#deep-dives">Deep Dives</a><a href="/#breakdowns">Problem Breakdowns</a><a href="/#in-the-wild">In the Wild</a><a href="/#answers">Interview Answers</a><a href="/#dsa" aria-current="page">Data Structures</a></nav>
+</div></header>
+<div class="doc-shell">
+<nav class="side"><h4>Data Structures</h4><ol><li><a href="/dsa/bfs/">BFS</a></li><li><a href="/dsa/dsu/" aria-current="page">DSU</a></li><li><a href="/dsa/heap/">Heap</a></li><li><a href="/dsa/lrucache/">LRUCache</a></li><li><a href="/dsa/linked-lists/">Linked List.</a></li><li><a href="/dsa/segment-tree/">SegmentTree</a></li><li><a href="/dsa/ternary-search/">TernarySearch</a></li><li><a href="/dsa/trie/">Trie</a></li></ol></nav>
+<main>
+<article class="art">
+<div class="art-head">
+<div class="art-kicker">Data Structures</div>
+<h1>DSU</h1>
+<div class="art-meta"><span>406 words</span></div>
+</div>
+<div class="prose"><p>// <a href="https://leetcode.com/problems/min-cost-to-connect-all-points">https://leetcode.com/problems/min-cost-to-connect-all-points</a></p>
+<p>class Node {
+    public: 
+        int x;
+        int y;
+        int cost;
+        Node(int x1, int y1, int cost1) {
+            x = x1;
+            y = y1;
+            cost = cost1;
+        }
+};</p>
+<p>class DSU {
+    public:
+        vector<int> parent;
+        DSU(int sz) {
+            parent.resize(sz, 0);
+            for(int i = 0; i &lt; sz; i++) 
+                parent[i] = i;
+        }
+        int find(int cur) {
+            if (parent[cur] == cur)
+                return cur;
+            return parent[cur] = find(parent[cur]);
+        }</p>
+<pre><code>    void merge(int x, int y) {
+        int parentX = find(x);
+        int parentY = find(y);
+        if (parentX != parentY)
+            parent[parentY] = parentX;
+    }
+</code></pre>
+<p>};</p>
+<p>class Solution {
+public:
+    int minCostConnectPoints(vector&lt;vector<int>&gt;&amp; points) {
+        int rows = points.size();
+        int cols = points[0].size();
+        vector<Node> edges;
+        for(int i = 0; i &lt; points.size(); i++)  {
+            for(int j = 0;j &lt; points.size(); j++) {
+                if (i == j)
+                    continue;
+                int cost = abs(points[i][0] - points[j][0]) + abs(points[i][1] -points[j][1]);
+                edges.push_back(Node(i, j, cost));
+            }
+        }
+        // Sort by cost in ascending order
+        sort(edges.begin(), edges.end(), [](const Node &amp;a, const Node &amp;b) {
+            return a.cost &lt; b.cost;
+        });</p>
+<pre><code>    DSU dsu(points.size());
+    int totalCost = 0;
+    for(int i = 0; i &lt; edges.size(); i++)  {
+        if (dsu.find(edges[i].x) != dsu.find(edges[i].y)) {
+            totalCost += edges[i].cost;
+            dsu.merge(edges[i].x, edges[i].y);
+        }
+    }
+
+    return totalCost;
+
+}
+</code></pre>
+<p>};</p>
+<p>// <a href="https://leetcode.com/problems/minimum-cost-walk-in-weighted-graph">https://leetcode.com/problems/minimum-cost-walk-in-weighted-graph</a></p>
+<p>class DSU {
+public:</p>
+<pre><code>vector&lt;int&gt; parent;
+vector&lt;int&gt; componentAnds;
+void merge(int x, int y, int cost) {
+    int parentX = find(x);
+    int parentY = find(y);
+
+    // Merge
+    if(parentX != parentY) {
+        parent[parentY] = parentX;
+    }
+    if (componentAnds[parentX] == -1 &amp;&amp; componentAnds[parentY] == -1) {
+        componentAnds[parentX] = cost;
+    } else if (componentAnds[parentX] == -1) {
+        componentAnds[parentX] = componentAnds[parentY] &amp; cost;
+    } else if (componentAnds[parentY] == -1) {
+        componentAnds[parentX] = componentAnds[parentX] &amp; cost;
+    } else {
+        componentAnds[parentX] &amp;= componentAnds[parentY] &amp; cost;
+    }
+}
+
+int find(int x) {
+    if (parent[x] == x)
+        return x;
+    return parent[x] = find(parent[x]);
+}
+
+int cost(int x) {
+    return componentAnds[x];
+}
+
+DSU(int n) {
+    parent.resize(n + 5, 0);
+    componentAnds.resize(n + 5, -1);
+
+    for(int i = 0; i &lt;= n; i++) {
+        parent[i] = i;
+    }
+}
+</code></pre>
+<p>};
+class Solution {
+public:
+    vector<int> minimumCost(int n, vector&lt;vector<int>&gt;&amp; edges, vector&lt;vector<int>&gt;&amp; query) {
+        DSU dsu(n);</p>
+<pre><code>    // Processand merge all edges
+    int rows = edges.size();
+    int columns = edges[0].size();
+
+    for(int i = 0; i &lt; rows; i++) {
+        dsu.merge(edges[i][0], edges[i][1], edges[i][2]);
+    }
+
+    vector&lt;int&gt; result;
+
+    for(int i = 0; i &lt; query.size(); i++) {
+        int pX = dsu.find(query[i][0]);
+        int pY = dsu.find(query[i][1]);
+
+        int ans;
+        if (pX != pY)
+            ans = -1;
+        else 
+            ans = dsu.cost(pX);
+
+        result.push_back(ans);
+    }
+    return result;
+}
+</code></pre>
+<p>};</p>
+</div>
+</article>
+<nav class="pager">
+<a href="/dsa/bfs/"><span>Previous</span><b>BFS</b></a>
+<a class="nx" href="/dsa/heap/"><span>Next</span><b>Heap</b></a>
+</nav>
+</main>
+<aside class="toc"></aside>
+</div>
+<script src="/assets/doc.js" defer></script>
+<footer class="foot"><div class="foot-in">
+<span>InterviewVault — system design study vault</span>
+<span>122 documents · 607 diagrams</span>
+</div></footer>
+</body>
+</html>

@@ -1393,7 +1393,7 @@ graph TB
 
     subgraph "Facebook — Memcached + TAO"
         F1[TAO: Read-through cache for social graph]
-        F2[Cache invalidation via McSqueal (MySQL binlog)]
+        F2["Cache invalidation via McSqueal (MySQL binlog)"]
         F3[Thundering herd protection: lease tokens]
     end
 

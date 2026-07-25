@@ -1151,16 +1151,16 @@ Instead of storing the current state, store every change as an immutable event:
 graph LR
     subgraph "Traditional (State-Based)"
         T1[orders table]
-        T1 --> TR1[{id: 1, status: 'delivered', total: 50}]
+        T1 --> TR1["{id: 1, status: delivered, total: 50}"]
         NOTE1[One row per order<br/>History lost on update]
     end
 
     subgraph "Event Sourcing"
         E1[order_events table]
-        E1 --> EV1[{order_id: 1, type: 'created', data: {...}}]
-        E1 --> EV2[{order_id: 1, type: 'paid', data: {...}}]
-        E1 --> EV3[{order_id: 1, type: 'shipped', data: {...}}]
-        E1 --> EV4[{order_id: 1, type: 'delivered', data: {...}}]
+        E1 --> EV1["{order_id: 1, type: created, data: ...}"]
+        E1 --> EV2["{order_id: 1, type: paid, data: ...}"]
+        E1 --> EV3["{order_id: 1, type: shipped, data: ...}"]
+        E1 --> EV4["{order_id: 1, type: delivered, data: ...}"]
         NOTE2[Replay events to get current state<br/>Full audit trail built-in]
     end
 

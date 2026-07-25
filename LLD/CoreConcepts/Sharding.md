@@ -625,9 +625,9 @@ graph TB
     APP2 -->|Can't lookup| DIR
     APP3 -->|Can't lookup| DIR
     
-    DIR -.x|Blocked| S1
-    DIR -.x|Blocked| S2
-    DIR -.x|Blocked| S3
+    DIR -.-x|Blocked| S1
+    DIR -.-x|Blocked| S2
+    DIR -.-x|Blocked| S3
     
     NOTE[❌ Directory down = System down<br/>Even though shards are healthy!]
     
@@ -1064,9 +1064,9 @@ graph TB
     subgraph "Discord Message Storage"
         CK[Compound Key: channel_id + message_id]
         CK --> PART[Partition Key: channel_id<br/>All messages in one channel → one node]
-        CK --> CLUSTER[Clustering Key: message_id (time-ordered UUID)<br/>Messages sorted chronologically within partition]
+        CK --> CLUSTER["Clustering Key: message_id (time-ordered UUID)<br/>Messages sorted chronologically within partition"]
 
-        QUERY[Query: Last 50 messages in #general]
+        QUERY["Query: Last 50 messages in #general"]
         QUERY -->|Hits exactly ONE Cassandra partition| FAST[Fast single-partition query]
     end
 

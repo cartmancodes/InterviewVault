@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Database Indexing — InterviewVault</title>
+<meta name="description" content="Database Indexing: The vocabulary every design rests on — caching, sharding, indexing, CAP.">
+<meta property="og:title" content="Database Indexing — InterviewVault">
+<meta property="og:description" content="Database Indexing: The vocabulary every design rests on — caching, sharding, indexing, CAP.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+</head>
+<body class="">
+<header class="hdr"><div class="hdr-in">
+<a class="brand" href="/"><span class="brand-mark">IV</span><span class="brand-name">Interview<span>Vault</span></span></a>
+<nav class="hdr-nav"><a href="/#in-a-hurry">In a Hurry</a><a href="/#notes">Deep Notes</a><a href="/#concepts" aria-current="page">Core Concepts</a><a href="/#patterns">Patterns</a><a href="/#deep-dives">Deep Dives</a><a href="/#breakdowns">Problem Breakdowns</a><a href="/#in-the-wild">In the Wild</a><a href="/#answers">Interview Answers</a><a href="/#dsa">Data Structures</a></nav>
+</div></header>
+<div class="doc-shell">
+<nav class="side"><h4>Core Concepts</h4><ol><li><a href="/concepts/api-design/">API Design</a></li><li><a href="/concepts/caching/">Caching</a></li><li><a href="/concepts/cap-theorem/">CAP Theorem</a></li><li><a href="/concepts/consistent-hashing/">Consistent Hashing</a></li><li><a href="/concepts/data-modeling/">Data Modeling</a></li><li><a href="/concepts/database-indexing/" aria-current="page">Database Indexing</a></li><li><a href="/concepts/networking-essentials/">Networking Essentials</a></li><li><a href="/concepts/numbers-to-know/">Numbers to Know</a></li><li><a href="/concepts/sharding/">Sharding</a></li></ol></nav>
+<main>
+<article class="art">
+<div class="art-head">
+<div class="art-kicker">Core Concepts</div>
+<h1>Database Indexing</h1>
+<div class="art-meta"><span>7,225 words</span><span>1 diagram</span><span>9 figures</span></div>
+</div>
+<div class="prose"><blockquote>
+<p><strong>Overview</strong>: Indexes are separate data structures that let a database jump straight to the rows it needs instead of scanning every record. This deep dive covers how indexes are stored and accessed on disk, then walks through the main index types you&#39;ll meet in interviews — B-trees, LSM trees, hash, geospatial, and inverted indexes — before finishing with optimization patterns like composite and covering indexes.</p>
+</blockquote>
+<h2 id="laymans-explanation">🧒 Layman&#39;s Explanation</h2>
+<p>Imagine a giant library where books are shelved in the order they arrived, with no system at all. To find one specific novel, you&#39;d have to walk past every shelf and check each book one by one — that&#39;s a database doing a <em>full table scan</em>. An <strong>index</strong> is the library&#39;s catalog: a separate, well-organized guide that sends you straight to the right shelf without touching the others.</p>
+<p>Different catalogs suit different questions. A card catalog kept in alphabetical order (a <strong>B-tree</strong>) is great for both &quot;find this exact title&quot; and &quot;find everything between D and F.&quot; A coat-check ticket that maps a number straight to one peg (a <strong>hash index</strong>) is unbeatable for &quot;give me exactly this one&quot; but useless for browsing a range. A map grid that groups nearby places together (a <strong>geospatial index</strong>) answers &quot;what&#39;s near me.&quot; And the index at the back of a textbook that lists which pages mention each word (an <strong>inverted index</strong>) is how you search inside the text itself. Every catalog costs shelf space and has to be updated whenever a book is added — which is exactly the trade-off a database makes each time you add an index.</p>
+<p>Learn about how database indexing works and how to optimize your queries</p>
+<p>Watch the author walk through the problem step-by-step</p>
+<p>Watch the author walk through the problem step-by-step</p>
+<p>Database performance can make or break modern applications. Think about what it takes to search for a user&#39;s profile by email in a table with millions of records. Without any optimizations, the database would have to check each row sequentially, scanning through every single record until it finds a match. For a table with millions of rows, this becomes painfully slow - like searching through every book in a library one by one to find a specific novel.</p>
+<p>This is where indexes come in handy. By maintaining separate data structures optimized for searching, indexes allow databases to quickly locate the exact records we need without examining every row. From finding products in an e-commerce catalog to loading user profiles in a social network, indexes are what make fast lookups possible.</p>
+<p>Knowing when to add an index, to what columns, and what type of index is a critical part of system design. Choosing the right indexes is often a key focus in interviews. For mid-level engineers, understanding basic indexing strategies is expected. For staff-level engineers, mastery of different index types and their trade-offs is essential.</p>
+<p>This deep dive covers how database indexes work under the hood and the different types you&#39;ll encounter. We&#39;ll start with the core concepts of how indexes are stored and accessed, then examine specific index types like B-trees, hash indexes, geospatial indexes, and more. For each type, we&#39;ll cover their strengths, limitations, and when to use them in your system design interviews.</p>
+<p>First, let&#39;s understand exactly how databases store and use indexes to make our queries efficient.</p>
+<blockquote>
+<p>Indexing and data organization tends to be a stronger focus in infrastructure style interviews. For full-stack and product-focused roles, you&#39;ll likely only need a basic understanding of when and why to use indexes. The depth we cover here goes beyond what&#39;s typically asked in full-stack interviews, but understanding the fundamentals will help you make better decisions when designing and optimizing your applications.</p>
+</blockquote>
+<h2 id="how-database-indexes-work">🏗️ How Database Indexes Work</h2>
+<p>When we store data in a database, it&#39;s ultimately written to disk as a collection of files. The main table data is typically stored as a heap file - essentially a collection of rows in no particular order. Think of this like a notebook where you write entries as they come, one after another.</p>
+<h3 id="physical-storage-and-access-patterns">Physical Storage and Access Patterns</h3>
+<blockquote>
+<p>Unless interviewing for a database internals role, the details here are not going to be asked in an interview. That said, they are an important foundation to understand the problem of why we need indexes.</p>
+</blockquote>
+<p>Modern databases face an interesting challenge: they need to store and quickly access vast amounts of data. While the data lives on disk (typically SSDs nowadays), we can only process it when it&#39;s in memory. This means every query requires loading data from disk into RAM.</p>
+<p>When querying without an index, we need to scan through every page of data one by one, loading each into memory to check if it contains what we&#39;re looking for. With millions of pages, this means millions of (relatively)slow disk reads just to find a single record. It&#39;s like having to flip through every page of a massive book to find one specific word.</p>
+<blockquote>
+<p>Modern databases have optimizations like prefetching and caching to make random access faster, but the point here still stands. It&#39;s too slow to scan through every page of data sequentially.</p>
+</blockquote>
+<p>But with indexes, we transform our access patterns. Instead of reading through every page of data sequentially, indexes provide a structured path to follow directly to the data we need. They help us minimize the number of pages we need to read from storage by telling us exactly which pages contain our target data. It&#39;s the difference between checking every page in a book versus using the table of contents to jump straight to the relevant pages.</p>
+<blockquote>
+<p>While SSDs are the norm today, it&#39;s important to note that random access is still significantly slower than sequential access, even on SSDs. This is a common misconception - while the performance gap is smaller than with HDDs, it&#39;s still very real. And for systems still using HDDs, especially for large datasets, this performance difference becomes even more pronounced, making proper indexing absolutely critical.</p>
+</blockquote>
+<h3 id="cost">Cost</h3>
+<p>But indexes aren&#39;t free - they come with their own set of trade-offs. Every index we create requires additional disk space, sometimes nearly as much as the original data.</p>
+<p>Write performance takes a hit too. When we insert a new row or update an existing one, the database must update not just the main table, but every index on it. With multiple indexes, a single write operation can trigger several disk writes.</p>
+<p>So when might indexes actually hurt more than help? The classic case is a table with frequent writes but infrequent reads. Think of a logging table where we&#39;re constantly inserting new records but rarely querying old ones. Here, the overhead of maintaining indexes might not justify their benefit. Similarly, for small tables with just a few hundred rows, the cost of maintaining an index and traversing its structure might exceed the cost of a simple sequential scan.</p>
+<blockquote>
+<p>In reality, the impact of indexes on memory is often overblown. Modern databases have smart buffer pool management that reduces the performance hit of having multiple indexes. However, it&#39;s still a good idea to closely monitor index usage and avoid creating unnecessary indexes that don&#39;t provide significant benefits.</p>
+</blockquote>
+<h2 id="types-of-indexes">🔬 Types of indexes</h2>
+<p>There are lots of indexes, many of which fall into the tail and are rarely used but for specialized use cases. Rather than enumerating every type of index you may see in the wild, we&#39;re going to focus in on the most common ones that show up in system design interviews.</p>
+<h3 id="b-tree-indexes">B-Tree Indexes</h3>
+<p>B-tree indexes are the most common type of database index, providing an efficient way to organize data for fast searches and updates. They achieve this by maintaining a balanced tree structure that minimizes the number of disk reads needed to find any piece of data.</p>
+<h4 id="the-structure-of-b-trees">The Structure of B-trees</h4>
+<p>A B-tree is a self-balancing tree that maintains sorted data and allows for efficient insertions, deletions, and searches. Unlike binary trees where each node has at most two children, B-tree nodes can have multiple children - typically hundreds in practice. Each node contains an ordered array of keys and pointers, structured to minimize disk reads.</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/CoreConcepts/assets/x8124msF427Y.0mjg3mtbo2t2n.svg" alt="b-tree" loading="lazy"><figcaption>b-tree</figcaption></figure></p>
+<p>Every node in a B-tree follows strict rules:</p>
+<ul>
+<li>All leaf nodes must be at the same depth</li>
+<li>Each node can contain between m/2 and m keys (where m is the order of the tree)</li>
+<li>A node with k keys must have exactly k+1 children</li>
+<li>Keys within a node are kept in sorted order</li>
+</ul>
+<p>This structure is particularly clever because it maps perfectly to how databases store data on disk. Each node is sized to fit in a single disk page (typically 8KB), maximizing our I/O efficiency. When PostgreSQL needs to find a record with id=350, it might only need to read 2-3 pages from disk: the root node, maybe an internal node, and finally a leaf node.</p>
+<h4 id="real-world-examples">Real-World Examples</h4>
+<p>B-trees are everywhere in modern databases. PostgreSQL uses them for almost everything - primary keys, unique constraints, and most regular indexes are all B-trees.</p>
+<p>When you create a table like this in PostgreSQL:</p>
+<pre><code class="language-sql">CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) UNIQUE
+);
+</code></pre>
+<p>PostgreSQL automatically creates two B-tree indexes: one for the primary key and one for the unique email constraint. These B-trees maintain sorted order, which is crucial for both uniqueness checks and range queries.</p>
+<p>DynamoDB organizes items within a partition in sort-key order, enabling efficient range queries within that partition. Its storage internals aren’t publicly documented in detail, but it’s widely understood to use an LSM-style storage architecture rather than a B-tree for its underlying engine.</p>
+<p>Even MongoDB, with its document model, uses B-trees (specifically B+ trees, a variant where all data is stored in leaf nodes) for its indexes.</p>
+<p>When you create an index in MongoDB like this:</p>
+<pre><code>db.users.createIndex({ &quot;email&quot;: 1 });
+</code></pre>
+<p>You&#39;re creating a B-tree that maps email values to document locations.</p>
+<h4 id="why-b-trees-are-the-default-choice">Why B-trees are the default choice</h4>
+<p>B-trees have become the default choice for most database indexes because they excel at everything databases need:</p>
+<ol>
+<li>They maintain sorted order, making range queries and ORDER BY operations efficient</li>
+<li>They&#39;re self-balancing, ensuring predictable performance even as data grows</li>
+<li>They minimize disk I/O by matching their structure to how databases store data</li>
+<li>They handle both equality searches (email = &#39;x&#39;) and range searches (age &gt; 25) equally well</li>
+<li>They remain balanced even with random inserts and deletes, avoiding the performance cliffs you might see with simpler tree structures</li>
+</ol>
+<p>If you find yourself in an interview and you need to decide which index to use, B-trees are a safe bet.</p>
+<h3 id="lsm-trees-log-structured-merge-trees">LSM Trees (Log-Structured Merge Trees)</h3>
+<p>B-trees are great for balanced workloads, but what happens when you need to handle tons of writes? Think about building a system like DataDog that&#39;s ingesting millions of metrics per second from thousands of servers. Every CPU reading, memory stat, and error count needs to be stored immediately.</p>
+<p>With B-trees, each write means finding the right leaf page, reading it into memory, updating it, and writing it back to disk. For a few thousand writes per second, this works fine. But when you&#39;re processing 100,000 writes per second, those random disk seeks become a bottleneck. It&#39;s like trying to update a filing cabinet where you need to find and modify individual folders scattered throughout - eventually, you spend more time searching than actually storing data.</p>
+<p>This is where LSM trees work really well. But they take a fundamentally different approach to indexing. With B-trees, each index is its own separate structure that you can create on any column. LSM trees don&#39;t work this way. The LSM tree is the storage format for your entire table, sorted by the primary key. Your primary key lookups are extremely fast, but secondary indexes require additional structures - some systems like Cassandra and DynamoDB (via GSIs/LSIs) support them, though with different performance characteristics than primary key access.</p>
+<p>Instead of updating data in place like B-trees, LSM trees use an append-only approach that&#39;s built for write-heavy workloads.</p>
+<h4 id="how-lsm-trees-work">How LSM Trees Work</h4>
+<p>LSM trees solve the write problem by batching writes in memory and flushing them to disk sequentially. Instead of immediately writing each update to disk like B-trees do, LSM trees buffer changes in memory and write them out in large chunks. This converts many small random writes into fewer large sequential writes, increasing efficiency.</p>
+<p>Here&#39;s what happens when you write to a database that uses LSM trees:</p>
+<ol>
+<li><strong>Memtable (Memory Component)</strong>: New writes go into an in-memory structure called a memtable, typically implemented as a sorted data structure like a red-black tree or skip list. This is extremely fast since it&#39;s all in RAM.</li>
+<li><strong>Write-Ahead Log (WAL)</strong>: To ensure durability, every write is also appended to a write-ahead log on disk. This is a sequential append operation, which is much faster than random writes.</li>
+<li><strong>Flush to SSTable</strong>: Once the memtable reaches a certain size (often a few megabytes), it&#39;s frozen and flushed to disk as an immutable Sorted String Table (SSTable). This is a single sequential write operation that can write megabytes of data at once.</li>
+<li><strong>Compaction</strong>: Over time, you accumulate many SSTables on disk. A background process called compaction periodically merges these files, removing duplicates and deleted entries. This keeps the number of files manageable and maintains read performance.</li>
+</ol>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/CoreConcepts/assets/jrlp5dG9G_Yx.2y5dforf83vye.svg" alt="lsm-tree" loading="lazy"><figcaption>lsm-tree</figcaption></figure></p>
+<p>This makes writes incredibly fast, you&#39;re just appending to memory and a log file. Even when flushing to disk, you&#39;re writing large sequential chunks rather than seeking to random locations.</p>
+<h4 id="negative-impact-on-reads">Negative Impact on Reads</h4>
+<p>As always, this benefits comes at a cost. While LSM trees excel at writes, they make reads more complex. Remember how B-trees could find any record with just 2-3 disk reads? With LSM trees, the story is different.</p>
+<p>When you query for a specific key, the database must check multiple places:</p>
+<ol>
+<li>First, the memtable: Is the data in the current in-memory buffer?</li>
+<li>Then, immutable memtables: Any memtables waiting to be flushed?</li>
+<li>Finally, all SSTables on disk: Starting from the newest (most likely to have recent data) and working backwards</li>
+</ol>
+<p>This means a single point query might need to check dozens of files in the worst case. It&#39;s like searching for a document that could be in your desk drawer, filing cabinet, or any of several archive boxes. And you have to check them all.</p>
+<p>Obviously, this would make LSM trees almost unusable for any workflow requiring reasonable read performance. So to mitigate this problem, LSM trees typically employ several optimizations:</p>
+<ol>
+<li>Bloom Filters: Each SSTable has an associated bloom filter - a probabilistic data structure that can quickly tell you if a key is definitely NOT in that file. This lets you skip most SSTables without reading them. If the bloom filter says &quot;maybe&quot;, you still need to check, but it eliminates the definite misses.</li>
+<li>Sparse Indexes: Since SSTables are sorted, they maintain sparse indexes that tell you the range of keys in each block. If you&#39;re looking for user_id=500 and an SSTable only contains keys 1000-2000, you can skip it entirely.</li>
+<li>Compaction Strategies: Different compaction strategies optimize for different workloads. Size-tiered compaction minimizes write amplification but can lead to more files to check. Leveled compaction maintains fewer files but requires more frequent rewrites.</li>
+</ol>
+<p>The read path a point query walks through — memtable first, then immutable memtables, then SSTables newest-to-oldest with bloom filters pruning the definite misses — looks like this:</p>
+<div class="diagram"><svg preserveAspectRatio="xMidYMid meet" id="me32838b810c4599c" width="100%" xmlns="http://www.w3.org/2000/svg" class="flowchart" style="max-width:1371.625px;width:100%;height:auto;" viewBox="0 0 1371.625 295.94140625" role="graphics-document document" aria-roledescription="flowchart-v2"><style>#me32838b810c4599c{font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;font-size:14px;fill:#0E1A2B;}@keyframes edge-animation-frame{from{stroke-dashoffset:0;}}@keyframes dash{to{stroke-dashoffset:0;}}#me32838b810c4599c .edge-animation-slow{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 50s linear infinite;stroke-linecap:round;}#me32838b810c4599c .edge-animation-fast{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 20s linear infinite;stroke-linecap:round;}#me32838b810c4599c .error-icon{fill:#FFFFFF;}#me32838b810c4599c .error-text{fill:#000000;stroke:#000000;}#me32838b810c4599c .edge-thickness-normal{stroke-width:1px;}#me32838b810c4599c .edge-thickness-thick{stroke-width:3.5px;}#me32838b810c4599c .edge-pattern-solid{stroke-dasharray:0;}#me32838b810c4599c .edge-thickness-invisible{stroke-width:0;fill:none;}#me32838b810c4599c .edge-pattern-dashed{stroke-dasharray:3;}#me32838b810c4599c .edge-pattern-dotted{stroke-dasharray:2;}#me32838b810c4599c .marker{fill:#5B7BB4;stroke:#5B7BB4;}#me32838b810c4599c .marker.cross{stroke:#5B7BB4;}#me32838b810c4599c svg{font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;font-size:14px;}#me32838b810c4599c p{margin:0;}#me32838b810c4599c .label{font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;color:#0E1A2B;}#me32838b810c4599c .cluster-label text{fill:#000000;}#me32838b810c4599c .cluster-label span{color:#000000;}#me32838b810c4599c .cluster-label span p{background-color:transparent;}#me32838b810c4599c .label text,#me32838b810c4599c span{fill:#0E1A2B;color:#0E1A2B;}#me32838b810c4599c .node rect,#me32838b810c4599c .node circle,#me32838b810c4599c .node ellipse,#me32838b810c4599c .node polygon,#me32838b810c4599c .node path{fill:#EEF3FF;stroke:#2563EB;stroke-width:1px;}#me32838b810c4599c .rough-node .label text,#me32838b810c4599c .node .label text,#me32838b810c4599c .image-shape .label,#me32838b810c4599c .icon-shape .label{text-anchor:middle;}#me32838b810c4599c .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#me32838b810c4599c .rough-node .label,#me32838b810c4599c .node .label,#me32838b810c4599c .image-shape .label,#me32838b810c4599c .icon-shape .label{text-align:center;}#me32838b810c4599c .node.clickable{cursor:pointer;}#me32838b810c4599c .root .anchor path{fill:#5B7BB4!important;stroke-width:0;stroke:#5B7BB4;}#me32838b810c4599c .arrowheadPath{fill:rgba(255, 255, 255, 0);}#me32838b810c4599c .edgePath .path{stroke:#5B7BB4;stroke-width:1px;}#me32838b810c4599c .flowchart-link{stroke:#5B7BB4;fill:none;}#me32838b810c4599c .edgeLabel{background-color:#F0F4FF;text-align:center;}#me32838b810c4599c .edgeLabel p{background-color:#F0F4FF;}#me32838b810c4599c .edgeLabel rect{opacity:0.5;background-color:#F0F4FF;fill:#F0F4FF;}#me32838b810c4599c .labelBkg{background-color:rgba(240, 244, 255, 0.5);}#me32838b810c4599c .cluster rect{fill:#FFFFFF;stroke:hsl(0, 0%, 90%);stroke-width:1px;}#me32838b810c4599c .cluster text{fill:#000000;}#me32838b810c4599c .cluster span{color:#000000;}#me32838b810c4599c div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;font-size:12px;background:#FFFFFF;border:1px solid hsl(0, 0%, 90%);border-radius:2px;pointer-events:none;z-index:100;}#me32838b810c4599c .flowchartTitleText{text-anchor:middle;font-size:18px;fill:#0E1A2B;}#me32838b810c4599c rect.text{fill:none;stroke-width:0;}#me32838b810c4599c .icon-shape,#me32838b810c4599c .image-shape{background-color:#F0F4FF;text-align:center;}#me32838b810c4599c .icon-shape p,#me32838b810c4599c .image-shape p{background-color:#F0F4FF;padding:2px;}#me32838b810c4599c .icon-shape .label rect,#me32838b810c4599c .image-shape .label rect{opacity:0.5;background-color:#F0F4FF;fill:#F0F4FF;}#me32838b810c4599c .label-icon{display:inline-block;height:1em;overflow:visible;vertical-align:-0.125em;}#me32838b810c4599c .node .label-icon path{fill:currentColor;stroke:revert;stroke-width:revert;}#me32838b810c4599c .node .neo-node{stroke:#2563EB;}#me32838b810c4599c [data-look="neo"].node rect,#me32838b810c4599c [data-look="neo"].cluster rect,#me32838b810c4599c [data-look="neo"].node polygon{stroke:url(#me32838b810c4599c-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#me32838b810c4599c [data-look="neo"].swimlane.cluster rect{filter:none;}#me32838b810c4599c [data-look="neo"].node path{stroke:url(#me32838b810c4599c-gradient);stroke-width:1px;}#me32838b810c4599c [data-look="neo"].node .outer-path{filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#me32838b810c4599c [data-look="neo"].node .neo-line path{stroke:#2563EB;filter:none;}#me32838b810c4599c [data-look="neo"].node circle{stroke:url(#me32838b810c4599c-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#me32838b810c4599c [data-look="neo"].node circle .state-start{fill:#000000;}#me32838b810c4599c [data-look="neo"].icon-shape .icon{fill:url(#me32838b810c4599c-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#me32838b810c4599c [data-look="neo"].icon-shape .icon-neo path{stroke:url(#me32838b810c4599c-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#me32838b810c4599c :root{--mermaid-font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;}</style><g><marker id="me32838b810c4599c_flowchart-v2-pointEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></path></marker><marker id="me32838b810c4599c_flowchart-v2-pointStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="4.5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 5 L 10 10 L 10 0 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></path></marker><marker id="me32838b810c4599c_flowchart-v2-pointEnd-margin" class="marker flowchart-v2" viewBox="0 0 11.5 14" refX="11.5" refY="7" markerUnits="userSpaceOnUse" markerWidth="10.5" markerHeight="14" orient="auto"><path d="M 0 0 L 11.5 7 L 0 14 z" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"></path></marker><marker id="me32838b810c4599c_flowchart-v2-pointStart-margin" class="marker flowchart-v2" viewBox="0 0 11.5 14" refX="1" refY="7" markerUnits="userSpaceOnUse" markerWidth="11.5" markerHeight="14" orient="auto"><polygon points="0,7 11.5,14 11.5,0" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"></polygon></marker><marker id="me32838b810c4599c_flowchart-v2-circleEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="11" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></circle></marker><marker id="me32838b810c4599c_flowchart-v2-circleStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-1" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></circle></marker><marker id="me32838b810c4599c_flowchart-v2-circleEnd-margin" class="marker flowchart-v2" viewBox="0 0 10 10" refY="5" refX="12.25" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"></circle></marker><marker id="me32838b810c4599c_flowchart-v2-circleStart-margin" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-2" refY="5" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"></circle></marker><marker id="me32838b810c4599c_flowchart-v2-crossEnd" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="12" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"></path></marker><marker id="me32838b810c4599c_flowchart-v2-crossStart" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="-1" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"></path></marker><marker id="me32838b810c4599c_flowchart-v2-crossEnd-margin" class="marker cross flowchart-v2" viewBox="0 0 15 15" refX="17.7" refY="7.5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M 1,1 L 14,14 M 1,14 L 14,1" class="arrowMarkerPath" style="stroke-width: 2.5;"></path></marker><marker id="me32838b810c4599c_flowchart-v2-crossStart-margin" class="marker cross flowchart-v2" viewBox="0 0 15 15" refX="-3.5" refY="7.5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M 1,1 L 14,14 M 1,14 L 14,1" class="arrowMarkerPath" style="stroke-width: 2.5; stroke-dasharray: 1, 0;"></path></marker><g class="root"><g class="clusters"></g><g class="edgePaths"><path d="M139.75,114.5L143.917,114.5C148.083,114.5,156.417,114.5,164.083,114.5C171.75,114.5,178.75,114.5,182.25,114.5L185.75,114.5" id="me32838b810c4599c-L_Q_M_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_Q_M_0" data-points="W3sieCI6MTM5Ljc1LCJ5IjoxMTQuNX0seyJ4IjoxNjQuNzUsInkiOjExNC41fSx7IngiOjE4OS43NSwieSI6MTE0LjV9XQ==" data-look="classic" marker-end="url(#me32838b810c4599c_flowchart-v2-pointEnd)"></path><path d="M299.454,81.392L311.579,70.91C323.704,60.428,347.953,39.464,379.749,28.982C411.544,18.5,450.885,18.5,490.227,18.5C529.568,18.5,568.909,18.5,608.836,18.5C648.763,18.5,689.276,18.5,738.152,18.5C787.029,18.5,844.268,18.5,903.1,18.5C961.932,18.5,1022.357,18.5,1071.978,18.5C1121.599,18.5,1160.417,18.5,1189.483,25.837C1218.549,33.174,1237.864,47.848,1247.522,55.185L1257.179,62.522" id="me32838b810c4599c-L_M_R_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_M_R_0" data-points="W3sieCI6Mjk5LjQ1NDA1NTM1NDMxMjg2LCJ5Ijo4MS4zOTE1NTUzNTQzMTI4OX0seyJ4IjozNzIuMjAzMTI1LCJ5IjoxOC41fSx7IngiOjQ5MC4yMjY1NjI1LCJ5IjoxOC41fSx7IngiOjYwOC4yNSwieSI6MTguNX0seyJ4Ijo3MjkuNzg5MDYyNSwieSI6MTguNX0seyJ4Ijo5MDEuNTA3ODEyNSwieSI6MTguNX0seyJ4IjoxMDgyLjc4MTI1LCJ5IjoxOC41fSx7IngiOjExOTkuMjM0Mzc1LCJ5IjoxOC41fSx7IngiOjEyNjAuMzY0NDQ4ODYxNzg1NCwieSI6NjQuOTQxNDA2MjV9XQ==" data-look="classic" marker-end="url(#me32838b810c4599c_flowchart-v2-pointEnd)"></path><path d="M308.429,138.634L319.058,144.06C329.687,149.486,350.945,160.339,367.514,165.765C384.083,171.191,395.964,171.191,401.904,171.191L407.844,171.191" id="me32838b810c4599c-L_M_IM_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_M_IM_0" data-points="W3sieCI6MzA4LjQyODk0NjgzOTg1LCJ5IjoxMzguNjMzNTUzMTYwMTQ5OTd9LHsieCI6MzcyLjIwMzEyNSwieSI6MTcxLjE5MTQwNjI1fSx7IngiOjQxMS44NDM3NSwieSI6MTcxLjE5MTQwNjI1fV0=" data-look="classic" marker-end="url(#me32838b810c4599c_flowchart-v2-pointEnd)"></path><path d="M536.767,139.349L548.681,131.198C560.595,123.047,584.422,106.744,616.593,98.593C648.763,90.441,689.276,90.441,738.152,90.441C787.029,90.441,844.268,90.441,903.1,90.441C961.932,90.441,1022.357,90.441,1071.978,90.441C1121.599,90.441,1160.417,90.441,1183.326,90.441C1206.234,90.441,1213.234,90.441,1216.734,90.441L1220.234,90.441" id="me32838b810c4599c-L_IM_R_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_IM_R_0" data-points="W3sieCI6NTM2Ljc2NzAzMTMyOTgzNTMsInkiOjEzOS4zNDkwNjI1Nzk4MzUzfSx7IngiOjYwOC4yNSwieSI6OTAuNDQxNDA2MjV9LHsieCI6NzI5Ljc4OTA2MjUsInkiOjkwLjQ0MTQwNjI1fSx7IngiOjkwMS41MDc4MTI1LCJ5Ijo5MC40NDE0MDYyNX0seyJ4IjoxMDgyLjc4MTI1LCJ5Ijo5MC40NDE0MDYyNX0seyJ4IjoxMTk5LjIzNDM3NSwieSI6OTAuNDQxNDA2MjV9LHsieCI6MTIyNC4yMzQzNzUsInkiOjkwLjQ0MTQwNjI1fV0=" data-look="classic" marker-end="url(#me32838b810c4599c_flowchart-v2-pointEnd)"></path><path d="M548.492,191.309L558.452,194.748C568.411,198.186,588.331,205.064,604.23,208.503C620.13,211.941,632.01,211.941,637.951,211.941L643.891,211.941" id="me32838b810c4599c-L_IM_BF_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_IM_BF_0" data-points="W3sieCI6NTQ4LjQ5MjAzMjU4MDA4MTYsInkiOjE5MS4zMDg3NDg2Njk5MTgzMn0seyJ4Ijo2MDguMjUsInkiOjIxMS45NDE0MDYyNX0seyJ4Ijo2NDcuODkwNjI1LCJ5IjoyMTEuOTQxNDA2MjV9XQ==" data-look="classic" marker-end="url(#me32838b810c4599c_flowchart-v2-pointEnd)"></path><path d="M811.688,187.856L826.658,183.454C841.628,179.051,871.568,170.246,904.375,165.844C937.182,161.441,972.857,161.441,990.694,161.441L1008.531,161.441" id="me32838b810c4599c-L_BF_SKIP_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_BF_SKIP_0" data-points="W3sieCI6ODExLjY4NzUsInkiOjE4Ny44NTYyNjA2NjMxMDI4M30seyJ4Ijo5MDEuNTA3ODEyNSwieSI6MTYxLjQ0MTQwNjI1fSx7IngiOjEwMTIuNTMxMjUsInkiOjE2MS40NDE0MDYyNX1d" data-look="classic" marker-end="url(#me32838b810c4599c_flowchart-v2-pointEnd)"></path><path d="M811.688,236.027L826.658,240.429C841.628,244.832,871.568,253.636,900.841,258.039C930.115,262.441,958.721,262.441,973.025,262.441L987.328,262.441" id="me32838b810c4599c-L_BF_READ_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_BF_READ_0" data-points="W3sieCI6ODExLjY4NzUsInkiOjIzNi4wMjY1NTE4MzY4OTcxN30seyJ4Ijo5MDEuNTA3ODEyNSwieSI6MjYyLjQ0MTQwNjI1fSx7IngiOjk5MS4zMjgxMjUsInkiOjI2Mi40NDE0MDYyNX1d" data-look="classic" marker-end="url(#me32838b810c4599c_flowchart-v2-pointEnd)"></path><path d="M1174.234,262.441L1178.401,262.441C1182.568,262.441,1190.901,262.441,1208.189,238.609C1225.477,214.776,1251.719,167.111,1264.84,143.278L1277.961,119.445" id="me32838b810c4599c-L_READ_R_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_READ_R_0" data-points="W3sieCI6MTE3NC4yMzQzNzUsInkiOjI2Mi40NDE0MDYyNX0seyJ4IjoxMTk5LjIzNDM3NSwieSI6MjYyLjQ0MTQwNjI1fSx7IngiOjEyNzkuODkwNTU2ODY3NzMyNiwieSI6MTE1Ljk0MTQwNjI1fV0=" data-look="classic" marker-end="url(#me32838b810c4599c_flowchart-v2-pointEnd)"></path></g><g class="edgeLabels"><g class="edgeLabel"><g class="label" data-id="L_Q_M_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(729.7890625, 18.5)"><g class="label" data-id="L_M_R_0" transform="translate(-8.1875, -10.5)"><foreignObject width="16.375" height="21"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "><p>hit</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(372.203125, 171.19140625)"><g class="label" data-id="L_M_IM_0" transform="translate(-14.640625, -10.5)"><foreignObject width="29.28125" height="21"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "><p>miss</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(901.5078125, 90.44140625)"><g class="label" data-id="L_IM_R_0" transform="translate(-8.1875, -10.5)"><foreignObject width="16.375" height="21"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "><p>hit</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(608.25, 211.94140625)"><g class="label" data-id="L_IM_BF_0" transform="translate(-14.640625, -10.5)"><foreignObject width="29.28125" height="21"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "><p>miss</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(901.5078125, 161.44140625)"><g class="label" data-id="L_BF_SKIP_0" transform="translate(-64.8203125, -10.5)"><foreignObject width="129.640625" height="21"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "><p>bloom: definitely not</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(901.5078125, 262.44140625)"><g class="label" data-id="L_BF_READ_0" transform="translate(-44.828125, -10.5)"><foreignObject width="89.65625" height="21"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "><p>bloom: maybe</p></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_READ_R_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g></g><g class="nodes"><g class="node default  " id="me32838b810c4599c-flowchart-Q-0" data-look="classic" transform="translate(73.875, 114.5)"><rect class="basic label-container" style="fill:#FFE4B5 !important" x="-65.875" y="-36" width="131.75" height="72"></rect><g class="label" style="" transform="translate(-35.875, -21)"><rect></rect><foreignObject width="71.75" height="42"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>Point query<br/>for a key</p></span></div></foreignObject></g></g><g class="node default  " id="me32838b810c4599c-flowchart-M-1" data-look="classic" transform="translate(261.15625, 114.5)"><polygon points="71.40625,0 142.8125,-71.40625 71.40625,-142.8125 0,-71.40625" class="label-container" transform="translate(-70.90625, 71.40625)" style="fill:#e1f5ff !important"></polygon><g class="label" style="" transform="translate(-35.40625, -21)"><rect></rect><foreignObject width="70.8125" height="42"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>In active<br/>memtable?</p></span></div></foreignObject></g></g><g class="node default  " id="me32838b810c4599c-flowchart-R-3" data-look="classic" transform="translate(1293.9296875, 90.44140625)"><rect class="basic label-container" style="fill:#90EE90 !important" x="-69.6953125" y="-25.5" width="139.390625" height="51"></rect><g class="label" style="" transform="translate(-39.6953125, -10.5)"><rect></rect><foreignObject width="79.390625" height="21"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>Return value</p></span></div></foreignObject></g></g><g class="node default  " id="me32838b810c4599c-flowchart-IM-5" data-look="classic" transform="translate(490.2265625, 171.19140625)"><polygon points="78.3828125,0 156.765625,-78.3828125 78.3828125,-156.765625 0,-78.3828125" class="label-container" transform="translate(-77.8828125, 78.3828125)" style="fill:#e1f5ff !important"></polygon><g class="label" style="" transform="translate(-42.3828125, -21)"><rect></rect><foreignObject width="84.765625" height="42"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>In immutable<br/>memtables?</p></span></div></foreignObject></g></g><g class="node default  " id="me32838b810c4599c-flowchart-BF-9" data-look="classic" transform="translate(729.7890625, 211.94140625)"><rect class="basic label-container" style="fill:#e1f5ff !important" x="-81.8984375" y="-46.5" width="163.796875" height="93"></rect><g class="label" style="" transform="translate(-51.8984375, -31.5)"><rect></rect><foreignObject width="103.796875" height="63"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>Scan SSTables<br/>newest → oldest<br/>via bloom filters</p></span></div></foreignObject></g></g><g class="node default  " id="me32838b810c4599c-flowchart-SKIP-11" data-look="classic" transform="translate(1082.78125, 161.44140625)"><rect class="basic label-container" style="fill:#FFB6C1 !important" x="-70.25" y="-25.5" width="140.5" height="51"></rect><g class="label" style="" transform="translate(-40.25, -10.5)"><rect></rect><foreignObject width="80.5" height="21"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>Skip SSTable</p></span></div></foreignObject></g></g><g class="node default  " id="me32838b810c4599c-flowchart-READ-13" data-look="classic" transform="translate(1082.78125, 262.44140625)"><rect class="basic label-container" style="fill:#FFE4B5 !important" x="-91.453125" y="-25.5" width="182.90625" height="51"></rect><g class="label" style="" transform="translate(-61.453125, -10.5)"><rect></rect><foreignObject width="122.90625" height="21"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>Read SSTable block</p></span></div></foreignObject></g></g></g></g></g><defs><filter id="me32838b810c4599c-drop-shadow" height="130%" width="130%"><feDropShadow dx="4" dy="4" stdDeviation="0" flood-opacity="0.06" flood-color="#000000"></feDropShadow></filter></defs><defs><filter id="me32838b810c4599c-drop-shadow-small" height="150%" width="150%"><feDropShadow dx="2" dy="2" stdDeviation="0" flood-opacity="0.06" flood-color="#000000"></feDropShadow></filter></defs><linearGradient id="me32838b810c4599c-gradient" gradientUnits="objectBoundingBox" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#2563EB" stop-opacity="1"></stop><stop offset="100%" stop-color="hsl(224, 60%, 87.0588235294%)" stop-opacity="1"></stop></linearGradient></svg></div>
+
+
+<p><em>A single key lookup may touch many files — bloom filters and sparse indexes let the engine skip most SSTables without reading them.</em></p>
+<p>Despite these optimizations, LSM trees fundamentally trade read performance for write performance. This makes them perfect for write-heavy workloads like time-series databases, logging systems, and analytics platforms where you&#39;re constantly ingesting new data but queries are less frequent or can tolerate slightly higher latency.</p>
+<p>The key insight for system design interviews is knowing when this trade-off makes sense. If you&#39;re building a system that writes far more than it reads - like a metrics collection system, audit log, or IoT data platform - LSM trees are likely the right choice. But for a user-facing application where every page load triggers multiple queries, B-trees usually perform better.</p>
+<h4 id="real-world-examples-2">Real-World Examples</h4>
+<p>LSM trees power some of the most write-heavy systems on the internet:</p>
+<p>Cassandra handles Netflix&#39;s billions of viewing events. When you watch a show, that data gets written to Cassandra&#39;s LSM-based storage without slowing down playback.</p>
+<p>RocksDB (built by Facebook) serves as the storage engine for many databases. It handles millions of social interactions per second—likes, posts, messages—all written to LSM trees for fast persistence.</p>
+<p>DynamoDB is generally understood to use an LSM-tree–style storage architecture optimized for high write throughput; its exact internals aren’t exposed publicly, and it does not dynamically switch storage engines based on access patterns.</p>
+<h3 id="hash-indexes">Hash Indexes</h3>
+<p>While B-trees dominate the indexing landscape, hash indexes serve a specialized purpose: they excel at exact-match queries. They&#39;re simply a persistent hashmap implementation, trading flexibility for super-fast O(1) lookups.</p>
+<h4 id="how-hash-indexes-work">How Hash Indexes Work</h4>
+<p>At their core, hash indexes are just a hashmap that maps indexed values to row locations. The database maintains an array of buckets, where each bucket can store multiple key-location pairs. When indexing a value, the database hashes it to determine which bucket should store the pointer to the row data.</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/CoreConcepts/assets/MczFgA7iuw0U.2hd5xawhxrsv7.svg" alt="hash-index" loading="lazy"><figcaption>hash-index</figcaption></figure></p>
+<p>For example, with a hash index on email:</p>
+<pre><code>buckets[hash(&quot;alice@example.com&quot;)] -&gt; [ptr to page 1]
+buckets[hash(&quot;bob@example.com&quot;)]   -&gt; [ptr to page 2]
+</code></pre>
+<p>Hash collisions are handled by allowing multiple entries per bucket, many systems use chaining with overflow storage when a bucket fills. For example, PostgreSQL hash indexes use buckets that can link to overflow pages (chaining). With a good hash function and load factor, average lookups remain O(1).</p>
+<p>This structure makes hash indexes incredibly fast for exact-match queries - just compute the hash, go to the bucket, and follow the pointer. However, this same structure makes them useless for range queries or sorting since similar values are deliberately scattered across different buckets.</p>
+<h4 id="real-world-usage">Real-World Usage</h4>
+<p>Despite their speed for exact matches, hash indexes are relatively rare in practice. PostgreSQL supports them but doesn&#39;t use them by default because B-trees perform nearly as well for exact matches while supporting range queries and sorting. As the PostgreSQL documentation notes, &quot;B-trees can handle equality comparisons almost as efficiently as hash indexes.&quot;</p>
+<p>However, hash indexes do shine in specific scenarios, particularly for in-memory databases. Redis, for example, uses hash tables as its primary data structure for key-value lookups because all data lives in memory. MySQL&#39;s MEMORY storage engine defaulted to hash indexes because in-memory exact-match queries were its primary use case. When working with disk-based storage, B-trees are usually the better choice due to their efficient handling of disk I/O patterns.</p>
+<h4 id="when-to-choose-hash-indexes">When to Choose Hash Indexes</h4>
+<p>For system design interviews, you might consider hash indexes when:</p>
+<ul>
+<li>You need the absolute fastest possible exact-match lookups</li>
+<li>You&#39;ll never need range queries or sorting</li>
+<li>You have plenty of memory (hash indexes tend to be larger than B-trees)</li>
+</ul>
+<p>But in most cases, B-trees will be the better choice. They&#39;re nearly as fast for exact matches and give you the flexibility to handle range queries when you need them. In the words of database expert Bruce Momjian: &quot;Hash indexes solve a problem we rarely have.&quot;</p>
+<blockquote>
+<p>Don&#39;t overemphasize hash indexes in an interview. While it&#39;s good to know about them, focusing too much on them might make you seem out of touch with real-world database practices. Remember, hash indexes are rarely used in production systems. They&#39;re a bit like that specialized kitchen gadget you buy and then use only once. B-trees are just so versatile that they cover most use cases where you might consider a hash index.</p>
+</blockquote>
+<h3 id="geospatial-indexes">Geospatial Indexes</h3>
+<p>Here&#39;s an interesting quirk of system design interviews: while geospatial indexes are fairly specialized in practice - you might never touch them unless you&#39;re working with location data - they&#39;ve become a common focus in interviews. Why? The rise of location-based services like Uber, Yelp, and Find My Friends has made <a href="https://www.hellointerview.com/learn/system-design/deep-dives/proximity-search">proximity search</a> a favorite interview topic.</p>
+<h4 id="the-challenge-with-location-data">The Challenge with Location Data</h4>
+<p>Say we&#39;re building a restaurant discovery app like Yelp. We have millions of restaurants in our database, each with a latitude and longitude. A user opens the app and wants to find &quot;restaurants within 5 miles of me.&quot; Seems simple enough, right?</p>
+<p>The naive approach would be to use standard B-tree indexes on latitude and longitude:</p>
+<pre><code class="language-sql">CREATE TABLE restaurants (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255),
+    latitude DECIMAL(10, 8),
+    longitude DECIMAL(11, 8)
+);
+
+CREATE INDEX idx_lat ON restaurants(latitude);
+CREATE INDEX idx_lng ON restaurants(longitude);
+</code></pre>
+<p>But this falls apart quickly when we try to execute a proximity search. Think about how a B-tree index on latitude and longitude actually works. We&#39;re essentially trying to solve a 2D spatial problem (finding points within a circle) using two separate 1D indexes.</p>
+<p>When we query &quot;restaurants within 5 miles,&quot; we&#39;ll inevitably hit one of two performance problems:</p>
+<p>If we use the latitude index first, we&#39;ll find all restaurants in the right latitude range - but that&#39;s a long strip spanning the entire globe at that latitude! Then for each of those restaurants, we need to check if they&#39;re also in the right longitude range. Our index on longitude isn&#39;t helping because we&#39;re not doing a range scan - we&#39;re doing point lookups for each restaurant we found in the latitude range.</p>
+<p>If we try to be clever and use both indexes together (via an index intersection), the database still has to merge two large sets of results - all restaurants in the right latitude range and all restaurants in the right longitude range. This creates a rectangular search area much larger than our actual circular search radius, and we still need to filter out results that are too far away.</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/CoreConcepts/assets/4-FlujMqOp54.2htxoxva35fsx.svg" alt="latlong" loading="lazy"><figcaption>latlong</figcaption></figure></p>
+<p>This is why we need indexes that understand 2D spatial relationships. Rather than treating latitude and longitude as independent dimensions, spatial indexes let us organize points based on their actual proximity in 2D space.</p>
+<h4 id="core-approaches">Core Approaches</h4>
+<p>There are three main approaches you&#39;ll encounter in interviews: geohashes, quadtrees, and R-trees. Each has its own strengths and trade-offs, but all solve our fundamental problem: they preserve spatial relationships in our index structure.</p>
+<p>We&#39;ll explore each one, but remember - while this seems like a lot of specialized knowledge, interviewers mainly want to see that you understand the basic problem (why regular indexes fall short) and can reason about at least one solution. You don&#39;t need deep expertise in all three approaches unless you&#39;re interviewing for a role that specifically works with location data.</p>
+<h4 id="geohash">Geohash</h4>
+<p>We&#39;ll start with geohash because it&#39;s the simplest spatial index to understand and the core idea is beautifully simple: convert a 2D location into a 1D string in a way that preserves proximity.</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/CoreConcepts/assets/Qhm__K-jUKko.0bwsmur9-4sou.svg" alt="Geohash" loading="lazy"><figcaption>Geohash</figcaption></figure></p>
+<p>Imagine dividing the world into four squares and labeling them 0-3. Then divide each of those squares into four smaller squares, and so on. Each division adds more precision to our location description. A geohash is essentially this process, but using a base32 encoding that creates strings like &quot;dr5ru&quot; for locations. The longer the string, the more precise the location:</p>
+<ul>
+<li>&quot;9q8y&quot; might represent all of San Francisco</li>
+<li>&quot;9q8yy&quot; narrows it down to the Mission District</li>
+<li>&quot;9q8yyk&quot; might pinpoint a specific city block</li>
+</ul>
+<p>What makes geohash clever is that locations that are close to each other usually share similar prefix strings. Two restaurants on the same block might have geohashes that start with &quot;9q8yyk&quot;, while a restaurant in a different neighborhood might start with &quot;9q8yym&quot;.</p>
+<p>And here&#39;s the real elegance: once we&#39;ve converted our 2D locations into these ordered strings, we can use a regular B-tree index to handle our spatial queries. Remember how B-trees excel at prefix matching and range queries? That&#39;s exactly what we need for proximity searches.</p>
+<p>When we index the geohash strings with a B-tree:</p>
+<pre><code>CREATE INDEX idx_geohash ON restaurants(geohash);
+</code></pre>
+<p>Finding nearby locations becomes a matter of searching strings with matching prefixes. If we&#39;re looking for restaurants near geohash &quot;9q8yyk&quot;, we can do a range scan in our B-tree for entries starting with that prefix. For radius queries, we also need to include adjacent geohash cells since our search area might span cell boundaries - but this is still just a handful of prefix range scans. This lets us leverage all the optimizations that databases already have for B-trees - no special spatial data structure needed.</p>
+<p>This is why Redis&#39;s geospatial commands use this approach internally. When you run:</p>
+<pre><code>GEOADD restaurants -122.4194 37.7749 &quot;Restaurant A&quot;
+GEOSEARCH restaurants FROMLONLAT -122.4194 37.7749 BYRADIUS 5 mi
+</code></pre>
+<blockquote>
+<p>GEORADIUS is deprecated in favor of GEOSEARCH . Redis uses geohash under the hood to efficiently find nearby points.</p>
+</blockquote>
+<p>The main limitation of geohash is that locations near each other in reality might not share similar prefixes if they happen to fall on different sides of a major grid division - like two restaurants on opposite sides of a street that marks a geohash boundary. But for most applications, this edge case isn&#39;t significant enough to matter.</p>
+<p>This elegance - turning a complex 2D problem into simple string prefix matching that can leverage existing B-tree implementations - is why geohash is such a popular choice. It&#39;s easy to understand, implement, and use with existing database systems that already know how to handle strings efficiently.</p>
+<h4 id="quadtree">Quadtree</h4>
+<p>While less common in production databases today, quadtrees represent a fundamental tree-based approach to indexing 2D space that has shaped how we think about spatial indexing. Unlike geohash which transforms coordinates into strings, quadtrees directly partition space by recursively subdividing regions into four quadrants.</p>
+<p>Start with one square covering your entire area. When a square contains more than some threshold of points (typically 4-8), split it into four equal quadrants. Continue this recursive subdivision until reaching a maximum depth or achieving the desired point density per node. This spatial partitioning maps to a tree structure:</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/CoreConcepts/assets/baAeBcHjtOFS.3yknn8lvni22c.svg" alt="Quadtree" loading="lazy"><figcaption>Quadtree</figcaption></figure></p>
+<p>For proximity searches, navigate down the tree to find the target quadrant, check neighboring quadrants at the same level, and adjust the search radius by moving up or down tree levels as needed.</p>
+<p>The key advantage of quadtrees is their adaptive resolution - dense areas get subdivided more finely while sparse regions maintain larger quadrants. However, unlike geohash which leverages existing B-tree implementations, quadtrees require specialized tree structures. This implementation complexity explains why most modern databases prefer geohash or R-tree variants.</p>
+<p>So while they&#39;re not common in production nowadays, quadtrees have a significant impact on modern spatial indexing. The core concept of recursive spatial subdivision forms the foundation for R-trees, which optimize these ideas for disk-based storage and better handling of overlapping regions. You&#39;ll even find quadtree principles in modern mapping systems - Google Maps uses a similar structure for organizing map tiles at different zoom levels.</p>
+<p>Now let&#39;s see how R-trees evolved these concepts into today&#39;s production standard for spatial indexing.</p>
+<h4 id="r-tree">R-Tree</h4>
+<p>R-trees have emerged as the default spatial index in modern databases like PostgreSQL/PostGIS and MySQL. While both quadtrees and R-trees organize spatial data hierarchically, R-trees take a fundamentally different approach to how they divide space.</p>
+<p>Instead of splitting space into fixed quadrants, R-trees work with flexible, overlapping rectangles. Where a quadtree rigidly divides each region into four equal parts regardless of data distribution, R-trees adapt their rectangles to the actual data. Think of organizing photos on a table - a quadtree approach would divide the table into equal quarters and keep subdividing, while an R-tree would let you create natural, overlapping groupings of nearby photos.</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/CoreConcepts/assets/-nWlGG6zpcs1.10h4c-06m_jnm.svg" alt="R-tree" loading="lazy"><figcaption>R-tree</figcaption></figure></p>
+<p>When searching for nearby restaurants in San Francisco, an R-tree might first identify the large rectangle containing the city, then drill down through progressively smaller, overlapping rectangles until reaching individual restaurant locations. These rectangles aren&#39;t constrained to fixed sizes or positions - they adapt to wherever your data actually clusters. A quadtree, in contrast, would force you to navigate through a rigid grid of increasingly smaller squares, potentially requiring more steps to reach the same destinations.</p>
+<p>This flexibility offers a crucial advantage: R-trees can efficiently handle both points and larger shapes in the same index structure. A single R-tree can index everything from individual restaurant locations to delivery zone polygons and road networks. The rectangles simply adjust their size to bound whatever shapes they contain. Quadtrees struggle with this mixed data - they keep subdividing until they can isolate each shape, leading to deeper trees and more complex traversal.</p>
+<p>The trade-off for this flexibility is that overlapping rectangles sometimes force us to search multiple branches of the tree. Modern R-tree implementations use smart algorithms to balance this overlap against tree depth, tuning for how databases actually read data from disk. This balance of flexibility and disk efficiency is why R-trees have become the standard choice for production spatial indexes.</p>
+<blockquote>
+<p>If you&#39;re asked about geospatial indexing in an interview, focus on explaining the problem clearly and contrasting a tree-based approach with a hash-based approach. For example, you could say something like: &quot;Traditional indexes like B-trees don&#39;t work well for spatial data because they treat latitude and longitude as independent dimensions. To efficiently search for nearby locations, we need an index that understands spatial relationships. Geohash is a hash-based approach that converts 2D coordinates into a 1D string, preserving proximity. This allows us to use a regular B-tree index on the geohash strings for efficient proximity searches. However, tree-based approaches like R-trees can offer more flexibility and accuracy by grouping nearby objects into overlapping rectangles, creating a hierarchy of bounding boxes.&quot; By contrasting these two approaches, you demonstrate a deeper understanding of the trade-offs involved in geospatial indexing.</p>
+</blockquote>
+<h3 id="inverted-indexes">Inverted Indexes</h3>
+<p>While B-trees excel at finding exact matches and ranges, they fall short when we need to search through text content. Consider what happens when you run a query like:</p>
+<pre><code class="language-sql">SELECT * FROM posts WHERE content LIKE &#39;%database%&#39;;
+</code></pre>
+<p>Here, we&#39;re looking for posts that contain the word &quot;database&quot; anywhere in their content - not just posts that start or end with it. Even with a B-tree index on the content column, the database can&#39;t use the index at all. Why? B-tree indexes can only help with prefix matches (like &#39;database%&#39;) or suffix matches (if you index the reversed content). When the pattern could match anywhere within the text, the database has no choice but to check every character of every post, reading entire text fields into memory to look for matches.</p>
+<p>This full pattern matching gets exponentially slower as your text content grows. Each additional character in your posts means more data to scan, more memory to use, and more CPU cycles spent checking patterns. It&#39;s like trying to find every mention of a word in a library by reading every book, page by page.</p>
+<p>An inverted index solves this by flipping the relationship between documents and their content. Instead of storing documents with their words, it stores words with their documents. Think of it like the index at the back of a textbook - rather than reading every page to find mentions of &quot;ACID properties&quot;, you can look up &quot;ACID&quot; and find every page that discusses it.</p>
+<p>Here&#39;s how it works. Consider a simple blogging platform with these posts:</p>
+<pre><code>doc1: &quot;B-trees are fast and reliable&quot;
+doc2: &quot;Hash tables are fast but limited&quot;
+doc3: &quot;B-trees handle range queries well&quot;
+</code></pre>
+<p>The inverted index creates a mapping:</p>
+<pre><code>b-trees  -&gt; [doc1, doc3]
+fast     -&gt; [doc1, doc2]
+reliable -&gt; [doc1]
+hash     -&gt; [doc2]
+tables   -&gt; [doc2]
+limited  -&gt; [doc2]
+handle   -&gt; [doc3]
+range    -&gt; [doc3]
+queries  -&gt; [doc3]
+</code></pre>
+<p>While this basic mapping shows the core concept, production inverted indexes are much more sophisticated. When systems like Elasticsearch index text, they first run it through an analysis pipeline that processes and enriches the content. This means:</p>
+<ol>
+<li>Breaking text into tokens (words or subwords)</li>
+<li>Converting to lowercase</li>
+<li>Removing common &quot;stop words&quot; like &quot;the&quot; or &quot;and&quot;</li>
+<li>Often applying stemming (reducing words to their root form)</li>
+</ol>
+<p>So when a user searches for &quot;Databases&quot;, the system can match documents containing &quot;database&quot;, &quot;DATABASE&quot;, or even &quot;database&#39;s&quot;. This is why full-text search feels so natural compared to rigid pattern matching.</p>
+<p>Modern search systems like Elasticsearch and Lucene build additional features on top of this foundation:</p>
+<ul>
+<li>Term frequency analysis (how often words appear)</li>
+<li>Relevance scoring (which documents best match the query)</li>
+<li>Fuzzy matching (finding close matches like &quot;databas&quot;)</li>
+<li>Phrase queries (matching exact sequences of words)</li>
+</ul>
+<p>In practice, you&#39;ll see inverted indexes whenever advanced text search is needed. When developers search GitHub repositories, when users search Slack message history, or when you search through documentation - they&#39;re all using inverted indexes under the hood.</p>
+<p>There are still trade-offs, of course.Inverted indexes require substantial storage overhead and careful updating. When a document changes, you need to update entries for every term it contains. But for making text truly searchable, these are trade-offs we&#39;re willing to make.</p>
+<p>You can learn more about how inverted indexes work in our <a href="https://www.hellointerview.com/learn/system-design/deep-dives/elasticsearch">Elasticsearch Deep Dive</a>.</p>
+<h2 id="index-optimization-patterns">📈 Index Optimization Patterns</h2>
+<p>So far, we&#39;ve explored the main types of indexes you&#39;ll encounter in system design interviews: B-trees for general-purpose querying, hash indexes for exact matches, geospatial indexes for location data, and inverted indexes for text search. Each type solves a specific class of problem, with trade-offs in storage, performance, and flexibility.</p>
+<p>Experienced engineers spend significant time analyzing their application&#39;s read and write patterns, looking for ways to reduce the processing overhead of common queries. They identify performance bottlenecks by examining query plans and database metrics, then strategically improve performance using appropriate indexing strategies. This often requires looking beyond just picking the right type of index - it&#39;s about understanding your access patterns and crafting an indexing approach that efficiently supports them.</p>
+<h3 id="composite-indexes">Composite Indexes</h3>
+<p>Composite indexes are the most common optimization pattern you&#39;ll encounter in practice. Instead of creating separate indexes for each column, we create a single index that combines multiple columns in a specific order. This matches how we typically query data in real applications.</p>
+<p>Consider a typical social media feed query:</p>
+<pre><code class="language-sql">SELECT * FROM posts 
+WHERE user_id = 123 
+AND created_at &gt; &#39;2024-01-01&#39;
+ORDER BY created_at DESC;
+</code></pre>
+<p>We could create two separate indexes:</p>
+<pre><code>CREATE INDEX idx_user ON posts(user_id);
+CREATE INDEX idx_time ON posts(created_at);
+</code></pre>
+<p>But this isn&#39;t optimal. The database would need to:</p>
+<ol>
+<li>Use one index to find all posts by user 123</li>
+<li>Use another index to find all posts after January 1st</li>
+<li>Intersect these results</li>
+<li>Sort the final result set by created_at</li>
+</ol>
+<p>Instead, a composite index gives us everything we need in one shot:</p>
+<pre><code>CREATE INDEX idx_user_time ON posts(user_id, created_at);
+</code></pre>
+<p>When we create a composite index, we&#39;re really creating a B-tree where each node&#39;s key is a concatenation of our indexed columns. For our (user_id, created_at) index, each key in the B-tree is effectively a tuple of both values. The B-tree maintains these keys in sorted order based on user_id first, then created_at. Conceptually, the keys might look like:</p>
+<pre><code>(1, 2024-01-01)
+(1, 2024-01-02)
+(1, 2024-01-03)
+(2, 2024-01-01)
+(2, 2024-01-02)
+(3, 2024-01-01)
+</code></pre>
+<p>Now when we execute our query, the database can traverse the B-tree to find the first entry for user_id=123, then scan sequentially through the index entries for that user until it finds entries beyond our date range. Because the entries are already sorted by created_at within each user_id group, we get both our filtering and sorting for free.</p>
+<p>This structure is particularly efficient because we&#39;re using the B-tree&#39;s natural ordering to handle multiple conditions in a single index traversal. We&#39;ve effectively turned our two-dimensional query (user and time) into a one-dimensional scan through ordered index entries.</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/CoreConcepts/assets/27mN6csVGNNG.3lel4ugsnoayq.svg" alt="composite-index" loading="lazy"><figcaption>composite-index</figcaption></figure></p>
+<h4 id="the-order-matters">The Order Matters</h4>
+<p>The order of columns in a composite index is crucial. Our index on (user_id, created_at) is great for queries that filter on user_id first, but it&#39;s not helpful for queries that only filter on created_at. This follows from how B-trees work - we can only use the index efficiently for prefixes of our column list.</p>
+<p>This is why you&#39;ll often hear database experts say &quot;order columns from most selective to least selective.&quot; But there&#39;s more nuance in practice. Sometimes query patterns trump selectivity - if you frequently sort by a particular column, including it in your composite index (even if it&#39;s not highly selective) can eliminate expensive sort operations.</p>
+<p>Consider common interview scenarios like:</p>
+<ul>
+<li>Order history lookups: (customer_id, order_date)</li>
+<li>Event processing: (status, priority, created_at)</li>
+<li>Activity feeds: (user_id, type, timestamp)</li>
+</ul>
+<h3 id="covering-indexes">Covering Indexes</h3>
+<p>A covering index is one that includes all the columns needed by your query - not just the columns you&#39;re filtering or sorting on. Think about showing a social media feed with post timestamps and like counts. With a regular index on <code>(user_id, created_at)</code>, the database first finds matching posts in the index, then has to fetch each post&#39;s full data page just to get the like count. That&#39;s a lot of extra disk reads just to display a number.</p>
+<p>By including the likes column directly in our index, we can skip those expensive page lookups entirely. The database can return everything we need straight from the index itself:</p>
+<pre><code class="language-sql">CREATE TABLE posts (
+    id SERIAL PRIMARY KEY,
+    user_id INT,
+    title TEXT,
+    content TEXT,
+    likes INT,
+    created_at TIMESTAMP
+);
+
+-- Regular index
+CREATE INDEX idx_user_time ON posts(user_id, created_at);
+
+-- Covering index includes likes column
+CREATE INDEX idx_user_time_likes ON posts(user_id, created_at) INCLUDE (likes);
+</code></pre>
+<blockquote>
+<p>I&#39;m using SQL as the examples given it&#39;s the most ubiquitous language for database interactions. But the same principles apply to other database systems and even NoSQL solutions.</p>
+</blockquote>
+<p>With the covering index, PostgreSQL can return results purely from the index data - no need to look up each post in the main table. This is especially powerful for queries that only need a small subset of columns from large tables.</p>
+<p>The trade-off is, of course, size - covering indexes are larger because they store extra columns. But for frequently-run queries that only need a few columns, the performance boost from avoiding table lookups often justifies the storage cost. This is particularly true in social feeds, leaderboards, and other read-heavy features where query speed is critical.</p>
+<blockquote>
+<p>The reality in 2026 is that covering indexes are more of a niche optimization than a go-to solution. Modern database query optimizers have become quite smart at executing queries efficiently with regular indexes. While covering indexes can provide significant performance gains in specific scenarios - like read-heavy tables with limited columns - they come with real costs in terms of maintenance overhead and storage space. In an interview, you may be wise to focus on simpler indexing strategies and, if reaching for covering indexes, be sure to make sure you have a good reason for why it&#39;s necessary. If you&#39;re not sure if they make sense in a given scenario, it&#39;s often better to err on the side of simplicity.</p>
+</blockquote>
+<h2 id="wrapping-up">📝 Wrapping Up</h2>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/CoreConcepts/assets/DNSd0VdpWATy.09nbwbynauv2f.svg" alt="Flowchart" loading="lazy"><figcaption>Flowchart</figcaption></figure></p>
+<p>Indexes matter. Not just in interviews, but in production systems. Knowing how to use them effectively is a key skill for any developer and is knowledge that is regularly tested in interviews.</p>
+<p>Most important is knowing when you need an index, and on what columns. This should be a natural instinct when you&#39;re designing a new schema. Consider the query patterns you&#39;re likely to run, and whether you&#39;ll be filtering or sorting on certain columns.</p>
+<p>From here, expect that you may be asked what type of index you would use for a given scenario. When in doubt, go with B-trees. They&#39;re the swiss army knife of indexes, handling both exact matches and range queries efficiently, and they&#39;re what most databases use by default for good reason.</p>
+<p>The two main exceptions are when you&#39;re dealing with spatial data, or full-text search.</p>
+<p>If you&#39;re dealing with latitude and longitude, and need to efficiently search for nearby points, you&#39;ll want to opt for a geospatial index. If you only want to know one option, learn geohashing. Better still if you can explain how it works and weigh the tradeoffs between it and tree-based approaches.</p>
+<p>Lastly, when it comes to full-text search, you&#39;ll need an inverted index to search large amounts of text efficiently. While it&#39;s unlikely you&#39;ll get deeply probed about how they work, you should have a basic understanding of the reverse mapping from keywords to documents.</p>
+<p>With these tools in your toolbelt, you&#39;ll be well prepared for the overwhelming majority of indexing questions that may come your way.</p>
+<p>Answer the question below to find your gaps.</p>
+<h2 id="key-takeaways">🎓 Key Takeaways</h2>
+<ul>
+<li><strong>Indexes trade write cost and storage for read speed.</strong> They let the database follow a structured path to the target rows instead of scanning every page, but every index adds disk space and extra work on each insert/update — so they can hurt on write-heavy tables with few reads, or on very small tables.</li>
+<li><strong>B-trees are the default and safe choice.</strong> They keep data sorted, stay balanced with random inserts/deletes, minimize disk I/O, and handle both equality and range queries — which is why PostgreSQL, MongoDB (B+ trees), and most engines reach for them first.</li>
+<li><strong>LSM trees flip the trade-off for write-heavy workloads.</strong> By buffering writes in a memtable + WAL and flushing sequential SSTables (compacted in the background), they make writes fast at the cost of more complex reads, mitigated by bloom filters and sparse indexes. They power Cassandra, RocksDB, and DynamoDB-style engines.</li>
+<li><strong>Specialized indexes solve specialized problems.</strong> Hash indexes give O(1) exact matches but no ranges (rarely worth it over B-trees); geospatial indexes (geohash, quadtree, R-tree) preserve 2D proximity that two 1D indexes cannot; inverted indexes map terms → documents for full-text search.</li>
+<li><strong>Optimization is about access patterns, not just index type.</strong> Composite indexes serve multi-column filters/sorts in one traversal but only for column <em>prefixes</em> (order matters); covering indexes answer a query straight from the index but are a niche optimization with real storage cost.</li>
+</ul>
+<h2 id="related-concepts">📚 Related Concepts</h2>
+<ul>
+<li><a href="/notes/data-indexing/">Data Indexing</a> — handwritten deep notes on indexing fundamentals.</li>
+<li><a href="/deep-dives/elasticsearch/">Elasticsearch</a> — inverted indexes and the analysis pipeline behind full-text search.</li>
+<li><a href="/deep-dives/proximity-search/">Proximity Search</a> — geospatial indexing applied to &quot;find nearby&quot; queries.</li>
+<li><a href="/deep-dives/postgresql/">PostgreSQL</a> — B-tree indexes, hash indexes, and query planning in practice.</li>
+<li><a href="/deep-dives/cassandra/">Cassandra</a> — LSM-tree storage for write-heavy workloads.</li>
+<li><a href="/deep-dives/redis/">Redis</a> — in-memory hash tables and geohash-based geospatial commands.</li>
+<li><a href="/patterns/scaling-reads/">Scaling Reads</a> — indexing as the first lever for read-heavy systems.</li>
+</ul>
+<hr>
+<p><em>Source: <a href="https://www.hellointerview.com/learn/system-design/core-concepts/db-indexing">https://www.hellointerview.com/learn/system-design/core-concepts/db-indexing</a></em></p>
+</div>
+</article>
+<nav class="pager">
+<a href="/concepts/data-modeling/"><span>Previous</span><b>Data Modeling</b></a>
+<a class="nx" href="/concepts/networking-essentials/"><span>Next</span><b>Networking Essentials</b></a>
+</nav>
+</main>
+<aside class="toc"><h4>On this page</h4><ol><li><a class="" href="#laymans-explanation">Layman's Explanation</a></li><li><a class="" href="#how-database-indexes-work">How Database Indexes Work</a></li><li><a class="h3" href="#physical-storage-and-access-patterns">Physical Storage and Access Patterns</a></li><li><a class="h3" href="#cost">Cost</a></li><li><a class="" href="#types-of-indexes">Types of indexes</a></li><li><a class="h3" href="#b-tree-indexes">B-Tree Indexes</a></li><li><a class="h3" href="#lsm-trees-log-structured-merge-trees">LSM Trees (Log-Structured Merge Trees)</a></li><li><a class="h3" href="#hash-indexes">Hash Indexes</a></li><li><a class="h3" href="#geospatial-indexes">Geospatial Indexes</a></li><li><a class="h3" href="#inverted-indexes">Inverted Indexes</a></li><li><a class="" href="#index-optimization-patterns">Index Optimization Patterns</a></li><li><a class="h3" href="#composite-indexes">Composite Indexes</a></li><li><a class="h3" href="#covering-indexes">Covering Indexes</a></li><li><a class="" href="#wrapping-up">Wrapping Up</a></li><li><a class="" href="#key-takeaways">Key Takeaways</a></li><li><a class="" href="#related-concepts">Related Concepts</a></li></ol></aside>
+</div>
+<script src="/assets/doc.js" defer></script>
+<footer class="foot"><div class="foot-in">
+<span>InterviewVault — system design study vault</span>
+<span>122 documents · 607 diagrams</span>
+</div></footer>
+</body>
+</html>

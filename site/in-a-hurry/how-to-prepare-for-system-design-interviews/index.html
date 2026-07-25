@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How to Prepare for System Design Interviews — InterviewVault</title>
+<meta name="description" content="How to Prepare for System Design Interviews: The 60-minute orientation: framework, key technologies, how to prepare.">
+<meta property="og:title" content="How to Prepare for System Design Interviews — InterviewVault">
+<meta property="og:description" content="How to Prepare for System Design Interviews: The 60-minute orientation: framework, key technologies, how to prepare.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+</head>
+<body class="">
+<header class="hdr"><div class="hdr-in">
+<a class="brand" href="/"><span class="brand-mark">IV</span><span class="brand-name">Interview<span>Vault</span></span></a>
+<nav class="hdr-nav"><a href="/#in-a-hurry" aria-current="page">In a Hurry</a><a href="/#notes">Deep Notes</a><a href="/#concepts">Core Concepts</a><a href="/#patterns">Patterns</a><a href="/#deep-dives">Deep Dives</a><a href="/#breakdowns">Problem Breakdowns</a><a href="/#in-the-wild">In the Wild</a><a href="/#answers">Interview Answers</a><a href="/#dsa">Data Structures</a></nav>
+</div></header>
+<div class="doc-shell">
+<nav class="side"><h4>In a Hurry</h4><ol><li><a href="/in-a-hurry/breakdowns-of-popular-system-design-questions/">Breakdowns of Popular System Design Questions</a></li><li><a href="/in-a-hurry/common-patterns/">Common Patterns</a></li><li><a href="/in-a-hurry/core-concepts/">Core Concepts</a></li><li><a href="/in-a-hurry/delivery-framework/">Delivery Framework</a></li><li><a href="/in-a-hurry/how-to-prepare-for-system-design-interviews/" aria-current="page">How to Prepare for System Design Interviews</a></li><li><a href="/in-a-hurry/introduction/">Introduction</a></li><li><a href="/in-a-hurry/key-technologies/">Key Technologies</a></li><li><a href="/in-a-hurry/vote-for-what-we-break-down-next/">Vote for what we break down next</a></li></ol></nav>
+<main>
+<article class="art">
+<div class="art-head">
+<div class="art-kicker">In a Hurry</div>
+<h1>How to Prepare for System Design Interviews</h1>
+<div class="art-meta"><span>1,600 words</span><span>1 diagram</span></div>
+</div>
+<div class="prose"><blockquote>
+<p><strong>Overview</strong>: A step-by-step roadmap for preparing for system design interviews, distilled from coaching thousands of candidates through FAANG loops. Prep splits into two phases — first build the mental model (intro, delivery framework, core concepts, key technologies, common patterns), then practice deliberately by working real questions on your own before reading the answer key.</p>
+</blockquote>
+<h2 id="laymans-explanation">🧒 Layman&#39;s Explanation</h2>
+<p>Preparing for a system design interview is like learning to cook for a dinner party. First you read the recipes and learn the basic techniques — that&#39;s the <strong>fundamentals</strong>. But nobody becomes a chef by only reading. You have to get in the kitchen and actually cook a dish start to finish (attempt a question <strong>on your own</strong>), then taste it against how it was supposed to turn out (read the <strong>answer key</strong>). Once a few dishes come out well, you invite a friend who&#39;s a tough critic to judge you live (a <strong>peer mock</strong>) — because plating a meal while someone watches the clock is a completely different skill than reading a cookbook.</p>
+<h2 id="the-preparation-roadmap">🗺️ The Preparation Roadmap</h2>
+<p>Having helped thousands of candidates pass their FAANG interviews, we&#39;ve learned exactly what works. The plan is two phases: build the mental model, then practice it until it&#39;s automatic.</p>
+<div class="diagram"><svg preserveAspectRatio="xMidYMid meet" id="m77f5505f2aad1601" width="100%" xmlns="http://www.w3.org/2000/svg" class="flowchart" style="max-width:1476.859375px;width:100%;height:auto;" viewBox="0 0 1476.859375 198.25" role="graphics-document document" aria-roledescription="flowchart-v2"><style>#m77f5505f2aad1601{font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;font-size:14px;fill:#0E1A2B;}@keyframes edge-animation-frame{from{stroke-dashoffset:0;}}@keyframes dash{to{stroke-dashoffset:0;}}#m77f5505f2aad1601 .edge-animation-slow{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 50s linear infinite;stroke-linecap:round;}#m77f5505f2aad1601 .edge-animation-fast{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 20s linear infinite;stroke-linecap:round;}#m77f5505f2aad1601 .error-icon{fill:#FFFFFF;}#m77f5505f2aad1601 .error-text{fill:#000000;stroke:#000000;}#m77f5505f2aad1601 .edge-thickness-normal{stroke-width:1px;}#m77f5505f2aad1601 .edge-thickness-thick{stroke-width:3.5px;}#m77f5505f2aad1601 .edge-pattern-solid{stroke-dasharray:0;}#m77f5505f2aad1601 .edge-thickness-invisible{stroke-width:0;fill:none;}#m77f5505f2aad1601 .edge-pattern-dashed{stroke-dasharray:3;}#m77f5505f2aad1601 .edge-pattern-dotted{stroke-dasharray:2;}#m77f5505f2aad1601 .marker{fill:#5B7BB4;stroke:#5B7BB4;}#m77f5505f2aad1601 .marker.cross{stroke:#5B7BB4;}#m77f5505f2aad1601 svg{font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;font-size:14px;}#m77f5505f2aad1601 p{margin:0;}#m77f5505f2aad1601 .label{font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;color:#0E1A2B;}#m77f5505f2aad1601 .cluster-label text{fill:#000000;}#m77f5505f2aad1601 .cluster-label span{color:#000000;}#m77f5505f2aad1601 .cluster-label span p{background-color:transparent;}#m77f5505f2aad1601 .label text,#m77f5505f2aad1601 span{fill:#0E1A2B;color:#0E1A2B;}#m77f5505f2aad1601 .node rect,#m77f5505f2aad1601 .node circle,#m77f5505f2aad1601 .node ellipse,#m77f5505f2aad1601 .node polygon,#m77f5505f2aad1601 .node path{fill:#EEF3FF;stroke:#2563EB;stroke-width:1px;}#m77f5505f2aad1601 .rough-node .label text,#m77f5505f2aad1601 .node .label text,#m77f5505f2aad1601 .image-shape .label,#m77f5505f2aad1601 .icon-shape .label{text-anchor:middle;}#m77f5505f2aad1601 .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#m77f5505f2aad1601 .rough-node .label,#m77f5505f2aad1601 .node .label,#m77f5505f2aad1601 .image-shape .label,#m77f5505f2aad1601 .icon-shape .label{text-align:center;}#m77f5505f2aad1601 .node.clickable{cursor:pointer;}#m77f5505f2aad1601 .root .anchor path{fill:#5B7BB4!important;stroke-width:0;stroke:#5B7BB4;}#m77f5505f2aad1601 .arrowheadPath{fill:rgba(255, 255, 255, 0);}#m77f5505f2aad1601 .edgePath .path{stroke:#5B7BB4;stroke-width:1px;}#m77f5505f2aad1601 .flowchart-link{stroke:#5B7BB4;fill:none;}#m77f5505f2aad1601 .edgeLabel{background-color:#F0F4FF;text-align:center;}#m77f5505f2aad1601 .edgeLabel p{background-color:#F0F4FF;}#m77f5505f2aad1601 .edgeLabel rect{opacity:0.5;background-color:#F0F4FF;fill:#F0F4FF;}#m77f5505f2aad1601 .labelBkg{background-color:rgba(240, 244, 255, 0.5);}#m77f5505f2aad1601 .cluster rect{fill:#FFFFFF;stroke:hsl(0, 0%, 90%);stroke-width:1px;}#m77f5505f2aad1601 .cluster text{fill:#000000;}#m77f5505f2aad1601 .cluster span{color:#000000;}#m77f5505f2aad1601 div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;font-size:12px;background:#FFFFFF;border:1px solid hsl(0, 0%, 90%);border-radius:2px;pointer-events:none;z-index:100;}#m77f5505f2aad1601 .flowchartTitleText{text-anchor:middle;font-size:18px;fill:#0E1A2B;}#m77f5505f2aad1601 rect.text{fill:none;stroke-width:0;}#m77f5505f2aad1601 .icon-shape,#m77f5505f2aad1601 .image-shape{background-color:#F0F4FF;text-align:center;}#m77f5505f2aad1601 .icon-shape p,#m77f5505f2aad1601 .image-shape p{background-color:#F0F4FF;padding:2px;}#m77f5505f2aad1601 .icon-shape .label rect,#m77f5505f2aad1601 .image-shape .label rect{opacity:0.5;background-color:#F0F4FF;fill:#F0F4FF;}#m77f5505f2aad1601 .label-icon{display:inline-block;height:1em;overflow:visible;vertical-align:-0.125em;}#m77f5505f2aad1601 .node .label-icon path{fill:currentColor;stroke:revert;stroke-width:revert;}#m77f5505f2aad1601 .node .neo-node{stroke:#2563EB;}#m77f5505f2aad1601 [data-look="neo"].node rect,#m77f5505f2aad1601 [data-look="neo"].cluster rect,#m77f5505f2aad1601 [data-look="neo"].node polygon{stroke:url(#m77f5505f2aad1601-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#m77f5505f2aad1601 [data-look="neo"].swimlane.cluster rect{filter:none;}#m77f5505f2aad1601 [data-look="neo"].node path{stroke:url(#m77f5505f2aad1601-gradient);stroke-width:1px;}#m77f5505f2aad1601 [data-look="neo"].node .outer-path{filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#m77f5505f2aad1601 [data-look="neo"].node .neo-line path{stroke:#2563EB;filter:none;}#m77f5505f2aad1601 [data-look="neo"].node circle{stroke:url(#m77f5505f2aad1601-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#m77f5505f2aad1601 [data-look="neo"].node circle .state-start{fill:#000000;}#m77f5505f2aad1601 [data-look="neo"].icon-shape .icon{fill:url(#m77f5505f2aad1601-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#m77f5505f2aad1601 [data-look="neo"].icon-shape .icon-neo path{stroke:url(#m77f5505f2aad1601-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#m77f5505f2aad1601 :root{--mermaid-font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;}</style><g><marker id="m77f5505f2aad1601_flowchart-v2-pointEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></path></marker><marker id="m77f5505f2aad1601_flowchart-v2-pointStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="4.5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 5 L 10 10 L 10 0 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></path></marker><marker id="m77f5505f2aad1601_flowchart-v2-pointEnd-margin" class="marker flowchart-v2" viewBox="0 0 11.5 14" refX="11.5" refY="7" markerUnits="userSpaceOnUse" markerWidth="10.5" markerHeight="14" orient="auto"><path d="M 0 0 L 11.5 7 L 0 14 z" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"></path></marker><marker id="m77f5505f2aad1601_flowchart-v2-pointStart-margin" class="marker flowchart-v2" viewBox="0 0 11.5 14" refX="1" refY="7" markerUnits="userSpaceOnUse" markerWidth="11.5" markerHeight="14" orient="auto"><polygon points="0,7 11.5,14 11.5,0" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"></polygon></marker><marker id="m77f5505f2aad1601_flowchart-v2-circleEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="11" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></circle></marker><marker id="m77f5505f2aad1601_flowchart-v2-circleStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-1" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></circle></marker><marker id="m77f5505f2aad1601_flowchart-v2-circleEnd-margin" class="marker flowchart-v2" viewBox="0 0 10 10" refY="5" refX="12.25" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"></circle></marker><marker id="m77f5505f2aad1601_flowchart-v2-circleStart-margin" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-2" refY="5" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"></circle></marker><marker id="m77f5505f2aad1601_flowchart-v2-crossEnd" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="12" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"></path></marker><marker id="m77f5505f2aad1601_flowchart-v2-crossStart" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="-1" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"></path></marker><marker id="m77f5505f2aad1601_flowchart-v2-crossEnd-margin" class="marker cross flowchart-v2" viewBox="0 0 15 15" refX="17.7" refY="7.5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M 1,1 L 14,14 M 1,14 L 14,1" class="arrowMarkerPath" style="stroke-width: 2.5;"></path></marker><marker id="m77f5505f2aad1601_flowchart-v2-crossStart-margin" class="marker cross flowchart-v2" viewBox="0 0 15 15" refX="-3.5" refY="7.5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M 1,1 L 14,14 M 1,14 L 14,1" class="arrowMarkerPath" style="stroke-width: 2.5; stroke-dasharray: 1, 0;"></path></marker><g class="root"><g class="clusters"><g class="cluster " id="m77f5505f2aad1601-subGraph0" data-look="classic"><rect style="" x="318" y="8" width="913.9375" height="182.25"></rect><g class="cluster-label " transform="translate(732.4765625, 8)"><foreignObject width="84.984375" height="21"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5;"><span class="nodeLabel "><p>Practice Loop</p></span></div></foreignObject></g></g></g><g class="edgePaths"><path d="M511.833,89L517.129,87.333C522.425,85.667,533.017,82.333,541.813,80.667C550.609,79,557.609,79,561.109,79L564.609,79" id="m77f5505f2aad1601-L_Q_R_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_Q_R_0" data-points="W3sieCI6NTExLjgzMzQwNjY5MDE0MDg2LCJ5Ijo4OX0seyJ4Ijo1NDMuNjA5Mzc1LCJ5Ijo3OX0seyJ4Ijo1NjguNjA5Mzc1LCJ5Ijo3OX1d" data-look="classic" marker-end="url(#m77f5505f2aad1601_flowchart-v2-pointEnd)"></path><path d="M772.484,79L776.651,79C780.818,79,789.151,79,796.818,79C804.484,79,811.484,79,814.984,79L818.484,79" id="m77f5505f2aad1601-L_R_A_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_R_A_0" data-points="W3sieCI6NzcyLjQ4NDM3NSwieSI6Nzl9LHsieCI6Nzk3LjQ4NDM3NSwieSI6Nzl9LHsieCI6ODIyLjQ4NDM3NSwieSI6Nzl9XQ==" data-look="classic" marker-end="url(#m77f5505f2aad1601_flowchart-v2-pointEnd)"></path><path d="M967.063,79L971.229,79C975.396,79,983.729,79,992.887,80.477C1002.046,81.955,1012.029,84.91,1017.021,86.387L1022.012,87.865" id="m77f5505f2aad1601-L_A_K_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_A_K_0" data-points="W3sieCI6OTY3LjA2MjUsInkiOjc5fSx7IngiOjk5Mi4wNjI1LCJ5Ijo3OX0seyJ4IjoxMDI1Ljg0NzcxMTI2NzYwNTUsInkiOjg5fV0=" data-look="classic" marker-end="url(#m77f5505f2aad1601_flowchart-v2-pointEnd)"></path><path d="M1025.848,140L1020.217,141.667C1014.586,143.333,1003.324,146.667,981.479,148.333C959.633,150,927.203,150,894.773,150C862.344,150,829.914,150,792.543,150C755.172,150,712.859,150,670.547,150C628.234,150,585.922,150,560.106,148.533C534.289,147.067,524.969,144.134,520.309,142.667L515.649,141.201" id="m77f5505f2aad1601-L_K_Q_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_K_Q_0" data-points="W3sieCI6MTAyNS44NDc3MTEyNjc2MDU1LCJ5IjoxNDB9LHsieCI6OTkyLjA2MjUsInkiOjE1MH0seyJ4Ijo4OTQuNzczNDM3NSwieSI6MTUwfSx7IngiOjc5Ny40ODQzNzUsInkiOjE1MH0seyJ4Ijo2NzAuNTQ2ODc1LCJ5IjoxNTB9LHsieCI6NTQzLjYwOTM3NSwieSI6MTUwfSx7IngiOjUxMS44MzM0MDY2OTAxNDA4NiwieSI6MTQwfV0=" data-look="classic" marker-end="url(#m77f5505f2aad1601_flowchart-v2-pointEnd)"></path><path d="M268,114.5L272.167,114.5C276.333,114.5,284.667,114.5,293,114.5C301.333,114.5,309.667,114.5,317.333,114.5C325,114.5,332,114.5,335.5,114.5L339,114.5" id="m77f5505f2aad1601-L_F_Q_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_F_Q_0" data-points="W3sieCI6MjY4LCJ5IjoxMTQuNX0seyJ4IjoyOTMsInkiOjExNC41fSx7IngiOjMxOCwieSI6MTE0LjV9LHsieCI6MzQzLCJ5IjoxMTQuNX1d" data-look="classic" marker-end="url(#m77f5505f2aad1601_flowchart-v2-pointEnd)"></path><path d="M1206.938,114.5L1211.104,114.5C1215.271,114.5,1223.604,114.5,1231.938,114.5C1240.271,114.5,1248.604,114.5,1256.271,114.5C1263.938,114.5,1270.938,114.5,1274.438,114.5L1277.938,114.5" id="m77f5505f2aad1601-L_K_M_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_K_M_0" data-points="W3sieCI6MTIwNi45Mzc1LCJ5IjoxMTQuNX0seyJ4IjoxMjMxLjkzNzUsInkiOjExNC41fSx7IngiOjEyNTYuOTM3NSwieSI6MTE0LjV9LHsieCI6MTI4MS45Mzc1LCJ5IjoxMTQuNX1d" data-look="classic" marker-end="url(#m77f5505f2aad1601_flowchart-v2-pointEnd)"></path></g><g class="edgeLabels"><g class="edgeLabel"><g class="label" data-id="L_Q_R_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_R_A_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_A_K_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_K_Q_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_F_Q_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="L_K_M_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g></g><g class="nodes"><g class="node default  " id="m77f5505f2aad1601-flowchart-F-0" data-look="classic" transform="translate(138, 114.5)"><rect class="basic label-container" style="fill:#FFE4B5 !important" x="-130" y="-57" width="260" height="114"></rect><g class="label" style="" transform="translate(-100, -42)"><rect></rect><foreignObject width="200" height="84"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table; white-space: break-spaces; line-height: 1.5; max-width: 200px; text-align: center; width: 200px;"><span class="nodeLabel "><p>Learn the Fundamentals<br/>intro · delivery framework<br/>core concepts · key tech · patterns</p></span></div></foreignObject></g></g><g class="node default  " id="m77f5505f2aad1601-flowchart-Q-1" data-look="classic" transform="translate(430.8046875, 114.5)"><rect class="basic label-container" style="fill:#e1f5ff !important" x="-87.8046875" y="-25.5" width="175.609375" height="51"></rect><g class="label" style="" transform="translate(-57.8046875, -10.5)"><rect></rect><foreignObject width="115.609375" height="21"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>Choose a question</p></span></div></foreignObject></g></g><g class="node default  " id="m77f5505f2aad1601-flowchart-R-2" data-look="classic" transform="translate(670.546875, 79)"><rect class="basic label-container" style="" x="-101.9375" y="-25.5" width="203.875" height="51"></rect><g class="label" style="" transform="translate(-71.9375, -10.5)"><rect></rect><foreignObject width="143.875" height="21"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>Read the requirements</p></span></div></foreignObject></g></g><g class="node default  " id="m77f5505f2aad1601-flowchart-A-4" data-look="classic" transform="translate(894.7734375, 79)"><rect class="basic label-container" style="fill:#FFE4B5 !important" x="-72.2890625" y="-36" width="144.578125" height="72"></rect><g class="label" style="" transform="translate(-42.2890625, -21)"><rect></rect><foreignObject width="84.578125" height="42"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>Try to answer<br/>on your own</p></span></div></foreignObject></g></g><g class="node default  " id="m77f5505f2aad1601-flowchart-K-6" data-look="classic" transform="translate(1112, 114.5)"><rect class="basic label-container" style="" x="-94.9375" y="-25.5" width="189.875" height="51"></rect><g class="label" style="" transform="translate(-64.9375, -10.5)"><rect></rect><foreignObject width="129.875" height="21"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>Read the answer key</p></span></div></foreignObject></g></g><g class="node default  " id="m77f5505f2aad1601-flowchart-M-12" data-look="classic" transform="translate(1375.3984375, 114.5)"><rect class="basic label-container" style="fill:#90EE90 !important" x="-93.4609375" y="-36" width="186.921875" height="72"></rect><g class="label" style="" transform="translate(-63.4609375, -21)"><rect></rect><foreignObject width="126.921875" height="42"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>Peer mock<br/>under time pressure</p></span></div></foreignObject></g></g></g></g></g><defs><filter id="m77f5505f2aad1601-drop-shadow" height="130%" width="130%"><feDropShadow dx="4" dy="4" stdDeviation="0" flood-opacity="0.06" flood-color="#000000"></feDropShadow></filter></defs><defs><filter id="m77f5505f2aad1601-drop-shadow-small" height="150%" width="150%"><feDropShadow dx="2" dy="2" stdDeviation="0" flood-opacity="0.06" flood-color="#000000"></feDropShadow></filter></defs><linearGradient id="m77f5505f2aad1601-gradient" gradientUnits="objectBoundingBox" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#2563EB" stop-opacity="1"></stop><stop offset="100%" stop-color="hsl(224, 60%, 87.0588235294%)" stop-opacity="1"></stop></linearGradient></svg></div>
+
+
+<h2 id="learn-the-fundamentals">🎯 Learn the Fundamentals</h2>
+<ol>
+<li><p>Understand what a system design interview is: Maybe you&#39;ve never done a system design interview before, you&#39;re not alone! Start by reading our <a href="https://www.hellointerview.com/learn/system-design/in-a-hurry/introduction">intro to system design</a> or <a href="https://www.youtube.com/watch?v=tgSe27eoBG0">watching a video of a mock system design interview.</a></p>
+</li>
+<li><p>Choose a delivery framework: System design interviews move fast. It&#39;s important that you have a clear roadmap to help you think linearly and avoid scope creep. We strongly recommend our <a href="https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery">Delivery Framework</a>. This is the framework you&#39;ll follow to design your system come interview day.</p>
+</li>
+<li><p>Start with the basics: If you&#39;re new to system design in particular, you&#39;ll want to start by learning the basics and mapping out the scope of knowledge required. Start by reading about the <a href="https://www.hellointerview.com/learn/system-design/in-a-hurry/core-concepts">Core Concepts</a>, <a href="https://www.hellointerview.com/learn/system-design/in-a-hurry/key-technologies">Key Technologies</a>, and <a href="https://www.hellointerview.com/learn/system-design/in-a-hurry/patterns">Common Patterns</a> used in system design interviews. These write-ups are high-level, but they help you build the mental model necessary to build upon.</p>
+</li>
+</ol>
+<h2 id="practice-deliberately">🎤 Practice Deliberately</h2>
+<p>Once you have the foundation in place, it&#39;s time to practice. Passively consuming content is good, but you&#39;ll retain 10x more information by actually doing.</p>
+<blockquote>
+<p>💡 <strong>Insider tip:</strong> Passive consuming is comfortable but low-retention. The single biggest jump in preparation comes from attempting a full design <em>on your own</em> before you look at any answer — the struggle is the point.</p>
+</blockquote>
+<ol>
+<li><p>Choose a question: Select a question from the list of common questions below.</p>
+</li>
+<li><p>Read the requirements: Understand the requirements of the system you&#39;ll need to design.</p>
+</li>
+<li><p>Try to answer on your own: Either practice with our <a href="https://www.hellointerview.com/premium">Guided Practices</a> (below) or on a virtual whiteboard like <a href="https://excalidraw.com/">Excalidraw</a>.</p>
+</li>
+<li><p>Read the answer key: Only after you have tried to answer the question, read the answer key to see how your answer compares.</p>
+</li>
+<li><p>Put your knowledge to the test: Once you&#39;ve done a few questions and are feeling comfortable, run a peer mock with someone who works at your target company — telling your design out loud under time pressure is a different skill than reading about it.</p>
+</li>
+</ol>
+<h2 id="interview-questions-with-write-ups">📝 Interview Questions with Write-Ups</h2>
+<div class="tbl-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th>Interview Question</th>
+<th>Difficulty</th>
+<th>Write-Up</th>
+<th>Mark as Read</th>
+<th>Guided Practice</th>
+</tr>
+</thead>
+<tbody><tr>
+<td></td>
+<td>Bitly</td>
+<td>Easy</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Dropbox</td>
+<td>Easy</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Yelp</td>
+<td>Easy</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Local Delivery Service</td>
+<td>Easy</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Ticketmaster</td>
+<td>Medium</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Instagram</td>
+<td>Medium</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>FB News Feed</td>
+<td>Medium</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Tinder</td>
+<td>Medium</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>LeetCode</td>
+<td>Medium</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>WhatsApp</td>
+<td>Medium</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Strava</td>
+<td>Medium</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Distributed Cache</td>
+<td>Medium</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Rate Limiter</td>
+<td>Medium</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Online Auction</td>
+<td>Medium</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>YouTube</td>
+<td>Medium</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Job Scheduler</td>
+<td>Medium</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>FB Live Comments</td>
+<td>Medium</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>News Aggregator</td>
+<td>Medium</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Price Tracking Service</td>
+<td>Medium</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>YouTube Top K</td>
+<td>Hard</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Uber</td>
+<td>Hard</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Robinhood</td>
+<td>Hard</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Google Docs</td>
+<td>Hard</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Web Crawler</td>
+<td>Hard</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Ad Click Aggregator</td>
+<td>Hard</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>FB Post Search</td>
+<td>Hard</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Payment System</td>
+<td>Hard</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Metrics Monitoring</td>
+<td>Hard</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Online Chess</td>
+<td>Hard</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>ChatGPT</td>
+<td>Hard</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody></table></div>
+<h2 id="additional-guided-practice">🧩 Additional Guided Practice</h2>
+<p>Full Guided Practice on additional interview questions. These problems don&#39;t include a written guide but have the same step-by-step practice and AI feedback and are sourced from real interview questions reported by the community.</p>
+<div class="tbl-wrap"><table>
+<thead>
+<tr>
+<th></th>
+<th>Interview Question</th>
+<th>Asked At</th>
+<th>Difficulty</th>
+<th>Guided Practice</th>
+</tr>
+</thead>
+<tbody><tr>
+<td></td>
+<td>Food Review App</td>
+<td></td>
+<td>Medium</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Game Leaderboard</td>
+<td></td>
+<td>Medium</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Notification System</td>
+<td></td>
+<td>Medium</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>Donations Website</td>
+<td></td>
+<td>Hard</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td>GitHub Actions</td>
+<td></td>
+<td>Hard</td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody></table></div>
+<p>Mark as read</p>
+<p>7511 Greenwood Ave North
+Unit #4238 Seattle
+WA 98103</p>
+<p>© 2026 Optick Labs Inc. All rights reserved.</p>
+<h2 id="key-takeaways">🎓 Key Takeaways</h2>
+<ul>
+<li><strong>Two phases, in order:</strong> build the mental model first, then practice — don&#39;t jump to questions before you have the foundation.</li>
+<li><strong>Foundation reading:</strong> the intro, a delivery framework, core concepts, key technologies, and common patterns give you the vocabulary and structure to build on.</li>
+<li><strong>Doing beats consuming:</strong> you retain roughly 10x more by attempting a design yourself than by passively reading answer keys.</li>
+<li><strong>Always attempt first:</strong> only read the answer key <em>after</em> you&#39;ve tried the question on your own, so you can compare and find your gaps.</li>
+<li><strong>Work up in difficulty:</strong> start with Easy write-ups (Bitly, Dropbox, Yelp) and progress toward Hard ones (Uber, Google Docs, Payment System).</li>
+<li><strong>Finish with a peer mock:</strong> talking through a design out loud under time pressure is a distinct skill — rehearse it with someone at your target company.</li>
+</ul>
+<h2 id="related-concepts">📚 Related Concepts</h2>
+<ul>
+<li><a href="/in-a-hurry/introduction/">Introduction</a> — what a system design interview actually is, for first-timers.</li>
+<li><a href="/in-a-hurry/delivery-framework/">Delivery Framework</a> — the step-by-step roadmap to follow on interview day.</li>
+<li><a href="/in-a-hurry/core-concepts/">Core Concepts</a> — the foundational building blocks of system design.</li>
+<li><a href="/in-a-hurry/key-technologies/">Key Technologies</a> — the databases, caches, and queues you&#39;ll reach for.</li>
+<li><a href="/in-a-hurry/common-patterns/">Common Patterns</a> — reusable design patterns across problems.</li>
+<li><a href="/in-a-hurry/breakdowns-of-popular-system-design-questions/">Breakdowns of Popular System Design Questions</a> — how to think about the questions in the tables above.</li>
+<li><a href="/breakdowns/bitly/">Bitly</a> — a good Easy starter write-up to attempt first.</li>
+<li><a href="/breakdowns/uber/">Uber</a> — a Hard question to work toward once you&#39;re comfortable.</li>
+</ul>
+<hr>
+<p><em>Source: <a href="https://www.hellointerview.com/learn/system-design/in-a-hurry/how-to-prepare">https://www.hellointerview.com/learn/system-design/in-a-hurry/how-to-prepare</a></em></p>
+</div>
+</article>
+<nav class="pager">
+<a href="/in-a-hurry/delivery-framework/"><span>Previous</span><b>Delivery Framework</b></a>
+<a class="nx" href="/in-a-hurry/introduction/"><span>Next</span><b>Introduction</b></a>
+</nav>
+</main>
+<aside class="toc"><h4>On this page</h4><ol><li><a class="" href="#laymans-explanation">Layman's Explanation</a></li><li><a class="" href="#the-preparation-roadmap">The Preparation Roadmap</a></li><li><a class="" href="#learn-the-fundamentals">Learn the Fundamentals</a></li><li><a class="" href="#practice-deliberately">Practice Deliberately</a></li><li><a class="" href="#interview-questions-with-write-ups">Interview Questions with Write-Ups</a></li><li><a class="" href="#additional-guided-practice">Additional Guided Practice</a></li><li><a class="" href="#key-takeaways">Key Takeaways</a></li><li><a class="" href="#related-concepts">Related Concepts</a></li></ol></aside>
+</div>
+<script src="/assets/doc.js" defer></script>
+<footer class="foot"><div class="foot-in">
+<span>InterviewVault — system design study vault</span>
+<span>122 documents · 607 diagrams</span>
+</div></footer>
+</body>
+</html>

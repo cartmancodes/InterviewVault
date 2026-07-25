@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Heap — InterviewVault</title>
+<meta name="description" content="Heap: The algorithm and data-structure notes that back the coding rounds.">
+<meta property="og:title" content="Heap — InterviewVault">
+<meta property="og:description" content="Heap: The algorithm and data-structure notes that back the coding rounds.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+</head>
+<body class="">
+<header class="hdr"><div class="hdr-in">
+<a class="brand" href="/"><span class="brand-mark">IV</span><span class="brand-name">Interview<span>Vault</span></span></a>
+<nav class="hdr-nav"><a href="/#in-a-hurry">In a Hurry</a><a href="/#notes">Deep Notes</a><a href="/#concepts">Core Concepts</a><a href="/#patterns">Patterns</a><a href="/#deep-dives">Deep Dives</a><a href="/#breakdowns">Problem Breakdowns</a><a href="/#in-the-wild">In the Wild</a><a href="/#answers">Interview Answers</a><a href="/#dsa" aria-current="page">Data Structures</a></nav>
+</div></header>
+<div class="doc-shell">
+<nav class="side"><h4>Data Structures</h4><ol><li><a href="/dsa/bfs/">BFS</a></li><li><a href="/dsa/dsu/">DSU</a></li><li><a href="/dsa/heap/" aria-current="page">Heap</a></li><li><a href="/dsa/lrucache/">LRUCache</a></li><li><a href="/dsa/linked-lists/">Linked List.</a></li><li><a href="/dsa/segment-tree/">SegmentTree</a></li><li><a href="/dsa/ternary-search/">TernarySearch</a></li><li><a href="/dsa/trie/">Trie</a></li></ol></nav>
+<main>
+<article class="art">
+<div class="art-head">
+<div class="art-kicker">Data Structures</div>
+<h1>Heap</h1>
+<div class="art-meta"><span>148 words</span></div>
+</div>
+<div class="prose"><h2 id="running-median">Running median</h2>
+<pre><code>class Solution {
+public:
+    double findMedianSortedArrays(vector&lt;int&gt;&amp; nums1, vector&lt;int&gt;&amp; nums2) {
+        // Keep a min heap here and find the max value 
+        priority_queue&lt;int&gt; leftMaxHeap;
+        
+        // Keep a max heap here and find the min value 
+        priority_queue&lt;int, vector&lt;int&gt;, greater&lt;int&gt;&gt; rightMinHeap;
+        
+        for(int i = 0; i &lt; nums1.size(); i++) {
+            // Add it to the min heap 
+            int num = nums1[i];
+            leftMaxHeap.push(num);
+            
+            // Now push the top of leftMax to rightMin 
+            rightMinHeap.push(leftMaxHeap.top());
+            leftMaxHeap.pop();
+            
+            // Check bal;ance
+            if (leftMaxHeap.size() &lt; rightMinHeap.size()) {
+                leftMaxHeap.push(rightMinHeap.top());
+                rightMinHeap.pop();
+            }
+        }
+        
+        for(int i = 0; i &lt; nums2.size(); i++) {
+            // Add it to the min heap 
+            int num = nums2[i];
+            leftMaxHeap.push(num);
+            
+            // Now push the top of leftMax to rightMin 
+            rightMinHeap.push(leftMaxHeap.top());
+            leftMaxHeap.pop();
+            
+            // Check bal;ance
+            if (leftMaxHeap.size() &lt; rightMinHeap.size()) {
+                leftMaxHeap.push(rightMinHeap.top());
+                rightMinHeap.pop();
+            }
+        }
+        
+        // Find medion 
+        if (leftMaxHeap.size() &gt; rightMinHeap.size())
+            return leftMaxHeap.top();
+        else 
+            return double(leftMaxHeap.top() + rightMinHeap.top())/2;
+    }
+};
+</code></pre>
+</div>
+</article>
+<nav class="pager">
+<a href="/dsa/dsu/"><span>Previous</span><b>DSU</b></a>
+<a class="nx" href="/dsa/lrucache/"><span>Next</span><b>LRUCache</b></a>
+</nav>
+</main>
+<aside class="toc"><h4>On this page</h4><ol><li><a class="" href="#running-median">Running median</a></li></ol></aside>
+</div>
+<script src="/assets/doc.js" defer></script>
+<footer class="foot"><div class="foot-in">
+<span>InterviewVault — system design study vault</span>
+<span>122 documents · 607 diagrams</span>
+</div></footer>
+</body>
+</html>

@@ -1,0 +1,9 @@
+# build tooling
+tools/node_modules/
+node_modules/
+
+# os
+.DS_Store
+
+# local preview
+.wrangler/

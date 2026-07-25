@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Multi-step Processes — InterviewVault</title>
+<meta name="description" content="Multi-step Processes: Condensed cheat-sheets for each pattern. Built for the last hour before an interview.">
+<meta property="og:title" content="Multi-step Processes — InterviewVault">
+<meta property="og:description" content="Multi-step Processes: Condensed cheat-sheets for each pattern. Built for the last hour before an interview.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+</head>
+<body class="">
+<header class="hdr"><div class="hdr-in">
+<a class="brand" href="/"><span class="brand-mark">IV</span><span class="brand-name">Interview<span>Vault</span></span></a>
+<nav class="hdr-nav"><a href="/#in-a-hurry">In a Hurry</a><a href="/#notes">Deep Notes</a><a href="/#concepts">Core Concepts</a><a href="/#patterns">Patterns</a><a href="/#deep-dives">Deep Dives</a><a href="/#breakdowns">Problem Breakdowns</a><a href="/#in-the-wild">In the Wild</a><a href="/#answers">Interview Answers</a><a href="/#dsa">Data Structures</a></nav>
+</div></header>
+<div class="doc-shell">
+<nav class="side"><h4>Quick Reference</h4><ol><li><a href="/patterns/quick-reference/dealing-with-contention/">Dealing with Contention</a></li><li><a href="/patterns/quick-reference/handling-large-blobs/">Handling Large Blobs</a></li><li><a href="/patterns/quick-reference/managing-long-running-tasks/">Managing Long Running Tasks</a></li><li><a href="/patterns/quick-reference/multi-step-processes/" aria-current="page">Multi-step Processes</a></li><li><a href="/patterns/quick-reference/real-time-updates/">Real-time Updates</a></li><li><a href="/patterns/quick-reference/scaling-reads/">Scaling Reads</a></li><li><a href="/patterns/quick-reference/scaling-writes/">Scaling Writes</a></li></ol></nav>
+<main>
+<article class="art">
+<div class="art-head">
+<div class="art-kicker">Quick Reference</div>
+<h1>Multi-step Processes</h1>
+<div class="art-meta"><span>926 words</span><span>6 figures</span></div>
+</div>
+<div class="prose"><blockquote>
+<p><strong>Quick Reference</strong> for <a href="/patterns/multi-step-processes/">Multi-StepProcesses</a> — condensed cheat-sheet.</p>
+</blockquote>
+<h2 id="interview-fit">Interview Fit</h2>
+<h3 id="use-when">Use When</h3>
+<p>Flow-chart logic with state and many failures is a workflow candidate.</p>
+<p>Driver acceptance, warehouse picking, and document signing are workflow candidates.</p>
+<p>&quot;If X fails, undo Y&quot; or &quot;all steps or none&quot; is a workflow signal.</p>
+<h3 id="avoid-when">Avoid When</h3>
+<p>Image resize or send email alone does not need a workflow engine.</p>
+<p>If the client waits for the response, workflows usually add too much async overhead.</p>
+<p>Most CRUD, single-service, and high-frequency low-value operations do not justify engine cost.</p>
+<h2 id="coordination-choices">Coordination Choices</h2>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/Patterns/QuickReference/assets/aa3cd63cf82688fa-d11c2c01197b3b54.png" alt="Saga Pattern uses local commits and unwinds earlier effects on later failure; Event-Driven Choreography uses durable-log events and works for mid-complexity but hides the flow; Workflow Orchestration uses one coordinator and fits complex flows needing control and visibility; Two-Phase Commit is a poor fit for long workflows because locks wait on the slowest participant and external systems may not support it." loading="lazy"><figcaption>Saga Pattern uses local commits and unwinds earlier effects on later failure; Event-Driven Choreography uses durable-log events and works for mid-complexity but hides the flow; Workflow Orchestration uses one coordinator and fits complex flows needing control and visibility; Two-Phase Commit is a poor fit for long workflows because locks wait on the slowest participant and external systems may not support it.</figcaption></figure></p>
+<ul>
+<li><strong>Saga Pattern</strong>: Sequence of local commits; if a later step fails, unwind earlier effects.</li>
+<li><strong>Event-Driven Choreography</strong>: Workers react to durable-log events; good mid-complexity, but flow is implicit.</li>
+<li><strong>Workflow Orchestration</strong>: Single coordinator owns the sequence; best for complex flows needing control and visibility.</li>
+<li><strong>Two-Phase Commit</strong>: Poor fit for long workflows: locks wait on slowest participant and external systems may not support it.</li>
+</ul>
+<h2 id="engine-choices">Engine Choices</h2>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/Patterns/QuickReference/assets/aa3cd63cf82688fa-25fc928e58a3d361.png" alt="Temporal is the most powerful open-source option with code-driven workflows, long waits, full history, and self-operation or Temporal Cloud; AWS Step Functions is a managed serverless state machine with standard runs capped at one year and 256KB between states; Durable Functions is an Azure cloud-native option that is easier to operate than Temporal but less flexible; Google Cloud Workflows is a cloud-native option similar to Durable Functions; Apache Airflow is strong for scheduled batch ETL but weaker for user-facing long-running workflows." loading="lazy"><figcaption>Temporal is the most powerful open-source option with code-driven workflows, long waits, full history, and self-operation or Temporal Cloud; AWS Step Functions is a managed serverless state machine with standard runs capped at one year and 256KB between states; Durable Functions is an Azure cloud-native option that is easier to operate than Temporal but less flexible; Google Cloud Workflows is a cloud-native option similar to Durable Functions; Apache Airflow is strong for scheduled batch ETL but weaker for user-facing long-running workflows.</figcaption></figure></p>
+<ul>
+<li><strong>Temporal</strong>: Most powerful open-source option; code-driven workflows, long waits, full history, operate it or use Temporal Cloud.</li>
+<li><strong>AWS Step Functions</strong>: Managed serverless state machines; standard runs cap at one year and 256KB between states.</li>
+<li><strong>Durable Functions</strong>: Azure cloud-native option; easier to operate than Temporal but less flexible.</li>
+<li><strong>Google Cloud Workflows</strong>: Cloud-native option similar to Durable Functions; easier ops than Temporal but less flexible.</li>
+<li><strong>Apache Airflow</strong>: Great for scheduled batch ETL; less suitable for user-facing long-running workflows.</li>
+</ul>
+<h2 id="durable-mechanics">Durable Mechanics</h2>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/Patterns/QuickReference/assets/aa3cd63cf82688fa-872350d7e5787af7.png" alt="Workflow is deterministic high-level flow that must replay the same from inputs and history; Activity is one side-effecting step such as a service call, card charge, database read, or email; History Database is an append-only log of workflow decisions and Activity results; Replay recovers by re-executing from the top and returning recorded Activity results without re-running them; Temporal Server hands out tasks, tracks timeouts, records progress, and never runs your code." loading="lazy"><figcaption>Workflow is deterministic high-level flow that must replay the same from inputs and history; Activity is one side-effecting step such as a service call, card charge, database read, or email; History Database is an append-only log of workflow decisions and Activity results; Replay recovers by re-executing from the top and returning recorded Activity results without re-running them; Temporal Server hands out tasks, tracks timeouts, records progress, and never runs your code.</figcaption></figure></p>
+<ul>
+<li><strong>Workflow</strong>: Deterministic high-level flow; decisions must replay the same from inputs and history.</li>
+<li><strong>Activity</strong>: One side-effecting step, such as a service call, card charge, database read, or email.</li>
+<li><strong>History Database</strong>: Append-only log of workflow decisions and Activity results that survives crashes.</li>
+<li><strong>Replay</strong>: Recovery re-executes from the top; recorded Activity results return without re-running.</li>
+<li><strong>Temporal Server</strong>: Hands out tasks, tracks timeouts, and records progress; it never runs your code.</li>
+</ul>
+<h2 id="workflow-updates">Workflow Updates</h2>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/Patterns/QuickReference/assets/aa3cd63cf82688fa-1b807353eae0790d.png" alt="Workflow Versioning keeps old executions on old code and new executions on new code, which is simple but not immediate; Workflow Migrations update the definition in place so running executions can pick up the change; patched() is a deterministic branch where old histories stay legacy and new arrivals run new behavior; Step Functions Pinning keeps running executions on their starting definition and applies updates only to new executions." loading="lazy"><figcaption>Workflow Versioning keeps old executions on old code and new executions on new code, which is simple but not immediate; Workflow Migrations update the definition in place so running executions can pick up the change; patched() is a deterministic branch where old histories stay legacy and new arrivals run new behavior; Step Functions Pinning keeps running executions on their starting definition and applies updates only to new executions.</figcaption></figure></p>
+<ul>
+<li><strong>Workflow Versioning</strong>: Old executions run old code, new executions run new code; simplest but not immediate.</li>
+<li><strong>Workflow Migrations</strong>: Update definition in place so running executions can pick up the change.</li>
+<li><strong>patched()</strong>: Deterministic branch: old histories stay legacy, new arrivals at the point run new behavior.</li>
+<li><strong>Step Functions Pinning</strong>: Running executions stay on starting definition; updates affect only new executions.</li>
+</ul>
+<h2 id="failure-handling">Failure Handling</h2>
+<h3 id="primitive-pitfalls">Primitive Pitfalls</h3>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/Patterns/QuickReference/assets/aa3cd63cf82688fa-a16108e18ff99b7f.png" alt="In-Memory Progress loses what happened after a crash unless progress is persisted outside the host; Callback Routing means a webhook may hit a different API server, so load persisted state or wake the workflow by ID; Manual State Machines leave database rows passive and lead to hand-rolled pollers, locks, retries, and claiming." loading="lazy"><figcaption>In-Memory Progress loses what happened after a crash unless progress is persisted outside the host; Callback Routing means a webhook may hit a different API server, so load persisted state or wake the workflow by ID; Manual State Machines leave database rows passive and lead to hand-rolled pollers, locks, retries, and claiming.</figcaption></figure></p>
+<ul>
+<li><strong>In-Memory Progress</strong>: Crash after a commit loses what happened; persist progress outside the host.</li>
+<li><strong>Callback Routing</strong>: Webhook may hit a different API server; load persisted state or wake the workflow by ID.</li>
+<li><strong>Manual State Machines</strong>: Database rows do not act; hand-rolled pollers, locks, retries, and claiming follow.</li>
+</ul>
+<h3 id="deep-dive-fixes">Deep Dive Fixes</h3>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/Patterns/QuickReference/assets/aa3cd63cf82688fa-404958fc757490a2.png" alt="Compensating Actions undo committed steps in reverse and need retries and idempotency too; Idempotency Key records IN_PROGRESS before and COMPLETED after irreversible work and reconciles uncertain cases; Signals wake workflows by ID without holding a thread or worker memory; Continue-as-New starts a fresh run with current state and empty history; Activity Payloads should pass identifiers instead of huge inputs and results to keep history small." loading="lazy"><figcaption>Compensating Actions undo committed steps in reverse and need retries and idempotency too; Idempotency Key records IN_PROGRESS before and COMPLETED after irreversible work and reconciles uncertain cases; Signals wake workflows by ID without holding a thread or worker memory; Continue-as-New starts a fresh run with current state and empty history; Activity Payloads should pass identifiers instead of huge inputs and results to keep history small.</figcaption></figure></p>
+<ul>
+<li><strong>Compensating Actions</strong>: Undo committed steps in reverse; refunds and releases need retries and idempotency too.</li>
+<li><strong>Idempotency Key</strong>: Record IN_PROGRESS before and COMPLETED after; reconcile uncertain cases instead of re-firing.</li>
+<li><strong>Signals</strong>: External events wake the workflow by ID; waiting holds no thread or worker memory.</li>
+<li><strong>Continue-as-New</strong>: Start a fresh run with current state and empty history; resumes at current position.</li>
+<li><strong>Activity Payloads</strong>: Pass identifiers instead of huge inputs/results to keep workflow history small.</li>
+</ul>
+<hr>
+<p><em>Source: <a href="https://www.hellointerview.com/learn/system-design/patterns/multi-step-processes/quick-reference">https://www.hellointerview.com/learn/system-design/patterns/multi-step-processes/quick-reference</a></em></p>
+</div>
+</article>
+<nav class="pager">
+<a href="/patterns/quick-reference/managing-long-running-tasks/"><span>Previous</span><b>Managing Long Running Tasks</b></a>
+<a class="nx" href="/patterns/quick-reference/real-time-updates/"><span>Next</span><b>Real-time Updates</b></a>
+</nav>
+</main>
+<aside class="toc"><h4>On this page</h4><ol><li><a class="" href="#interview-fit">Interview Fit</a></li><li><a class="h3" href="#use-when">Use When</a></li><li><a class="h3" href="#avoid-when">Avoid When</a></li><li><a class="" href="#coordination-choices">Coordination Choices</a></li><li><a class="" href="#engine-choices">Engine Choices</a></li><li><a class="" href="#durable-mechanics">Durable Mechanics</a></li><li><a class="" href="#workflow-updates">Workflow Updates</a></li><li><a class="" href="#failure-handling">Failure Handling</a></li><li><a class="h3" href="#primitive-pitfalls">Primitive Pitfalls</a></li><li><a class="h3" href="#deep-dive-fixes">Deep Dive Fixes</a></li></ol></aside>
+</div>
+<script src="/assets/doc.js" defer></script>
+<footer class="foot"><div class="foot-in">
+<span>InterviewVault — system design study vault</span>
+<span>122 documents · 607 diagrams</span>
+</div></footer>
+</body>
+</html>

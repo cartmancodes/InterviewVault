@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Networking Essentials — InterviewVault</title>
+<meta name="description" content="Networking Essentials: The vocabulary every design rests on — caching, sharding, indexing, CAP.">
+<meta property="og:title" content="Networking Essentials — InterviewVault">
+<meta property="og:description" content="Networking Essentials: The vocabulary every design rests on — caching, sharding, indexing, CAP.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+</head>
+<body class="">
+<header class="hdr"><div class="hdr-in">
+<a class="brand" href="/"><span class="brand-mark">IV</span><span class="brand-name">Interview<span>Vault</span></span></a>
+<nav class="hdr-nav"><a href="/#in-a-hurry">In a Hurry</a><a href="/#notes">Deep Notes</a><a href="/#concepts" aria-current="page">Core Concepts</a><a href="/#patterns">Patterns</a><a href="/#deep-dives">Deep Dives</a><a href="/#breakdowns">Problem Breakdowns</a><a href="/#in-the-wild">In the Wild</a><a href="/#answers">Interview Answers</a><a href="/#dsa">Data Structures</a></nav>
+</div></header>
+<div class="doc-shell">
+<nav class="side"><h4>Core Concepts</h4><ol><li><a href="/concepts/api-design/">API Design</a></li><li><a href="/concepts/caching/">Caching</a></li><li><a href="/concepts/cap-theorem/">CAP Theorem</a></li><li><a href="/concepts/consistent-hashing/">Consistent Hashing</a></li><li><a href="/concepts/data-modeling/">Data Modeling</a></li><li><a href="/concepts/database-indexing/">Database Indexing</a></li><li><a href="/concepts/networking-essentials/" aria-current="page">Networking Essentials</a></li><li><a href="/concepts/numbers-to-know/">Numbers to Know</a></li><li><a href="/concepts/sharding/">Sharding</a></li></ol></nav>
+<main>
+<article class="art">
+<div class="art-head">
+<div class="art-kicker">Core Concepts</div>
+<h1>Networking Essentials</h1>
+<div class="art-meta"><span>11,721 words</span><span>1 diagram</span><span>14 figures</span></div>
+</div>
+<div class="prose"><blockquote>
+<p><strong>Overview</strong>: Networking is the foundation of every distributed system — independent devices communicating over a network. This guide covers the most important parts of networking for system design interviews: the layered networking model, the key protocols at the network, transport, and application layers, load balancing strategies, and practical concerns like regionalization and failure handling.</p>
+</blockquote>
+<h2 id="laymans-explanation">🧒 Layman&#39;s Explanation</h2>
+<p>Think of sending a package across the country. You never drive it yourself — you hand it to a postal system organized in layers, so you never worry about the details below you. You write down a name and street address (a <strong>domain name</strong>), and a lookup service turns that into exact coordinates (<strong>DNS</strong> turning <code>hellointerview.com</code> into an IP address). The delivery network then figures out which trucks, planes, and sorting centers move your box toward that address (<strong>IP routing</strong>) — nobody promises a specific truck makes it, just best-effort delivery.</p>
+<p>How you send it is a tradeoff. <strong>TCP</strong> is like certified mail with tracking: every handoff is acknowledged, anything lost is re-sent, and pages arrive in order — reliable, but with paperwork overhead. <strong>UDP</strong> is like tossing postcards out the window: blazing fast and cheap, but some blow away and you never retry — perfect for a live phone call where one dropped word doesn&#39;t matter. On top of that, the <strong>application protocols</strong> are the kinds of correspondence: a letter-and-reply (HTTP request/response), a subscription that keeps mailing you updates (SSE), or an open phone line where both sides talk at once (WebSockets).</p>
+<p>Finally, when one clerk can&#39;t handle all the mail, you put a <strong>front desk</strong> (a <strong>load balancer</strong>) that routes each visitor to whichever clerk is free — and quietly stops sending work to any clerk who has gone home sick (<strong>health checks</strong>). That is networking for system design in a nutshell.</p>
+<h2 id="networking-101">🎯 Networking 101</h2>
+<p>At its core, networking is about connecting devices and enabling them to communicate. Networks are built on a layered architecture (the so-called <a href="https://en.wikipedia.org/wiki/OSI_model">&quot;OSI model&quot;</a>) which greatly simplifies the world for us application developers who sit on top of it.</p>
+<p>Effectively, network layers are just abstractions that allow us to reason about the communication between devices in simpler terms relevant to our application. This way, when you&#39;re requesting a webpage, you don&#39;t need to know which voltages represent a <code>1</code> or a <code>0</code> on the network wire (modern networking hardware is even more sophisticated than this!) — you just need to know how to use the next layer down the stack. Think of it like how you might use <code>open</code> in your language of choice instead of manually instructing the disk how to read bytes off a disk.</p>
+<h3 id="networking-layers">Networking Layers</h3>
+<p>While the full networking stack is fascinating, there are three key layers that come up most often in system design interviews. We&#39;re going to dive into each of them in a bit, but first let&#39;s talk about what these layers do and how they work together.</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/CoreConcepts/assets/B5c4KEuENPxB.2r7-h61f15b1u.svg" alt="OSI Layers" loading="lazy"><figcaption>OSI Layers</figcaption></figure></p>
+<p>At this layer is IP, the protocol that handles routing and addressing. It&#39;s responsible for breaking the data into packets, handling packet forwarding between networks, and providing best-effort delivery to any destination IP address on the network. While there are other protocols at this layer (like <a href="https://en.wikipedia.org/wiki/InfiniBand">InfiniBand</a>, which is used extensively for massive ML training workloads), IP by far the most common for system design interviews.</p>
+<p>At this layer, we have <a href="https://en.wikipedia.org/wiki/Transmission_Control_Protocol">TCP</a>, <a href="https://en.wikipedia.org/wiki/QUIC">QUIC</a>, and <a href="https://en.wikipedia.org/wiki/User_Datagram_Protocol">UDP</a>, which provide end-to-end communication services. Think of them like a layer that provides features like reliability, ordering, and flow control on top of the network layer.</p>
+<p>At the final layer are the application protocols like DNS, HTTP, Websockets, WebRTC. These are common protocols that build on top of TCP (or UDP, in the case of WebRTC) to provide a layer of abstraction for different types of data typically associated with web applications. We&#39;ll cover them in depth.</p>
+<p>These layers work together to enable all our network communications. To see how they interact in practice, let&#39;s walk through a concrete example of how a simple web request works.</p>
+<h3 id="example-a-simple-web-request">Example: A Simple Web Request</h3>
+<p>When you type a URL into your browser, several layers of networking protocols spring into action. Let&#39;s break down how these layers work together to retrieve a simple web page over HTTP on TCP.</p>
+<p>First, we use <a href="https://en.wikipedia.org/wiki/Domain_Name_System">DNS</a> to convert a human-readable domain name like <code>hellointerview.com</code> into an IP address like <code>32.42.52.62</code>. Then, a series of carefully orchestrated steps begins. We set up a TCP connection over IP, send our HTTP request, get a response, and tear down the connection.</p>
+<p>In detail:</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/CoreConcepts/assets/cvOR4cCwIO9k.0h5q3zu7d0tfu.svg" alt="Simple HTTP Request" loading="lazy"><figcaption>Simple HTTP Request</figcaption></figure></p>
+<ol>
+<li><strong>DNS Resolution</strong>: The client starts by resolving the domain name of the website to an IP address using DNS (Domain Name System).</li>
+<li><strong>TCP Handshake</strong>: The client initiates a TCP connection with the server using a three-way handshake:</li>
+</ol>
+<ul>
+<li><strong>SYN</strong>: The client sends a SYN (synchronize) packet to the server to request a connection.</li>
+<li><strong>SYN-ACK</strong>: The server responds with a SYN-ACK (synchronize-acknowledge) packet to acknowledge the request.</li>
+<li><strong>ACK</strong>: The client sends an ACK (acknowledge) packet to establish the connection.</li>
+</ul>
+<ol start="3">
+<li><strong>HTTP Request</strong>: Once the TCP connection is established, the client sends an HTTP GET request to the server to request the web page.</li>
+<li><strong>Server Processing</strong>: The server processes the request, retrieves the requested web page, and prepares an HTTP response. (This is usually the only latency most SWE&#39;s think about and control!)</li>
+<li><strong>HTTP Response</strong>: The server sends the HTTP response back to the client, which includes the requested web page content.</li>
+<li><strong>TCP Teardown</strong>: After the data transfer is complete, the client and server close the TCP connection using a four-way handshake:</li>
+</ol>
+<ul>
+<li><strong>FIN</strong>: The client sends a FIN (finish) packet to the server to terminate the connection.</li>
+<li><strong>ACK</strong>: The server acknowledges the FIN packet with an ACK.</li>
+<li><strong>FIN</strong>: The server sends a FIN packet to the client to terminate its side of the connection.</li>
+<li><strong>ACK</strong>: The client acknowledges the server&#39;s FIN packet with an ACK.</li>
+</ul>
+<blockquote>
+<p>It&#39;s less common recently in BigTech, but it used to be a popular interview question to ask candidates to dive into the details of &quot;what happens when you type (e.g.) hellointerview.com into your browser and press enter?&quot;. Details like these aren&#39;t typically a part of a system design interview but it&#39;s helpful to understand the basics of networking. It may save you some headaches on the job!</p>
+</blockquote>
+<p>While the specific details of TCP handshakes and teardowns might seem too esoteric to apply to interviews, there&#39;s a few things to observe which we&#39;ll build upon:</p>
+<p>First, as an application developer we are able to simplify our mental models dramatically. The application can take for granted that the data is transmitted with a degree of reliability and ordering: the TCP layer ensures that the data is delivered correctly and in order, and will provide a response to the application if it doesn&#39;t arrive. We also never have to concern ourselves with finding a specific server in the world and driving a pulse train of electrons to get there. With DNS, we can look up the IP address, and with IP the various networking hardware between us, our ISP, backbone providers, etc. can route the data to the destination. Nice!</p>
+<p>Second, while we have one conceptual &quot;request&quot; and &quot;response&quot; here, there were many more packets and requests exchanged between servers to make it happen. All of these introduce latency that we can ignore ... until we can&#39;t. The higher in the stack we go, the more latency and processing required. This is relevant for our load balancer discussion shortly!</p>
+<p>Finally note that the connection between the client and server is a <strong>state</strong> that both the client and server must maintain. Unless we use features like HTTP keep-alive or HTTP/2 multiplexing, we need to repeat this connection setup process for every request - a potentially significant overhead. This will become important for designing systems which need persistent connections, like those handling <a href="https://www.hellointerview.com/learn/system-design/deep-dives/realtime-updates">Realtime Updates</a>.</p>
+<h2 id="network-layer-protocols">🏗️ Network Layer Protocols</h2>
+<p>The first layer in our journey are the network layer protocols. This layer is dominated by the IP protocol, which is responsible for routing and addressing. In a system, nodes are assigned IPs usually by a <a href="https://en.wikipedia.org/wiki/Dynamic_Host_Configuration_Protocol">DHCP server</a> when they boot up. These IP addresses are arbitrary and only mean something in as much as we tell people about them. If I want to, I can create a private network with my servers and give them any IP address I want, but if you want internet traffic to be able to find them you&#39;ll need to use IP addresses that are routable and allocated by a <a href="https://en.wikipedia.org/wiki/Regional_Internet_Registry">RIR</a>.</p>
+<p>These assigned IP addresses are called <a href="https://en.wikipedia.org/wiki/Public_IP_address">public IPs</a> and are used to identify devices on the internet. The most important thing about them is that internet routing infrastructure is optimized to route traffic between public IPs and knows where they are. Any address starting with 17 (e.g. 17.0.0.0) is part of Apple — the backbone of the internet knows that when you want to send a packet to these addresses, you need to send it to their routers.</p>
+<p>There&#39;s a lot more to cover in internet routing but it&#39;s not going to be important for our purposes so we&#39;ll keep it simple and move up the stack to our next layer: the transport layer.</p>
+<h2 id="transport-layer-protocols">🚦 Transport Layer Protocols</h2>
+<p>The transport layer is where we establish end-to-end communication between applications. They give us some guarantees instead of handing us a jumbled mess of packets. The three primary protocols at this layer are TCP, UDP, and QUIC, each with distinct characteristics that make them suitable for different use cases.</p>
+<p>For most system design interviews, the real choice you&#39;ll be faced with is <strong>between TCP and UDP</strong>. QUIC is a new protocol that aims to provide some of the same benefits of TCP with some modernization and performance benefits. While QUIC is becoming more popular, it&#39;s still a relatively new protocol and not yet ubiquitous - for our purposes we&#39;ll consider it a better version of TCP but without the same broad baseline of adoption.</p>
+<blockquote>
+<p>Some performance-oriented interviewers will be impressed by your knowledge of modern protocols like QUIC and HTTP/3, but most system design interviewers will want you to spend your time elsewhere in the design!</p>
+</blockquote>
+<h3 id="udp-fast-but-unreliable">UDP: Fast but Unreliable</h3>
+<p>User Datagram Protocol (UDP) is the machinegun of protocols. It offers few features on top of IP but is very fast. <strong>Spray and pray</strong> is the right way to think about this. It provides a simpler, connectionless service with no guarantees of delivery, ordering, or duplicate protection.</p>
+<p>If you write an application that receives UDP datagrams, you&#39;ll be able to see where they came from (i.e. the source IP address and port) and where they&#39;re going (i.e. the destination IP address and port). But that&#39;s it! The rest is a binary blob.</p>
+<h4 id="key-characteristics-of-udp-include">Key characteristics of UDP include:</h4>
+<ol>
+<li><strong>Connectionless</strong>: No handshake or connection setup</li>
+<li><strong>No guarantee of delivery</strong>: Packets may be lost without notification</li>
+<li><strong>No ordering</strong>: Packets may arrive in a different order than sent</li>
+<li><strong>Lower latency</strong>: Less overhead means faster transmission</li>
+</ol>
+<p>No setup sounds great but 2 and 3 kinda suck, so why would you want to use UDP?</p>
+<p>UDP is perfect for applications where <strong>speed is more important than reliability</strong>, such as live video streaming, online gaming, VoIP, and DNS lookups. In these cases the application or client is equipped to handle the occasional packet loss or out of order packet. For VOIP as an example, the client might just drop the occasional packet leading to a hiccup in the audio but overall the conversation is still intelligible. This is vastly preferable to retransmitting those lost packets and clogging up the network with ACKs.</p>
+<blockquote>
+<p>Browsers don&#39;t have widespread support for UDP yet outside of WebRTC (we&#39;ll get into it). If you&#39;re thinking about a design which could use UDP (like the spamming of hearts and reactions in Facebook Live Comments ), think about what you&#39;ll do for your browser-based users. It might be that your app-based users get a real-time UDP stream of reactions while browser-based users a slower, batched HTTP stream which you spread out over time in the UI.</p>
+</blockquote>
+<h3 id="tcp-reliable-but-with-overhead">TCP: Reliable but with Overhead</h3>
+<p>Transmission Control Protocol (TCP) is the workhorse of the internet. It provides reliable, ordered, and error-checked delivery of data. It establishes a connection through a three-way handshake (we saw this illustrated above with the HTTP example) and maintains that connection throughout the communication session.</p>
+<p>This connection is called a &quot;stream&quot; and is a <strong>stateful connection</strong> between the client and server — it also gives us a basis to talk about ordering: two messages sent in the same stream/connection will arrive in the same order. TCP will ensure that recipients of messages acknowledge their receipt and, if they don&#39;t, will retransmit the message until it is acknowledged.</p>
+<h4 id="key-characteristics-of-tcp">Key Characteristics of TCP</h4>
+<ol>
+<li><strong>Connection-oriented</strong>: Establishes a dedicated connection before data transfer</li>
+<li><strong>Reliable delivery</strong>: Guarantees that data arrives in order and without errors</li>
+<li><strong>Flow control</strong>: Prevents overwhelming receivers with too much data</li>
+<li><strong>Congestion control</strong>: Adapts to network congestion to prevent collapse</li>
+</ol>
+<p>TCP is ideal for applications where data integrity is critical — that is, <strong>basically everything where UDP is not a good fit</strong>.</p>
+<h3 id="when-to-choose-each-protocol">When to Choose Each Protocol</h3>
+<p>In system design interviews, most interviewers will expect you&#39;re using TCP by default — it often doesn&#39;t need to be directly mentioned. That&#39;s good because that&#39;s also our recommendation!</p>
+<p>But you&#39;ll be able to earn extra points if you can make the case for a UDP application and not bungle the details. So the question you should be asking yourself is whether UDP is a better fit for your use-case.</p>
+<p>You might choose <strong>UDP</strong> when:</p>
+<ul>
+<li>Low latency is critical (real-time applications, gaming)</li>
+<li>Some data loss is acceptable (media streaming)</li>
+<li>You&#39;re handling high-volume telemetry or logs where occasional loss is acceptable</li>
+<li>You don&#39;t need to support web browsers (or you have an alternative for that client)</li>
+</ul>
+<blockquote>
+<p>Modern applications often use both protocols. For example, a web-based video conferencing app might use TCP/HTTP for signaling and authentication but UDP/WebRTC for the actual audio/video streams.</p>
+</blockquote>
+<h4 id="tcp-vs-udp-comparison">TCP vs UDP Comparison</h4>
+<div class="tbl-wrap"><table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>UDP</th>
+<th>TCP</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Connection</td>
+<td>Connectionless</td>
+<td>Connection-oriented</td>
+</tr>
+<tr>
+<td>Reliability</td>
+<td>Best-effort delivery</td>
+<td>Guaranteed delivery</td>
+</tr>
+<tr>
+<td>Ordering</td>
+<td>No ordering guarantees</td>
+<td>Maintains order</td>
+</tr>
+<tr>
+<td>Flow Control</td>
+<td>No</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Congestion Control</td>
+<td>No</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Header Size</td>
+<td>8 bytes</td>
+<td>20-60 bytes</td>
+</tr>
+<tr>
+<td>Speed</td>
+<td>Faster</td>
+<td>Slower due to overhead</td>
+</tr>
+<tr>
+<td>Use Cases</td>
+<td>Streaming, gaming, VoIP</td>
+<td>Everything Else</td>
+</tr>
+</tbody></table></div>
+<h2 id="application-layer-protocols">🔌 Application Layer Protocols</h2>
+<p>The application layer is where most developers spend their time. These protocols define how applications communicate and are built on top of the transport layer protocols we just discussed.</p>
+<blockquote>
+<p>Typically the application layer is processed in &quot;User Space&quot; whereas layers beneath it are processed in the OS kernel in &quot;Kernel Space&quot;. This means that the application layer is more flexible and can be more easily modified than lower layers, whereas lower layers are difficult to change but can be very efficient.</p>
+</blockquote>
+<h3 id="httphttps-the-webs-foundation">HTTP/HTTPS: The Web&#39;s Foundation</h3>
+<p>Hypertext Transfer Protocol (HTTP) is the de-facto standard for data communication on the web. It&#39;s a request-response protocol where clients send requests to servers, and servers respond with the requested data.</p>
+<p>HTTP is a stateless protocol, meaning that each request is independent and the server doesn&#39;t need to maintain any information about previous requests. This is generally a good thing. In system design you&#39;ll want to minimize the surface area of your system that needs to be stateful where possible. Most simple HTTP servers can be described as a function of the request parameters — they&#39;re stateless!</p>
+<p>Here&#39;s a simple HTTP request/response. You can actually open up a TCP connection and send an HTTP request/response by hand with <a href="https://en.wikipedia.org/wiki/Netcat"><code>netcat</code></a> (<code>nc</code> on the command line) if you&#39;d like!</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/CoreConcepts/assets/H1gTar0isNJz.1pa8cxsbnoo8a.svg" alt="Simple HTTP Request/Response" loading="lazy"><figcaption>Simple HTTP Request/Response</figcaption></figure></p>
+<p>You&#39;ll see a few key concepts:</p>
+<ol>
+<li><strong>Request methods</strong>: GET, POST, PUT, DELETE, etc.</li>
+<li><strong>Status codes</strong>: 200 OK, 404 Not Found, 500 Server Error, etc.</li>
+<li><strong>Headers</strong>: Metadata about the request or response</li>
+<li><strong>Body</strong>: The actual content being transferred</li>
+</ol>
+<p>The HTTP request methods and status codes are well-defined and standardized (think of them like enums). It&#39;s good to know some of the common ones, but most interviewers aren&#39;t going to get into this level of detail except if you&#39;re using a RESTful API.</p>
+<ul>
+<li><p><code>GET</code>: Request data from the server. GET requests should be idempotent and don&#39;t have a body.</p>
+</li>
+<li><p><code>POST</code>: Send data to the server.</p>
+</li>
+<li><p><code>PUT</code>: Update data on the server.</p>
+</li>
+<li><p><code>PATCH</code>: Update a resource partially.</p>
+</li>
+<li><p><code>DELETE</code>: Delete data from the server. DELETE requests should be idempotent.</p>
+</li>
+<li><p>Success (2xx)</p>
+<ul>
+<li><code>200 OK</code>: The request was successful</li>
+<li><code>201 Created</code>: The request was successful and a new resource was created</li>
+</ul>
+</li>
+<li><p>Moved (3xx)</p>
+<ul>
+<li><code>302 Found</code>: The requested resource has been moved temporarily</li>
+<li><code>301 Moved Permanently</code>: The requested resource has been moved permanently</li>
+</ul>
+</li>
+<li><p>Client Error (4xx)</p>
+<ul>
+<li><code>404 Not Found</code>: The requested resource was not found</li>
+<li><code>401 Unauthorized</code>: The request requires authentication</li>
+<li><code>403 Forbidden</code>: The server understood the request but refuses to authorize it</li>
+<li><code>429 Too Many Requests</code>: The client has sent too many requests in a given amount of time</li>
+</ul>
+</li>
+<li><p>Server Error (5xx)</p>
+<ul>
+<li><code>500 Server Error</code>: The server encountered an error</li>
+<li><code>502 Bad Gateway</code>: The server received an invalid response from the upstream server</li>
+</ul>
+</li>
+</ul>
+<p>The headers are much more flexible (think of them like key/value pairs). This flexibility demonstrates the pragmatic design philosophy that underlies much of the HTTP spec.</p>
+<blockquote>
+<p>HTTP headers are a great example of how to design an interface that is flexible to unknown future use-cases and provides a good lesson for API design. Content negotiation is a perfect case study. The HTTP Accepts-Encoding header as an example provides clients a way to indicate they can handle different types of content encoding. This allows servers to provide (e.g.) gzip or br (brotli) encoded responses if they&#39;re available. Servers can then respond with the most efficient encoding for that client with Content-Encoding: X providing both backward compatibility and graceful degradation.</p>
+</blockquote>
+<p>HTTPS adds a security layer (TLS/SSL) to encrypt communications, protecting against eavesdropping and man-in-the-middle attacks. If you&#39;re building a public website you&#39;re going to be using HTTPS without exception. Generally speaking this means that the contents of your HTTP requests and responses are encrypted and safe in transit.</p>
+<blockquote>
+<p>While the contents of your HTTPS requests and responses are encrypted, they aren&#39;t guaranteed to be generated by your client! Your API should never trust the contents of the request body without validating it. A common mistake is to include the user&#39;s ID in the request body and use it to make a database call. If an attacker can change the request body, they can change the user ID and read arbitrary user data. Ouch! This doesn&#39;t mean you can&#39;t include user IDs in your requests. It just means you need to be able to validate them on the server and your API shouldn&#39;t ask for anything you can&#39;t trust.</p>
+</blockquote>
+<p>That&#39;s HTTP in a nutshell! Now let&#39;s talk about how to use it to build APIs.</p>
+<h3 id="rest-simple-and-flexible">REST: Simple and Flexible</h3>
+<p>While HTTP can be used directly to build <em>websites</em>, oftentimes system designs are concerned with the communication between <em>services</em> via APIs. For creating these APIs, we have three main paradigms: REST, GraphQL, and gRPC.</p>
+<p>REST is the most common API paradigm you&#39;ll use in system design interviews. It&#39;s a simple and flexible way to create APIs that are easy to understand and use. The core principle behind REST is that clients are often performing simple operations against <strong>resources</strong> (think of them like database tables or files on a server).</p>
+<p>In RESTful API design, the primary challenge is to model your resources and the operations you can perform on them. RESTful API&#39;s take advantage of the HTTP methods or verbs together with some opinionated conventions about the paths and the body of the request. They often use JSON to represent the resources in both the request and response bodies — although it&#39;s not strictly required.</p>
+<blockquote>
+<p>If you&#39;ve followed our Delivery Framework , your Core Entities will oftentimes map directly to the resources in your API. Bonus!</p>
+</blockquote>
+<p>A simple RESTful API might look like this (where <code>User</code> is a JSON object representing a user):</p>
+<pre><code>GET /users/{id} -&gt; User
+</code></pre>
+<p>Here we&#39;re using the HTTP method &quot;GET&quot; to indicate that we&#39;re requesting a resource. The <code>{id}</code> is a placeholder for the resource ID, in this case the user ID of the user we want to retrieve.</p>
+<p>When we want to update that user, we can use the HTTP method &quot;PUT&quot; to indicate that we&#39;re updating a pre-existing resource.</p>
+<pre><code>PUT /users/{id} -&gt; User
+{
+  &quot;username&quot;: &quot;john.doe&quot;,
+  &quot;email&quot;: &quot;john.doe@example.com&quot;
+}
+</code></pre>
+<p>We can also create new resources by using the HTTP method &quot;POST&quot;. We&#39;ll include the body the content of the resource we want to create. Note that I&#39;m not specifying an ID here because the server will assign one.</p>
+<pre><code>POST /users -&gt; User
+{
+  &quot;username&quot;: &quot;stefan.mai&quot;,
+  &quot;email&quot;: &quot;stefan@hellointerview.com&quot;
+}
+</code></pre>
+<p>Finally, resources can be nested to represent relationships between resources. For example, a user might have many posts, so we can represent that relationship by nesting the posts under the user resource.</p>
+<pre><code>GET /users/{id}/posts -&gt; [Post]
+</code></pre>
+<blockquote>
+<p>Many engineers often think in terms of methods like updateUser or startGame . These are operations, not resources, so they&#39;re not RESTful. In REST, we want to think in terms of resources and the operations you can perform on them. So our updateUser might be PUT /users/{id} and our startGame might be PATCH /games with { &quot;status&quot;: &quot;started&quot; } .</p>
+</blockquote>
+<p>Overall REST is very flexible for a wide variety of use-cases and applications. <a href="https://www.hellointerview.com/learn/system-design/deep-dives/elasticsearch">ElasticSearch</a> uses it to manage documents, configure indexes, and more. Check out that deep dive if you want to see a great example of a RESTful API.</p>
+<p>REST is <a href="https://medium.com/@i.gorton/scaling-up-rest-versus-grpc-benchmark-tests-551f73ed88d4">not going to be the most performant solution</a> for very high throughput services, and generally speaking JSON is a pretty inefficient format for serializing and deserializing data.</p>
+<p>That said, most applications aren&#39;t going to be bottlenecked by request serialization. Like TCP, <strong>REST is where we&#39;d suggest you default for your interviews</strong>. It&#39;s well-understood and a good baseline for building scalable systems. You should reach for GraphQL, gRPC, SSE, or WebSockets if you have specific needs that REST can&#39;t meet. For practical REST API design patterns, see our <a href="https://www.hellointerview.com/learn/system-design/core-concepts/api-design">API Design</a> guide.</p>
+<h3 id="graphql-flexible-data-fetching">GraphQL: Flexible Data Fetching</h3>
+<p>GraphQL is a more recent API paradigm (open-sourced circa 2015 by Facebook) that allows clients to request exactly the data they need.</p>
+<p>Here&#39;s the problem GraphQL solves: Frequently teams and systems are organized into frontend and backend. As an example, the frontend might be a mobile app and the backend a database-based API.</p>
+<p>When the frontend team wants to display a new page, they can either (a) cobble together a bunch of different requests to backend endpoints (imagine querying 1 API for a list of users and making 10 API calls to get their details), (b) create huge aggregation APIs which are hard to maintain and slow to change, or (c) write brand new APIs for every new page they want to display. <em>None of these are particularly good solutions</em> but it&#39;s easy to run into them with a standard REST API.</p>
+<p>The problem with under-fetching is that you may need multiple requests and round trips. This adds overhead and latency to the page load.</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/CoreConcepts/assets/KXYfVUzeUMyb.0bu2-gaifwajx.svg" alt="Under-Fetching Example - Page requires a lot of API calls to render" loading="lazy"><figcaption>Under-Fetching Example - Page requires a lot of API calls to render</figcaption></figure></p>
+<p>Over-fetching is the opposite: when we pack way more than we need in an API response to guard ourselves against future use-cases that we don&#39;t have today. It means that APIs take a long time to load and return too much data.</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/CoreConcepts/assets/tjntWW1DLrY-.2jgeqs5x5-efz.svg" alt="Over-Fetching Example - Results take too long and have far more data than the frontend needs" loading="lazy"><figcaption>Over-Fetching Example - Results take too long and have far more data than the frontend needs</figcaption></figure></p>
+<p>And writing brand new APIs for every new page is a nightmare.</p>
+<p>GraphQL solves these problems by allowing the frontend team to flexibly query the backend for exactly the data they need. The backend can then respond with the data in the shape that the frontend needs it. This is a great fit for mobile apps and other use-cases where you want to reduce the amount of data transferred.</p>
+<p>Here&#39;s an example of a GraphQL query which fetches just the data the frontend needs for a sophisticated page which shows both users with their profiles and groups they&#39;re a member of.</p>
+<pre><code>query GetUsersWithProfilesAndGroups($limit: Int = 10, $offset: Int = 0) {
+  users(limit: $limit, offset: $offset) {
+    id
+    username
+    //...
+    
+    profile {
+      id
+      fullName
+      avatar
+      // ...
+    }
+    
+    groups {
+      id
+      name
+      description
+      // ...
+      
+      category {
+        id
+        name
+        icon
+      }
+    }
+    
+    status {
+      isActive
+      lastActiveAt
+    }
+  }
+  
+  _metadata {
+    totalCount
+    hasNextPage
+  }
+}
+</code></pre>
+<p>The graphQL code here is basically specifying which fields and nested objects we want to fetch. The backend can interpret this query and respond with just the data the frontend needs.</p>
+<p>In our example, instead of writing a bunch of different APIs, the frontend team can just write a single query to get the data they need and the backend can (in theory) respond with the data in the shape that the frontend needs it.</p>
+<h4 id="where-to-use-it">Where to Use It</h4>
+<p>GraphQL is a great fit for use-cases where the frontend team needs to iterate quickly and adjust. They can flexibly query the backend for exactly the data they need. On the other hand, execution of these GraphQL queries can be a source of latency and complexity for the backend — sometimes involving the same bespoke backend code that we&#39;re trying to avoid. In practice, GraphQL finds its sweet spot with complex clients and when multiple teams are making wide queries to overlapping data.</p>
+<p>For system design interviews specifically, the benefits of GraphQL are murky. In the interview you&#39;ll have a fixed set of requirements (not the moving targets of iterating on a mobile app or web frontend where GraphQL starts to shine). Additionally, the interviewer will frequently want to see how you optimize specific query patterns and while you can talk about custom resolvers — GraphQL is frequently just in the way.</p>
+<p>We recommend bringing up GraphQL in cases where the problem is clearly focused on flexibility (e.g. the interviewer tells us we need to be able to adapt our apps quickly to changing requirements) or when the requirements in the interview are deliberately uncertain. For more interview-focused GraphQL guidance, see our <a href="https://www.hellointerview.com/learn/system-design/core-concepts/api-design">API Design</a> article.</p>
+<h3 id="grpc-efficient-service-communication">gRPC: Efficient Service Communication</h3>
+<p>gRPC is a high-performance RPC (Remote Procedure Call) framework from Google (the &quot;g&quot;) that uses HTTP/2 and Protocol Buffers.</p>
+<p>Think of Protocol Buffers like JSON but with a more rigid schema that allows for better performance and more efficient serialization. Here&#39;s an example of a Protocol Buffer definition for a <code>User</code> resource:</p>
+<pre><code>message User {
+  string id = 1;
+  string name = 2;
+}
+</code></pre>
+<p>Instead of a chunky JSON object with embedded schema (40 bytes) ...</p>
+<pre><code>{
+  &quot;id&quot;: &quot;123&quot;,
+  &quot;name&quot;: &quot;John Doe&quot;
+}
+</code></pre>
+<p>... we have a binary encoding (15 bytes) of the same data with very skinny tags and variable length encoding of the strings. Less space and less CPU to parse!</p>
+<pre><code>0A 03 31 32 33 12 08 6A 6F 68 6E 20 64 6F 65
+</code></pre>
+<p>gRPC builds on this to provide service definitions. Here&#39;s an example of a gRPC service definition for a <code>UserService</code>:</p>
+<pre><code>message GetUserRequest {
+  string id = 1;
+}
+
+message GetUserResponse {
+  User user = 1;
+}
+
+service UserService {
+  rpc GetUser (GetUserRequest) returns (GetUserResponse);
+}
+</code></pre>
+<p>I probably don&#39;t need to explain the details of this to you!</p>
+<p>These definitions are compiled into a client and server stub which a wide variety of languages and frameworks can consume to build services and clients. gRPC includes a bunch of features relevant for operating microservice architectures at scale (it was invented by Google after all) like streaming, deadlines, client-side load balancing and more. But the most important thing to know is that it&#39;s a binary protocol that&#39;s faster and more efficient than JSON over HTTP.</p>
+<p>gRPC shines in microservices architectures where services need to communicate efficiently. Its strong typing helps catch errors at compile time rather than runtime, and its binary protocol is more efficient than JSON over HTTP (<a href="https://medium.com/@i.gorton/scaling-up-rest-versus-grpc-benchmark-tests-551f73ed88d4">some benchmarks show a factor of 10x throughput!</a>). Consider gRPC for internal service-to-service communication, especially when performance is critical or when latencies are dominated by the network rather than the work the server is doing.</p>
+<p>That said, you generally won&#39;t use gRPC for public-facing APIs, especially for clients you don&#39;t control, because it&#39;s a binary protocol and the tooling for working with it is less mature than simple JSON over HTTP. Having internal APIs using gRPC and external APIs using REST is a great way to get the benefits of a binary protocol without the complexity of a public-facing API. There are definitely engineers who would love it if gRPC was more widely adopted, but it&#39;s not there yet.</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/CoreConcepts/assets/QPaz7gvLzESP.1r3w08bh_nq7-.svg" alt="Example of Using gRPC for Internal APIs, and REST and HTTP for External" loading="lazy"><figcaption>Example of Using gRPC for Internal APIs, and REST and HTTP for External</figcaption></figure></p>
+<p>As such, <strong>we recommend using REST for public-facing APIs and leaving gRPC for internal service-to-service communication</strong> — especially if binary data is being exchanged or performance is critical. In many interviews, using REST both for internal and external APIs is fine and you can build from there depending on the needs of the problem and probes from your interviewer.</p>
+<blockquote>
+<p>Sometimes engineers think the point of a system design interview is to draw up an optimal solution to a problem on a whiteboard. But interviewers typically are trying to understand how you think through a problem and how you react to challenges and constraints you may not have seen before. Be wary of hyperoptimizing your RPC protocol choice before you&#39;ve handled other substantial bottlenecks in the problem. Premature optimization is the root of all evil!</p>
+</blockquote>
+<h3 id="server-sent-events-sse-real-time-push-communication">Server-Sent Events (SSE): Real-Time Push Communication</h3>
+<p>So far we&#39;ve been talking mostly about request/response style APIs, but many applications need to &quot;push&quot; data to clients in a more streaming fashion. While gRPC does support streaming, it&#39;s not ideal for external APIs due to limited support (e.g. no browsers support gRPC today). Server-Sent Events (SSE) is a spec defined on top of HTTP that allows a server to push many messages to the client over a single HTTP connection.</p>
+<p>Here&#39;s how to think of it: SSE is a nice hack on top of HTTP that <strong>allows a server to stream many messages, over time, in a single response from the server</strong>.</p>
+<p>With most HTTP APIs you&#39;d get a single, cohesive JSON blob as a response from the server that is processed once the whole thing has been received.</p>
+<pre><code>{
+  &quot;events&quot;: [
+    { &quot;id&quot;: 1, &quot;timestamp&quot;: &quot;2025-01-01T00:00:00Z&quot;, &quot;description&quot;: &quot;Event 1&quot; },
+    { &quot;id&quot;: 2, &quot;timestamp&quot;: &quot;2025-01-01T00:00:01Z&quot;, &quot;description&quot;: &quot;Event 2&quot; },
+    ...
+    { &quot;id&quot;: 100, &quot;timestamp&quot;: &quot;2025-01-01T00:00:10Z&quot;, &quot;description&quot;: &quot;Event 100&quot; }
+  ]
+}
+</code></pre>
+<p>Since we have to wait for the whole response to come in before we can process it, it&#39;s not much good for push notifications!</p>
+<p>On the other hand, with SSE, the server can push many messages as &quot;chunks&quot; in a single response from the server:</p>
+<pre><code>data: {&quot;id&quot;: 1, &quot;timestamp&quot;: &quot;2025-01-01T00:00:00Z&quot;, &quot;description&quot;: &quot;Event 1&quot;}
+data: {&quot;id&quot;: 2, &quot;timestamp&quot;: &quot;2025-01-01T00:00:01Z&quot;, &quot;description&quot;: &quot;Event 2&quot;}
+...
+data: {&quot;id&quot;: 100, &quot;timestamp&quot;: &quot;2025-01-01T00:00:10Z&quot;, &quot;description&quot;: &quot;Event 100&quot;}
+</code></pre>
+<p>Each line here is received as a separate message from the server. The client can then process each message as it comes in. It&#39;s still one big HTTP response (same TCP connection), but it comes in over many smaller packets and clients are expected to process each line of the body individually to allow them to react to the data as it comes in.</p>
+<p>Now with all good hacks, SSE comes with some acute limitations. We can&#39;t keep an SSE connection open for too long because the server (or the load balancer, or a middle box proxy) will close down the connection. So the SSE standard defines the behavior of an <code>EventSource</code> object that, once the connection is closed, will automatically reconnect with the ID of the last message received. Servers are expected to keep track of prior messages that may have been missed while the client was disconnected and resend them.</p>
+<p>In practice there are also some nasty, misbehaving networks that will batch up all SSE responses into a single response <a href="https://dev.to/miketalbot/server-sent-events-are-still-not-production-ready-after-a-decade-a-lesson-for-me-a-warning-for-you-2gie">making it behave a lot like what we&#39;re trying to avoid</a>. Tradeoffs!</p>
+<blockquote>
+<p>Most interviewers are not familiar with these limitations and will gladly let you assume they don&#39;t exist. But it&#39;s good to be aware of them because anyone who has actually implemented SSE has an enduring headache from these issues and will try to get a sense for whether you&#39;ve actually used it in practice.</p>
+</blockquote>
+<p>You&#39;ll find SSE useful in system design interviews in situations where you want clients to get notifications or events as soon as they happen. SSE is a great option for <a href="https://www.hellointerview.com/learn/system-design/problem-breakdowns/online-auction#3-how-can-we-ensure-that-the-system-displays-the-current-highest-bid-in-real-time">keeping bidders up-to-date on the current price of an auction</a>, for example.</p>
+<p>We touch on this pattern in greater detail in our <a href="https://www.hellointerview.com/learn/system-design/deep-dives/realtime-updates">Realtime Updates</a> deep dive, which also covers the server-side implications of an SSE implementation.</p>
+<h3 id="websockets-real-time-bidirectional-communication">WebSockets: Real-Time Bidirectional Communication</h3>
+<p>Now while SSE is a great way to push from the server to client, many applications need real-time bidirectional communication. And while gRPC does support streaming, it&#39;s still (broken record?) not ideal for external APIs due to limited support (e.g. no browsers support gRPC today). So what&#39;s an interview candidate to do?</p>
+<p>Enter WebSockets! WebSockets provide a persistent, TCP-style connection between client and server, allowing for real-time, bidirectional communication with broad support (including browsers). Unlike HTTP&#39;s request-response model, WebSockets enable servers to <strong>push</strong> data to clients without being prompted by a new request. Similarly clients can push data back to the server without the same wait.</p>
+<p>WebSockets are initiated via an HTTP &quot;upgrade&quot; protocol, which allows an existing TCP connection to change L7 protocols. This is super convenient because it means you can utilize some of the existing HTTP session information (e.g. cookies, headers, etc.) to your advantage.</p>
+<blockquote>
+<p>Just because clients can upgrade from HTTP to WebSocket doesn&#39;t mean that the infrastructure will support it. Every piece of infrastructure between the client and server will need to support WebSocket connections. If you&#39;ve ever implemented Websockets you&#39;ve probably hit a bunch of issues with firewalls, proxies, load balancers, and other infrastructure that don&#39;t support WebSocket connections.</p>
+</blockquote>
+<p>Here&#39;s how it works:</p>
+<ol>
+<li>Client initiates WebSocket handshake over HTTP (with a backing TCP connection)</li>
+<li>Connection upgrades to WebSocket protocol, WebSocket takes over the TCP connection</li>
+<li>Both client and server can send binary messages to each other over the connection</li>
+<li>The connection stays open until explicitly closed</li>
+</ol>
+<p>WebSockets don&#39;t dictate an application protocol, you effectively have a channel where you can send binary packets to the server from the client and vice versa. This means you&#39;ll need some way of defining what it is your client and server are exchanging. For many WebSocket applications, simple serialized JSON messages are a great option! This also gives you a chance to define the API of your service for your design:</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/CoreConcepts/assets/DElga39lrtz-.1cd_jfppgwy_q.svg" alt="WebSocket API Example" loading="lazy"><figcaption>WebSocket API Example</figcaption></figure></p>
+<p>WebSockets come up in system design interviews when you need <strong>high-frequency</strong>, <strong>persistent</strong>, <strong>bi-directional</strong> communication between client and server. Think real-time applications, games, and other use-cases where you need to send and receive messages as soon as they happen.</p>
+<p>For applications where either you just need to be able to send requests and receive responses, or situations where you can make due with the push notifications provided by SSE, WebSockets are overkill.</p>
+<blockquote>
+<p>In system design interviews, launching into a WebSocket implementation without justifying why they are needed is a great way to get a &quot;thumbs down&quot; from your interviewer. WebSockets are powerful, but the infra required to support them can be expensive and the overhead of stateful connections (especially at scale) will require significant accommodations in your design. Hold off unless you really need them!</p>
+</blockquote>
+<h3 id="webrtc-peer-to-peer-communication">WebRTC: Peer-to-Peer Communication</h3>
+<p>The last protocol we&#39;ll cover is the most unique. WebRTC enables direct peer-to-peer communication between browsers without requiring an intermediary server for the data exchange. WebRTC can be perfect for collaborative applications like document editors and is especially useful for video/audio calling and conferencing applications. Oh, and it&#39;s the only application-level protocol we&#39;ll cover that uses UDP!</p>
+<p>The WebRTC spec is comprised of several pieces of infra and protocols that are necessary to establish a peer-to-peer connection between browsers. From a networking perspective, peer-to-peer connections are more complex than the client-server models we&#39;ve been discussing so far because most clients don&#39;t allow inbound connections for security reasons.</p>
+<p>With WebRTC, clients talk to a central &quot;signaling server&quot; which keeps track of which peers are available together with their connection information. Once a client has the connection information for another peer, they can try to establish a direct connection without going through any intermediary servers.</p>
+<p>In practice, most clients don&#39;t allow inbound connections for security reasons and the majority of users are behind a NAT (network address translation) device which keeps them from being connected to directly. So if we stopped there, most peers wouldn&#39;t be able to &quot;speak&quot; to each other.</p>
+<p>The WebRTC standard includes two methods to work around these restrictions:</p>
+<ul>
+<li><strong>STUN</strong>: &quot;Session Traversal Utilities for NAT&quot; is a protocol and a set of techniques like &quot;hole punching&quot; which allows peers to establish publically routable addresses and ports. I won&#39;t go into details here, but as hacky as it sounds it&#39;s a standard way to deal with NAT traversal and it involves repeatedly creating open ports and sharing them via the signaling server with peers.</li>
+<li><strong>TURN</strong>: &quot;Traversal Using Relays around NAT&quot; is effectively a relay service, a way to bounce requests through a central server which can then be routed to the appropriate peer.</li>
+</ul>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/CoreConcepts/assets/L9DTCrHV_4vT.3ykrwp-md8inq.svg" alt="WebRTC Setup" loading="lazy"><figcaption>WebRTC Setup</figcaption></figure></p>
+<p>There&#39;s effectively 4 steps to a WebRTC connection:</p>
+<ol>
+<li>Clients connect to a central signaling server to learn about their peers.</li>
+<li>Clients reach out to a STUN server to get their public IP address and port.</li>
+<li>Clients share this information with each other via the signaling server.</li>
+<li>Clients establish a direct peer-to-peer connection and start sending data.</li>
+</ol>
+<p>This is the happy case! In reality, sometimes these connections fail and you need to have fallbacks like our TURN server.</p>
+<p>WebRTC is ideal for audio/video calling and conferencing applications. It can also occasionally be appropriate for collaborative applications like document editors, especially if they need to scale to many clients.</p>
+<p>In practice, most collaborative editors <em>don&#39;t</em> require scaling to thousands of clients. Additionally, you often need a central server anyways to store the document and coordinate between clients. That&#39;s why we&#39;re using Websockets in our <a href="https://www.hellointerview.com/learn/system-design/problem-breakdowns/google-docs">Google Docs problem breakdown</a>. But there is an alternative to use WebRTC and CRDTs (Conflict-free Replicated Data Types) to achieve a truly peer-to-peer experience.</p>
+<p>For interviews, we suggest sticking to WebRTC for video/audio calling and conferencing applications.</p>
+<blockquote>
+<p>WebRTC is an absolute pain to get right and even the best implementations still suffer connection losses. It truly is a niche solution. In interviews, I&#39;ve seen more candidates go wildly off trail trying to design peer-to-peer systems using WebRTC than I have seen them successfully implement them. Most problems don&#39;t require peer-to-peer connections and it&#39;s easy to try to wrap a solution around a problem that doesn&#39;t actually need it. If you stick to only using WebRTC for video/audio calling and conferencing, you&#39;ll be in good shape.</p>
+</blockquote>
+<p>There&#39;s way more to cover around WebRTC than is appropriate for this guide <em>or</em> your interview so we&#39;ll stop here, but I hope this gives you a good starting point for thinking about this protocol!</p>
+<h2 id="load-balancing">📈 Load Balancing</h2>
+<p>And with that we&#39;ve covered the top of our stack and all the relevant protocols you&#39;ll see in System Design interviews. But how do we <strong>scale</strong> our designs? Of course there are networking implications here!</p>
+<p>For scaling, we have two options: bigger servers (vertical scaling) or more servers (horizontal scaling).</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/CoreConcepts/assets/gz2YPLIbmlVE.2t1r4_aqc-l8r.svg" alt="Vertical vs Horizontal Scaling" loading="lazy"><figcaption>Vertical vs Horizontal Scaling</figcaption></figure></p>
+<p>My personal preference is to employ vertical scaling wherever possible. Modern hardware is incredibly powerful and the days of requiring thousands of tiny servers when a few larger ones can handle the load are over (read more about modern hardware capabilities in our <a href="https://www.hellointerview.com/learn/system-design/deep-dives/numbers-to-know">Numbers to Know</a> deep dive).</p>
+<p>That said, the reality for <em>interviews</em> is that <strong>the most common pattern for scaling you&#39;ll see is horizontal scaling</strong>: we&#39;re going to add more servers to handle the load. But just adding boxes to our whiteboard won&#39;t help if we don&#39;t tell our clients which server to talk to.</p>
+<p>Enter: Load Balancing.</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/CoreConcepts/assets/A2ooJ0ht9qtM.18tch993vobcn.svg" alt="How do we route our traffic?" loading="lazy"><figcaption>How do we route our traffic?</figcaption></figure></p>
+<h3 id="types-of-load-balancing">Types of Load Balancing</h3>
+<p>We need to spread the incoming requests (load) by deciding which server should handle each request. There&#39;s two ways to handle load balancing: on the client side or on the server side. Both have their pros and cons.</p>
+<h4 id="client-side-load-balancing">Client-Side Load Balancing</h4>
+<p>With client-side load balancing, the client itself decides which server to talk to. Usually this involves the client making a request to a service registry or directory which contains the list of available servers. Then the client makes a request to one of those servers directly. The client will need to periodically poll or be pushed updates when things change.</p>
+<p>Client-side load balancing can be very fast and efficient. Since the client is making the decision, it can choose the fastest server without any additional latency. Instead of using a full network hop to get routed to the right server on every request, we only need to (periodically) sync our list of servers with the server registry.</p>
+<p>A great example of this is Redis Cluster (read more in our <a href="https://www.hellointerview.com/learn/system-design/deep-dives/redis">Redis deep dive</a>). Redis cluster nodes maintain a gossip protocol between each other to share information about the cluster: which nodes are present, their status, etc. Every node knows about every other node!</p>
+<p>In order to connect to a Redis Cluster, the client will make a request to any of the nodes in the cluster and ask about both the nodes participating in the cluster and the shards of data they contain. When it comes time to read or write data, the client hashes the key to determine which shard to send the request to, then uses the locally retrieved node information to decide which node to talk to. If you send a request to the wrong node, Redis will helpfully send you a <code>MOVED</code> response to let you know you got the wrong node.</p>
+<p>Another example of &quot;client-side&quot; load balancing is DNS. When you make a request to a domain name like <code>example.com</code>, your DNS resolver will return a rotated list of IP addresses for the domain. Each new request will get a different ordering of IP addresses (or even a different set entirely).</p>
+<p>Because each client gets a different ordering of IP addresses, they&#39;re also going to hit different servers. The DNS resolver is effectively doing client-side load balancing for us!</p>
+<blockquote>
+<p>This behavior of DNS is also how you avoid a single point of failure with a load balancer! You set up two load balancers (in different data centers or regions, to be safe) and use DNS to rotate between them. If one goes down, clients will automatically start trying the other one.</p>
+</blockquote>
+<p>Client-side load balancing can work great in two different scenarios: either (1) we have a small number of clients that we control, (e.g. the Redis Cluster client, or gRPC&#39;s client-side load balancing for internal services) or (2) we have a large number of clients but we can tolerate slow updates (e.g. DNS).</p>
+<p>If we have a small number of clients that we control, getting them updates when we add or remove servers is easy! There&#39;s a lot of mechanisms to do this.</p>
+<p>In the case of a large number of clients, the reason we care about the latency of updates is because the amount of time it takes will scale with the number of clients we have to notify. In DNS&#39; case, entries have a TTL (time to live) which is the amount of time the entry is valid for. This allows far-flung DNS servers to cache entries for <em>their own</em> clients, but means that our updates cannot be faster than the TTL.</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/CoreConcepts/assets/pc4frD_W9Vme.17otsj8h5_z62.svg" alt="When to Use Client-Side Load Balancing" loading="lazy"><figcaption>When to Use Client-Side Load Balancing</figcaption></figure></p>
+<p>In an interview setting, client-side load balancing works remarkably well for internal microservices (it&#39;s actually built in to gRPC). Many interviewers actually aren&#39;t asking the details behind the lines between different services on your high-level design, but if you&#39;re asked more details about it you should definitely mention client-side load balancing!</p>
+<p>For all other use-cases, we&#39;ll need a dedicated load balancer.</p>
+<h4 id="dedicated-load-balancers">Dedicated Load Balancers</h4>
+<p>We may not want our clients to have to refresh their list of servers or even know about the existence of multiple servers on the backend. Or we might have a large number of clients that we don&#39;t control but need to retrieve updates quickly.</p>
+<p>In these cases, we&#39;ll use a dedicated load balancer: a server or hardware device that sits between the client and the backend servers and makes decisions about which server to send the request to.</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/CoreConcepts/assets/km3Yj8m6-r4B.2hzl4s-a2f4gk.svg" alt="Dedicated Load Balancer" loading="lazy"><figcaption>Dedicated Load Balancer</figcaption></figure></p>
+<p>These load balancers can operate at different layers of the protocol stack and which you choose will depend, in part, on what your application needs.</p>
+<p>Having a dedicated load balancer implies an additional hop in each request: first to the load balancer, then to the server which needs to serve the request. But in exchange we get very fast updates to our list of servers and fine-grained control over how we route requests.</p>
+<p>Layer 4 load balancers operate at the transport layer (TCP/UDP). They make routing decisions based on network information like IP addresses and ports, <strong>without looking at the actual content of the packets</strong>. The effect of a L4 load balancer is as-if you randomly selected a backend server and assumed that TCP connections were established directly between the client and that server.</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/CoreConcepts/assets/-blLoTPnJ-PE.3k_db_b7zdzpv.svg" alt="Simple HTTP Request with L4 Load Balancer" loading="lazy"><figcaption>Simple HTTP Request with L4 Load Balancer</figcaption></figure></p>
+<p>Layer 4 load balancers have some key characteristics, they ...</p>
+<ul>
+<li>Maintain persistent TCP connections between client and server.</li>
+<li>Are fast and efficient due to minimal packet inspection.</li>
+<li>Cannot make routing decisions based on application data.</li>
+<li>Are typically used when raw performance is the priority.</li>
+</ul>
+<p>For example, if a client establishes a TCP connection through an L4 load balancer, that same server will handle all subsequent requests within that TCP session. This makes L4 load balancers particularly well-suited for protocols that require persistent connections, like WebSocket connections. At a conceptual level, <em>it&#39;s as if we have a direct TCP connection between client and server which we can use to communicate at higher layers</em>.</p>
+<p>L4 load balancers are great for WebSocket connections and other protocols that <strong>require persistent connections</strong>. They&#39;re also great for high-performance applications that don&#39;t require much application-level processing.</p>
+<p>If you&#39;re using websockets in your interview, you probably want to use an L4 load balancer. For everything else, a Layer 7 load balancer is probably a better fit.</p>
+<p>Layer 7 load balancers operate at the application layer, understanding protocols like HTTP. They can <strong>examine the actual content of each request and make more intelligent routing decisions</strong>.</p>
+<p>Unlike Layer 4 load balancers, the connection-level details are not that relevant. Layer 7 load balancers receive an application-layer request (like an HTTP GET) and forward <em>that request</em> to the appropriate backend server.</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/CoreConcepts/assets/Lgk4gsoL2L_6.2as4camcs-sd7.svg" alt="Simple HTTP Request with L7 Load Balancer" loading="lazy"><figcaption>Simple HTTP Request with L7 Load Balancer</figcaption></figure></p>
+<p>Layer 7 load balancers have some key characteristics, they ...</p>
+<ul>
+<li>Terminate incoming connections and create new ones to backend servers.</li>
+<li>Can route based on request content (URL, headers, cookies, etc.).</li>
+<li>More CPU-intensive due to packet inspection.</li>
+<li>Provide more flexibility and features.</li>
+<li>Better suited for HTTP-based traffic.</li>
+</ul>
+<p>For example, an L7 load balancer could route all API requests to one set of servers while sending web page requests to another (providing similar functionality to an <a href="https://www.hellointerview.com/learn/system-design/deep-dives/api-gateway">API Gateway</a>), or it could ensure that all requests from a specific user go to the same server based on a cookie. The underlying TCP connection that&#39;s made to your server via an L7 load balancer is not all that relevant! It&#39;s just a way for the load balancer to forward L7 requests, like HTTP, to your server.</p>
+<p>While L7 load balancers can help us to not have to worry about lower-level details like TCP connections, we aren&#39;t able to ignore the connection-level reality if we want persistent connections to consistent servers.</p>
+<p>Layer 7 load balancers are great for HTTP-based traffic which is going to cover all of the protocols we&#39;ve discussed so far except for Websockets.</p>
+<blockquote>
+<p>The choice between L4 and L7 load balancers often comes up in system design interviews when discussing real-time features. There are some L7 load balancers which explicitly support connection-oriented protocols like WebSockets, but generally speaking L4 load balancers are better for WebSocket connections, while L7 load balancers offer more flexibility for HTTP-based solutions like long polling.</p>
+</blockquote>
+<p>While load balancers play a key role in distributing load and traffic, they are also responsible for monitoring the health of backend servers. If a server loses power or crashes, the load balancer stops routing traffic to it until it recovers.</p>
+<p>This automatic failover capability is what makes load balancers essential for high availability. They can detect and route around failures without user intervention.</p>
+<p>To do this, load balancers use <strong>health checks</strong>. Health checks are a way for the load balancer to determine if a server is healthy. They can be configured to check the server at different intervals and with different protocols.</p>
+<p>Health checks can be configured to check the server at different intervals and with different protocols. A common approach is to use a TCP health check, which is a simple and efficient way to check if a server is accepting new connections. A Layer 7 health check might make an HTTP request to the server and make sure the response is success (e.g. a 200 status code vs a 500 indicating internal failures or no response indicating a crash).</p>
+<p>The other benefit of a dedicated load balancer is that we have more choices over the algorithm used to distribute traffic.</p>
+<p>Several options are available with most load balancers:</p>
+<ul>
+<li><strong>Round Robin</strong>: Requests are distributed sequentially across servers</li>
+<li><strong>Random</strong>: Requests are distributed randomly across servers</li>
+<li><strong>Least Connections</strong>: Requests go to the server with the fewest active connections</li>
+<li><strong>Least Response Time</strong>: Requests go to the server with the fastest response time</li>
+<li><strong>IP Hash</strong>: Client IP determines which server receives the request (useful for session persistence)</li>
+</ul>
+<p>Usually, a round robin or random algorithm is appropriate, especially for stateless applications where we don&#39;t expect any particular server to be more popular than any other. When a new server is introduced to the load balancer (e.g. for scaling), these algorithms will naturally start distributing traffic to it without any special configuration.</p>
+<p>For services that require a persistent connection (e.g. those serving SSE or WebSocket connections), using Least Connections is a good idea because it avoids a situation where a single server gradually accumulates all of of the active connections.</p>
+<p>In practice, you&#39;ll encounter dedicated load balancers in various forms:</p>
+<ul>
+<li><strong>Hardware Load Balancers</strong>: Physical devices like F5 Networks BIG-IP</li>
+<li><strong>Software Load Balancers</strong>: HAProxy, NGINX, Envoy</li>
+<li><strong>Cloud Load Balancers</strong>: AWS ELB/ALB/NLB, Google Cloud Load Balancing, Azure Load Balancer</li>
+</ul>
+<p>Enterprise hardware load balancers can scale to support 100&#39;s of millions of requests per second, whereas software load balancers are more limited. Scaling load balancers is almost never part of a SWE system design interview (except for some networking specializations), but if you find the load balancer throughput is large — mentioning hardware load balancers is a good way out.</p>
+<h2 id="common-deep-dives-and-challenges">🔬 Common Deep Dives and Challenges</h2>
+<p>Ok cool, so we&#39;ve got protocols, we can balance load, handle persistent connections, and maintain high availability. What else do we need to know?</p>
+<p>While some aspects of networking can be assumed by your interviewer, other aspects are ripe for deep dive questions and probing to check your knowledge. Beyond the core protocols and patterns, several practical networking considerations can make or break your system design.</p>
+<h3 id="regionalization-and-latency">Regionalization and Latency</h3>
+<p>For global services, you&#39;re typically going to have servers distributed across the world. A common pattern is to have multiple data centers in a single region (Amazon calls these &quot;availability zones&quot;) so that e.g. a pipe breakage in one building doesn&#39;t take down your whole service, and then replicate this model across multiple cities spread across the world.</p>
+<p>But while this global deployment is a great victory for humanity, it does introduce new networking challenges. The physical distance between clients and servers significantly impacts network latency. Speed of light limitations mean that a request from New York to London will always have higher latency than a request to a nearby server (&lt;1ms vs &gt;80ms).</p>
+<blockquote>
+<p>Light travels through fiber optic cables at about 2/3 the speed of light in a vacuum, which is approximately 200,000 km/s. This means a round trip between New York and London (about 5,600 km) has a theoretical minimum latency of around 56ms just from the physics of signal propagation, before adding any processing time. This physical constraint is why geographic distribution is essential for low-latency applications.</p>
+</blockquote>
+<p>What do we do about this?</p>
+<p>In order to address this problem, we need to return to <strong>data locality</strong>. Across all of computing, we&#39;re going to have highest performance when the data is as close as possible to the computations we need to do.</p>
+<p>For a regional application, we want to try to keep all of the data we need to satisfy a query (a) as close together, and (b) as close to the user as possible. If our user data is in Los Angeles, but our web servers are in New York, every database query will have tens of milliseconds of network-induced latency. And that&#39;s before we even consider the processing time of the results!</p>
+<p>Some of this latency is <strong>unavoidable</strong>. If our users are simply far apart, there&#39;s nothing we can actually do to change that. But there are a couple of strategies we can use to optimize within the constraints of physics.</p>
+<h4 id="content-delivery-networks-cdns">Content Delivery Networks (CDNs)</h4>
+<p>The most common strategy for reducing latency is to use a <strong>Content Delivery Network (CDN)</strong>. CDNs are networks of servers that are strategically located around the world. CDNs frequently boast hundreds or even thousands of different cities where they have servers. These servers make up what is commonly referred to as an &quot;edge location&quot;. If that edge server can answer a user&#39;s request, the user is going to get lightning fast response times — the data is just up the road!</p>
+<p>This is only possible because of <em>caching</em>. If our data doesn&#39;t change a lot, or doesn&#39;t need to be updated frequently, we can cache it at the edge server and return it from there. This is especially effective for static content like images, videos, and other assets.</p>
+<p>In interviews, you&#39;ll see CDNs used frequently when we have data that is very cacheable and needs to be queried from across the globe. Using a CDN as a cache for e.g. <a href="https://www.hellointerview.com/learn/system-design/problem-breakdowns/fb-post-search#1-how-can-we-handle-the-large-volume-of-requests-from-users">search results on Facebook</a> allows us to both minimize latency <strong>and</strong> reduce the load on our backend servers.</p>
+<h4 id="regional-partitioning">Regional Partitioning</h4>
+<p>Another strategy common when we need to deal with regionalization is <strong>regional partitioning</strong>. If we have a lot of users in a single region, we can partition our data by region so that each region only has data relevant to it.</p>
+<p>Let&#39;s take Uber as an example. With the Uber app we&#39;re ordering rides from drivers in a specific city. If we&#39;re in Miami, we&#39;ll never want to book a ride with a driver currently in New York. This is an important insight!</p>
+<p>While on any given day we may have millions of riders and drivers, inside one particular city we may only have a few thousand. Our physical architecture and network topology can mirror this!</p>
+<p>We can bundle together nearby cities into a single local region (e.g. &quot;Northeast US&quot;, or &quot;Southwest US&quot;). Each region can have its own database hosted on distinct servers located in that geography (maybe we put our data centers in New York and Los Angeles). The servers handling requests can be co-located alongside the databases they need to query. Then when users want to book a ride, or look up their status, their queries can be answered by their regional services (fast), and those regional services can use a local database to process the query (very fast). Nice and optimal!</p>
+<h3 id="handling-failures-and-fault-modes">Handling Failures and Fault Modes</h3>
+<p>Beyond regionalization, another deep dive question that comes up frequently is how we handle failures in our system. Part of this is server failures: servers crash, solar flares can flip bits, power can be cut. But we may also deal with network failures! Cables get cut, routers fail, and packets get dropped. Robust system design requires planning for these failures.</p>
+<blockquote>
+<p>The fallacy of &quot;the network is reliable&quot; is one of the most dangerous assumptions in distributed systems. Always design with the expectation that network calls will fail, be delayed, or return unexpected results.</p>
+</blockquote>
+<p>Addressing these failures common to many deep-dives and there are several strategies we can use to address them.</p>
+<h4 id="timeouts-and-retries-with-backoff">Timeouts and Retries with Backoff</h4>
+<p>The most elementary hygiene for handling failures is to use timeouts and retries. If we expect a request to take a certain amount of time, we can set a timeout and if the request takes too long we can give up and try again.</p>
+<p>Retrying requests is a great strategy for dealing with transient failures. If a server is temporarily slow, we can retry the request and it will likely succeed. Having <strong>idempotent APIs</strong> is key here because we can retry the same request multiple times without causing issues.</p>
+<p>Retries can be a double-edged sword, though. If we have a lot of retries, we may be retrying requests that are going to fail over and over again. This can actually make the problem worse!</p>
+<p>This is why most retry strategies also include a <strong>backoff</strong> strategy. Instead of retrying immediately, we wait a short amount of time before retrying. If the request still fails, we wait a little longer. This gives the system time to recover and reduces the load on the system.</p>
+<p>It&#39;s important there is some randomness to the backoff strategy (often called &quot;jitter&quot;). It doesn&#39;t help us to have all of our clients retry at the same time! The worst case would be having all our failing requests synchronize and retry at the same time over and over again like a jackhammer. No good.</p>
+<p>In system design interviews, <strong>interviewers are often looking for the magic phrase &quot;retry with exponential backoff&quot;</strong>. In more senior interviews, you may be asked to elaborate about adding jitter.</p>
+<p>AWS has a great blog post on the <a href="https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/">timeouts, retries, and backoff</a> if you want to learn more.</p>
+<p>Retries are cool except when they have side effects. Imagine a payment system where we&#39;re trying to charge a user $10 for something. If we retry the same request multiple times, we&#39;re going to charge the user $20 (or $2,000) instead of $10! Ouch.</p>
+<p>This is why we need to make sure our APIs are <strong>idempotent</strong>. Idempotent APIs are APIs that can be called multiple times and they produce the same result every time. HTTP GET requests are common examples of idempotent APIs. While the content returned by a GET request may change, the act of fetching the content does not change the state of the system.</p>
+<p>But reading data is easy, how about writing data? For these cases, it&#39;s common for us to introduce an <strong>idempotency key</strong> to our API. The idempotency key is a unique identifier for a request that we can use to make sure the same request is idempotent.</p>
+<p>For our payment example, if we know a user is only ever going to buy one item per day, we can set an idempotency to the user&#39;s ID and the current date. On the server-side, we can check to see if we&#39;ve already processed (or are currently processing) a request with that idempotency key and process it only once. User-friendly APIs will wait for the request to complete then send the results to all requesters. Less friendly APIs will just return an error saying the request already exists. But both will keep you from double charging your user&#39;s credit cards.</p>
+<h4 id="circuit-breakers">Circuit Breakers</h4>
+<p>The last topic we see commonly in deep dives is how to handle <strong>cascading failures</strong> in a system. Senior candidates are frequently asked questions like “what happens when this service goes down”. Sometimes the answer is simple: “we fail and retry until it boots back up” — but occasionally that will introduce new problems for the system!</p>
+<p>If your database has gone down cold and you need to boot it up one instance at a time, having a firehose of retries and angry users might pin down an instance from ever getting started (sometimes ominously referred to as a &quot;thundering herd&quot;). You can&#39;t get the first instance up, so you have no hope of getting the whole database back online. You’re stuck!</p>
+<blockquote>
+<p>Experienced engineers who have spent time oncall will have a lot of war stories about cascading failures. It&#39;s a common problem that usually goes unnoticed until it bites you at 3am. As such, it makes for a great interview question! Not only does it help you to find candidates who understand how to prevent some of the most pernicious issues, but it&#39;s also a decent screen for experience which many interviewers are looking for. The key for your preparation is to familiarize yourself with scenarios where one failure might create new failures: a cascade of failures. Being able to identify these patterns and how to mitigate them is a great way to stand out in an interview.</p>
+</blockquote>
+<p>Enter circuit breakers: a crucial pattern for robust system design that directly impacts network communication. Circuit breakers protect your system when network calls to dependencies fail repeatedly. Here&#39;s how they work:</p>
+<ol>
+<li>The circuit breaker monitors for failures when calling external services</li>
+<li>When failures exceed a threshold, the circuit &quot;trips&quot; to an open state</li>
+<li>While open, requests immediately fail without attempting the actual call</li>
+<li>After a timeout period, the circuit transitions to a &quot;half-open&quot; state</li>
+<li>A test request determines whether to close the circuit or keep it open</li>
+</ol>
+<p>This pattern, inspired by electrical circuit breakers, prevents cascading failures across distributed systems and gives failing services time to recover.</p>
+<div class="diagram"><svg preserveAspectRatio="xMidYMid meet" id="me0980fb07f938fd7" width="100%" xmlns="http://www.w3.org/2000/svg" class="statediagram" style="max-width:656.16796875px;width:100%;height:auto;" viewBox="0 0 656.16796875 717" role="graphics-document document" aria-roledescription="stateDiagram"><style>#me0980fb07f938fd7{font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;font-size:14px;fill:#0E1A2B;}@keyframes edge-animation-frame{from{stroke-dashoffset:0;}}@keyframes dash{to{stroke-dashoffset:0;}}#me0980fb07f938fd7 .edge-animation-slow{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 50s linear infinite;stroke-linecap:round;}#me0980fb07f938fd7 .edge-animation-fast{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 20s linear infinite;stroke-linecap:round;}#me0980fb07f938fd7 .error-icon{fill:#FFFFFF;}#me0980fb07f938fd7 .error-text{fill:#000000;stroke:#000000;}#me0980fb07f938fd7 .edge-thickness-normal{stroke-width:1px;}#me0980fb07f938fd7 .edge-thickness-thick{stroke-width:3.5px;}#me0980fb07f938fd7 .edge-pattern-solid{stroke-dasharray:0;}#me0980fb07f938fd7 .edge-thickness-invisible{stroke-width:0;fill:none;}#me0980fb07f938fd7 .edge-pattern-dashed{stroke-dasharray:3;}#me0980fb07f938fd7 .edge-pattern-dotted{stroke-dasharray:2;}#me0980fb07f938fd7 .marker{fill:#5B7BB4;stroke:#5B7BB4;}#me0980fb07f938fd7 .marker.cross{stroke:#5B7BB4;}#me0980fb07f938fd7 svg{font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;font-size:14px;}#me0980fb07f938fd7 p{margin:0;}#me0980fb07f938fd7 defs [id$="-barbEnd"]{fill:#5B7BB4;stroke:#5B7BB4;}#me0980fb07f938fd7 g.stateGroup text{fill:#2563EB;stroke:none;font-size:10px;}#me0980fb07f938fd7 g.stateGroup text{fill:#0E1A2B;stroke:none;font-size:10px;}#me0980fb07f938fd7 g.stateGroup .state-title{font-weight:bolder;fill:#0E1A2B;}#me0980fb07f938fd7 g.stateGroup rect{fill:#EEF3FF;stroke:#2563EB;}#me0980fb07f938fd7 g.stateGroup line{stroke:#5B7BB4;stroke-width:1;}#me0980fb07f938fd7 .transition{stroke:#5B7BB4;stroke-width:1;fill:none;}#me0980fb07f938fd7 .stateGroup .composit{fill:transparent;border-bottom:1px;}#me0980fb07f938fd7 .stateGroup .alt-composit{fill:#e0e0e0;border-bottom:1px;}#me0980fb07f938fd7 .state-note{stroke:hsl(52.6829268293, 60%, 73.9215686275%);fill:#fff5ad;}#me0980fb07f938fd7 .state-note text{fill:#333;stroke:none;font-size:10px;}#me0980fb07f938fd7 .stateLabel .box{stroke:none;stroke-width:0;fill:#EEF3FF;opacity:0.5;}#me0980fb07f938fd7 .edgeLabel .label rect{fill:#EEF3FF;opacity:0.5;}#me0980fb07f938fd7 .edgeLabel{background-color:#F0F4FF;text-align:center;}#me0980fb07f938fd7 .edgeLabel p{background-color:#F0F4FF;}#me0980fb07f938fd7 .edgeLabel rect{opacity:0.5;background-color:#F0F4FF;fill:#F0F4FF;}#me0980fb07f938fd7 .edgeLabel .label text{fill:#0E1A2B;}#me0980fb07f938fd7 .label div .edgeLabel{color:#0E1A2B;}#me0980fb07f938fd7 .stateLabel text{fill:#0E1A2B;font-size:10px;font-weight:bold;}#me0980fb07f938fd7 .node circle.state-start{fill:#5B7BB4;stroke:#5B7BB4;}#me0980fb07f938fd7 .node .fork-join{fill:#5B7BB4;stroke:#5B7BB4;}#me0980fb07f938fd7 .node circle.state-end{fill:#2563EB;stroke:transparent;stroke-width:1.5;}#me0980fb07f938fd7 .end-state-inner{fill:transparent;stroke-width:1.5;}#me0980fb07f938fd7 .node rect{fill:#EEF3FF;stroke:#2563EB;stroke-width:1px;}#me0980fb07f938fd7 .node polygon{fill:#EEF3FF;stroke:#2563EB;stroke-width:1px;}#me0980fb07f938fd7 [id$="-barbEnd"]{fill:#5B7BB4;}#me0980fb07f938fd7 .statediagram-cluster rect{fill:#EEF3FF;stroke:#2563EB;stroke-width:1px;}#me0980fb07f938fd7 .cluster-label,#me0980fb07f938fd7 .nodeLabel{color:#0E1A2B;}#me0980fb07f938fd7 .statediagram-cluster rect.outer{rx:5px;ry:5px;}#me0980fb07f938fd7 .statediagram-state .divider{stroke:#2563EB;}#me0980fb07f938fd7 .statediagram-state .title-state{rx:5px;ry:5px;}#me0980fb07f938fd7 .statediagram-cluster.statediagram-cluster .inner{fill:transparent;}#me0980fb07f938fd7 .statediagram-cluster.statediagram-cluster-alt .inner{fill:#FFFFFF;}#me0980fb07f938fd7 .statediagram-cluster .inner{rx:0;ry:0;}#me0980fb07f938fd7 .statediagram-state rect.basic{rx:5px;ry:5px;}#me0980fb07f938fd7 .statediagram-state rect.divider{stroke-dasharray:10,10;fill:#FFFFFF;}#me0980fb07f938fd7 .note-edge{stroke-dasharray:5;}#me0980fb07f938fd7 .statediagram-note rect{fill:#fff5ad;stroke:hsl(52.6829268293, 60%, 73.9215686275%);stroke-width:1px;rx:0;ry:0;}#me0980fb07f938fd7 .statediagram-note rect{fill:#fff5ad;stroke:hsl(52.6829268293, 60%, 73.9215686275%);stroke-width:1px;rx:0;ry:0;}#me0980fb07f938fd7 .statediagram-note text{fill:#333;}#me0980fb07f938fd7 .statediagram-note .nodeLabel{color:#333;}#me0980fb07f938fd7 .statediagram .edgeLabel{color:red;}#me0980fb07f938fd7 [id$="-dependencyStart"],#me0980fb07f938fd7 [id$="-dependencyEnd"]{fill:#5B7BB4;stroke:#5B7BB4;stroke-width:1;}#me0980fb07f938fd7 .statediagramTitleText{text-anchor:middle;font-size:18px;fill:#0E1A2B;}#me0980fb07f938fd7 [data-look="neo"].statediagram-cluster rect{fill:#EEF3FF;stroke:url(#me0980fb07f938fd7-gradient);stroke-width:1;}#me0980fb07f938fd7 [data-look="neo"].statediagram-cluster rect.outer{rx:5px;ry:5px;filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#me0980fb07f938fd7 .node .neo-node{stroke:#2563EB;}#me0980fb07f938fd7 [data-look="neo"].node rect,#me0980fb07f938fd7 [data-look="neo"].cluster rect,#me0980fb07f938fd7 [data-look="neo"].node polygon{stroke:url(#me0980fb07f938fd7-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#me0980fb07f938fd7 [data-look="neo"].swimlane.cluster rect{filter:none;}#me0980fb07f938fd7 [data-look="neo"].node path{stroke:url(#me0980fb07f938fd7-gradient);stroke-width:1px;}#me0980fb07f938fd7 [data-look="neo"].node .outer-path{filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#me0980fb07f938fd7 [data-look="neo"].node .neo-line path{stroke:#2563EB;filter:none;}#me0980fb07f938fd7 [data-look="neo"].node circle{stroke:url(#me0980fb07f938fd7-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#me0980fb07f938fd7 [data-look="neo"].node circle .state-start{fill:#000000;}#me0980fb07f938fd7 [data-look="neo"].icon-shape .icon{fill:url(#me0980fb07f938fd7-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#me0980fb07f938fd7 [data-look="neo"].icon-shape .icon-neo path{stroke:url(#me0980fb07f938fd7-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#me0980fb07f938fd7 :root{--mermaid-font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;}</style><g><defs><marker id="me0980fb07f938fd7_stateDiagram-barbEnd" refX="19" refY="7" markerWidth="20" markerHeight="14" markerUnits="userSpaceOnUse" orient="auto"><path d="M 19,7 L9,13 L14,7 L9,1 Z"></path></marker></defs><g class="root"><g class="clusters"><g class="note-cluster" id="me0980fb07f938fd7-state-Closed----parent-5"><rect x="8" y="201" width="250.1875" height="122" fill="none"></rect></g><g class="note-cluster" id="me0980fb07f938fd7-state-Open----parent-6"><rect x="148.5078125" y="415" width="259.359375" height="122" fill="none"></rect></g><g class="note-cluster" id="me0980fb07f938fd7-state-HalfOpen----parent-7"><rect x="358.02734375" y="587" width="290.140625" height="122" fill="none"></rect></g></g><g class="edgePaths"><path d="M425.359,22L425.359,26.167C425.359,30.333,425.359,38.667,425.359,47C425.359,55.333,425.359,63.667,425.359,67.833L425.359,72" id="me0980fb07f938fd7-edge0" class=" edge-thickness-normal edge-pattern-solid transition" style="fill:none;;;fill:none" data-edge="true" data-et="edge" data-id="edge0" data-points="W3sieCI6NDI1LjM1OTM3NSwieSI6MjJ9LHsieCI6NDI1LjM1OTM3NSwieSI6NDd9LHsieCI6NDI1LjM1OTM3NSwieSI6NzJ9XQ==" data-look="classic" marker-end="url(#me0980fb07f938fd7_stateDiagram-barbEnd)"></path><path d="M411.354,109L405.551,116.667C399.747,124.333,388.139,139.667,382.335,155C376.531,170.333,376.531,185.667,376.531,200.417C376.531,215.167,376.531,229.333,376.531,236.417L376.531,243.5" id="me0980fb07f938fd7-edge1" class=" edge-thickness-normal edge-pattern-solid transition" style="fill:none;;;fill:none" data-edge="true" data-et="edge" data-id="edge1" data-points="W3sieCI6NDExLjM1NDQwODkxNDcyODcsInkiOjEwOX0seyJ4IjozNzYuNTMxMjUsInkiOjE1NX0seyJ4IjozNzYuNTMxMjUsInkiOjIwMX0seyJ4IjozNzYuNTMxMjUsInkiOjI0My41fV0=" data-look="classic" marker-end="url(#me0980fb07f938fd7_stateDiagram-barbEnd)"></path><path d="M398.141,280.5L406.415,287.583C414.689,294.667,431.237,308.833,439.511,323.583C447.785,338.333,447.785,353.667,447.785,369C447.785,384.333,447.785,399.667,454.208,414.417C460.631,429.167,473.477,443.333,479.9,450.417L486.323,457.5" id="me0980fb07f938fd7-edge2" class=" edge-thickness-normal edge-pattern-solid transition" style="fill:none;;;fill:none" data-edge="true" data-et="edge" data-id="edge2" data-points="W3sieCI6Mzk4LjE0MTA0MTIzOTc1NDEsInkiOjI4MC41fSx7IngiOjQ0Ny43ODUxNTYyNSwieSI6MzIzfSx7IngiOjQ0Ny43ODUxNTYyNSwieSI6MzY5fSx7IngiOjQ0Ny43ODUxNTYyNSwieSI6NDE1fSx7IngiOjQ4Ni4zMjI1NTM3OTA5ODM2LCJ5Ijo0NTcuNX1d" data-look="classic" marker-end="url(#me0980fb07f938fd7_stateDiagram-barbEnd)"></path><path d="M511.149,457.5L514.231,450.417C517.314,443.333,523.479,429.167,526.562,414.417C529.645,399.667,529.645,384.333,529.645,369C529.645,353.667,529.645,338.333,529.645,320.5C529.645,302.667,529.645,282.333,529.645,262C529.645,241.667,529.645,221.333,529.645,203.5C529.645,185.667,529.645,170.333,517.178,154.956C504.711,139.579,479.777,124.157,467.311,116.447L454.844,108.736" id="me0980fb07f938fd7-edge3" class=" edge-thickness-normal edge-pattern-solid transition" style="fill:none;;;fill:none" data-edge="true" data-et="edge" data-id="edge3" data-points="W3sieCI6NTExLjE0ODc1NzY4NDQyNjI0LCJ5Ijo0NTcuNX0seyJ4Ijo1MjkuNjQ0NTMxMjUsInkiOjQxNX0seyJ4Ijo1MjkuNjQ0NTMxMjUsInkiOjM2OX0seyJ4Ijo1MjkuNjQ0NTMxMjUsInkiOjMyM30seyJ4Ijo1MjkuNjQ0NTMxMjUsInkiOjI2Mn0seyJ4Ijo1MjkuNjQ0NTMxMjUsInkiOjIwMX0seyJ4Ijo1MjkuNjQ0NTMxMjUsInkiOjE1NX0seyJ4Ijo0NTQuODQzNzUsInkiOjEwOC43MzU5ODE1NzA5NjMwM31d" data-look="classic" marker-end="url(#me0980fb07f938fd7_stateDiagram-barbEnd)"></path><path d="M528.684,457.5L538.481,450.417C548.278,443.333,567.871,429.167,577.668,414.417C587.465,399.667,587.465,384.333,587.465,369C587.465,353.667,587.465,338.333,556.449,321.697C525.432,305.061,463.4,287.122,432.383,278.152L401.367,269.182" id="me0980fb07f938fd7-edge4" class=" edge-thickness-normal edge-pattern-solid transition" style="fill:none;;;fill:none" data-edge="true" data-et="edge" data-id="edge4" data-points="W3sieCI6NTI4LjY4NDQyNjIyOTUwODIsInkiOjQ1Ny41fSx7IngiOjU4Ny40NjQ4NDM3NSwieSI6NDE1fSx7IngiOjU4Ny40NjQ4NDM3NSwieSI6MzY5fSx7IngiOjU4Ny40NjQ4NDM3NSwieSI6MzIzfSx7IngiOjQwMS4zNjcxODc1LCJ5IjoyNjkuMTgyMzE4MTkxMDc3Nn1d" data-look="classic" marker-end="url(#me0980fb07f938fd7_stateDiagram-barbEnd)"></path><path d="M395.875,97.007L352.078,106.672C308.281,116.338,220.688,135.669,176.891,153.001C133.094,170.333,133.094,185.667,133.094,197.5C133.094,209.333,133.094,217.667,133.094,221.833L133.094,226" id="me0980fb07f938fd7-Closed-Closed----note-5" class=" edge-thickness-normal edge-pattern-solid transition note-edge" style="fill:none;;;fill:none" data-edge="true" data-et="edge" data-id="Closed-Closed----note-5" data-points="W3sieCI6Mzk1Ljg3NSwieSI6OTcuMDA2ODk2NTUxNzI0MTR9LHsieCI6MTMzLjA5Mzc1LCJ5IjoxNTV9LHsieCI6MTMzLjA5Mzc1LCJ5IjoyMDF9LHsieCI6MTMzLjA5Mzc1LCJ5IjoyMjZ9XQ==" data-look="classic"></path><path d="M351.695,277.405L339.444,285.004C327.193,292.603,302.69,307.802,290.439,323.068C278.188,338.333,278.188,353.667,278.188,369C278.188,384.333,278.188,399.667,278.188,411.5C278.188,423.333,278.188,431.667,278.188,435.833L278.188,440" id="me0980fb07f938fd7-Open-Open----note-6" class=" edge-thickness-normal edge-pattern-solid transition note-edge" style="fill:none;;;fill:none" data-edge="true" data-et="edge" data-id="Open-Open----note-6" data-points="W3sieCI6MzUxLjY5NTMxMjUsInkiOjI3Ny40MDUwNjgzMTkwMzR9LHsieCI6Mjc4LjE4NzUsInkiOjMyM30seyJ4IjoyNzguMTg3NSwieSI6MzY5fSx7IngiOjI3OC4xODc1LCJ5Ijo0MTV9LHsieCI6Mjc4LjE4NzUsInkiOjQ0MH1d" data-look="classic"></path><path d="M503.098,494.5L503.098,501.583C503.098,508.667,503.098,522.833,503.098,534.083C503.098,545.333,503.098,553.667,503.098,562C503.098,570.333,503.098,578.667,503.098,587C503.098,595.333,503.098,603.667,503.098,607.833L503.098,612" id="me0980fb07f938fd7-HalfOpen-HalfOpen----note-7" class=" edge-thickness-normal edge-pattern-solid transition note-edge" style="fill:none;;;fill:none" data-edge="true" data-et="edge" data-id="HalfOpen-HalfOpen----note-7" data-points="W3sieCI6NTAzLjA5NzY1NjI1LCJ5Ijo0OTQuNX0seyJ4Ijo1MDMuMDk3NjU2MjUsInkiOjUzN30seyJ4Ijo1MDMuMDk3NjU2MjUsInkiOjU2Mn0seyJ4Ijo1MDMuMDk3NjU2MjUsInkiOjU4N30seyJ4Ijo1MDMuMDk3NjU2MjUsInkiOjYxMn1d" data-look="classic"></path></g><g class="edgeLabels"><g class="edgeLabel"><g class="label" data-id="edge0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(376.53125, 155)"><g class="label" data-id="edge1" transform="translate(-47.5234375, -21)"><foreignObject width="95.046875" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "><p>failures exceed<br/>threshold</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(447.78515625, 369)"><g class="label" data-id="edge2" transform="translate(-46.0625, -21)"><foreignObject width="92.125" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "><p>after timeout<br/>period elapses</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(529.64453125, 262)"><g class="label" data-id="edge3" transform="translate(-37.8203125, -21)"><foreignObject width="75.640625" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "><p>test request<br/>succeeds</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(587.46484375, 369)"><g class="label" data-id="edge4" transform="translate(-37.8203125, -21)"><foreignObject width="75.640625" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "><p>test request<br/>fails</p></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="Closed-Closed----note-5" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="Open-Open----note-6" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel"><g class="label" data-id="HalfOpen-HalfOpen----note-7" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g></g><g class="nodes"><g class="node default" id="me0980fb07f938fd7-state-root_start-0" data-look="classic" transform="translate(425.359375, 15)"><circle class="state-start" r="7" width="14" height="14"></circle></g><g class="node  statediagram-state " id="me0980fb07f938fd7-state-Closed-5" data-look="classic" transform="translate(425.359375, 90.5)"><rect class="basic label-container" style="" rx="5" ry="5" x="-29.484375" y="-18.5" width="58.96875" height="37"></rect><g class="label" style="" transform="translate(-21.484375, -10.5)"><rect></rect><foreignObject width="42.96875" height="21"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel markdown-node-label"><p>Closed</p></span></div></foreignObject></g></g><g class="node  statediagram-state " id="me0980fb07f938fd7-state-Open-6" data-look="classic" transform="translate(376.53125, 262)"><rect class="basic label-container" style="" rx="5" ry="5" x="-24.8359375" y="-18.5" width="49.671875" height="37"></rect><g class="label" style="" transform="translate(-16.8359375, -10.5)"><rect></rect><foreignObject width="33.671875" height="21"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel markdown-node-label"><p>Open</p></span></div></foreignObject></g></g><g class="node  statediagram-state " id="me0980fb07f938fd7-state-HalfOpen-7" data-look="classic" transform="translate(503.09765625, 476)"><rect class="basic label-container" style="" rx="5" ry="5" x="-37.8046875" y="-18.5" width="75.609375" height="37"></rect><g class="label" style="" transform="translate(-29.8046875, -10.5)"><rect></rect><foreignObject width="59.609375" height="21"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel markdown-node-label"><p>HalfOpen</p></span></div></foreignObject></g></g><g class="node statediagram-note " id="me0980fb07f938fd7-state-Closed----note-5" data-look="classic" transform="translate(133.09375, 262)"><g class="basic label-container outer-path"><path d="M-90.09375 -36 L90.09375 -36 L90.09375 36 L-90.09375 36" stroke="none" stroke-width="0" fill="#fff5ad" style=""></path><path d="M-90.09375 -36 C-35.337035581496046 -36, 19.419678837007908 -36, 90.09375 -36 M-90.09375 -36 C-43.26736020104399 -36, 3.5590295979120157 -36, 90.09375 -36 M90.09375 -36 C90.09375 -7.637137801887221, 90.09375 20.72572439622556, 90.09375 36 M90.09375 -36 C90.09375 -7.474689044394008, 90.09375 21.050621911211984, 90.09375 36 M90.09375 36 C26.51050875515312 36, -37.07273248969376 36, -90.09375 36 M90.09375 36 C49.39689704925328 36, 8.700044098506567 36, -90.09375 36 M-90.09375 36 C-90.09375 14.469928293269174, -90.09375 -7.0601434134616525, -90.09375 -36 M-90.09375 36 C-90.09375 7.605201142087051, -90.09375 -20.7895977158259, -90.09375 -36" stroke="hsl(52.6829268293, 60%, 73.9215686275%)" stroke-width="1.3" fill="none" stroke-dasharray="0 0" style=""></path></g><g class="label noteLabel" style="" transform="translate(-75.09375, -21)"><rect></rect><foreignObject width="150.1875" height="42"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel markdown-node-label"><p>Requests flow normally,<br/>failures are counted</p></span></div></foreignObject></g></g><g class="node statediagram-note " id="me0980fb07f938fd7-state-Open----note-6" data-look="classic" transform="translate(278.1875, 476)"><g class="basic label-container outer-path"><path d="M-94.6796875 -36 L94.6796875 -36 L94.6796875 36 L-94.6796875 36" stroke="none" stroke-width="0" fill="#fff5ad" style=""></path><path d="M-94.6796875 -36 C-32.07731388670407 -36, 30.525059726591863 -36, 94.6796875 -36 M-94.6796875 -36 C-45.41115365373924 -36, 3.857380192521518 -36, 94.6796875 -36 M94.6796875 -36 C94.6796875 -14.318636413595499, 94.6796875 7.362727172809002, 94.6796875 36 M94.6796875 -36 C94.6796875 -7.810804274682031, 94.6796875 20.378391450635938, 94.6796875 36 M94.6796875 36 C24.402462899476134 36, -45.87476170104773 36, -94.6796875 36 M94.6796875 36 C24.30504579081311 36, -46.06959591837378 36, -94.6796875 36 M-94.6796875 36 C-94.6796875 17.90465771764736, -94.6796875 -0.19068456470527906, -94.6796875 -36 M-94.6796875 36 C-94.6796875 12.25356815722688, -94.6796875 -11.49286368554624, -94.6796875 -36" stroke="hsl(52.6829268293, 60%, 73.9215686275%)" stroke-width="1.3" fill="none" stroke-dasharray="0 0" style=""></path></g><g class="label noteLabel" style="" transform="translate(-79.6796875, -21)"><rect></rect><foreignObject width="159.359375" height="42"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel markdown-node-label"><p>Requests fail fast without<br/>calling the failing service</p></span></div></foreignObject></g></g><g class="node statediagram-note " id="me0980fb07f938fd7-state-HalfOpen----note-7" data-look="classic" transform="translate(503.09765625, 648)"><g class="basic label-container outer-path"><path d="M-110.0703125 -36 L110.0703125 -36 L110.0703125 36 L-110.0703125 36" stroke="none" stroke-width="0" fill="#fff5ad" style=""></path><path d="M-110.0703125 -36 C-51.05671672800459 -36, 7.956879043990824 -36, 110.0703125 -36 M-110.0703125 -36 C-35.09048171115994 -36, 39.88934907768012 -36, 110.0703125 -36 M110.0703125 -36 C110.0703125 -14.428672558894604, 110.0703125 7.142654882210792, 110.0703125 36 M110.0703125 -36 C110.0703125 -14.314985635977784, 110.0703125 7.370028728044431, 110.0703125 36 M110.0703125 36 C27.66146647686638 36, -54.74737954626724 36, -110.0703125 36 M110.0703125 36 C45.447967222336075 36, -19.17437805532785 36, -110.0703125 36 M-110.0703125 36 C-110.0703125 8.20046805839624, -110.0703125 -19.59906388320752, -110.0703125 -36 M-110.0703125 36 C-110.0703125 10.426804068543984, -110.0703125 -15.146391862912033, -110.0703125 -36" stroke="hsl(52.6829268293, 60%, 73.9215686275%)" stroke-width="1.3" fill="none" stroke-dasharray="0 0" style=""></path></g><g class="label noteLabel" style="" transform="translate(-95.0703125, -21)"><rect></rect><foreignObject width="190.140625" height="42"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel markdown-node-label"><p>A single test request probes<br/>whether the service recovered</p></span></div></foreignObject></g></g></g></g></g><defs><filter id="me0980fb07f938fd7-drop-shadow" height="130%" width="130%"><feDropShadow dx="4" dy="4" stdDeviation="0" flood-opacity="0.06" flood-color="#000000"></feDropShadow></filter></defs><defs><filter id="me0980fb07f938fd7-drop-shadow-small" height="150%" width="150%"><feDropShadow dx="2" dy="2" stdDeviation="0" flood-opacity="0.06" flood-color="#000000"></feDropShadow></filter></defs><linearGradient id="me0980fb07f938fd7-gradient" gradientUnits="objectBoundingBox" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#2563EB" stop-opacity="1"></stop><stop offset="100%" stop-color="hsl(224, 60%, 87.0588235294%)" stop-opacity="1"></stop></linearGradient></svg></div>
+
+
+<p>Circuit breakers provide numerous advantages:</p>
+<ul>
+<li>Fail Fast: Quickly reject requests to failing services instead of waiting for timeouts</li>
+<li>Reduce Load: Prevent overwhelming already struggling services with more requests</li>
+<li>Self-Healing: Automatically test recovery without full traffic load</li>
+<li>Improved User Experience: Provide fast fallbacks instead of hanging UI</li>
+<li>System Stability: Prevent failures in one service from affecting the entire system</li>
+</ul>
+<p>Circuit breakers can be a great response when an interviewer is deep-diving on reliability, failure modes, or disaster recovery. Being able to mention circuit breakers and apply them in useful places is a great way to show off knowledge that otherwise is won at 3:00am battling a hardware failure when the system Just. Won’t. Come. Back. Up.</p>
+<p>Some example sites to apply circuit breakers:</p>
+<ul>
+<li>External API calls to third-party services</li>
+<li>Database connections and queries</li>
+<li>Service-to-service communication in microservices</li>
+<li>Resource-intensive operations that might time out</li>
+<li>Any network call that could fail or become slow</li>
+</ul>
+<h2 id="wrapping-up">📝 Wrapping Up</h2>
+<p>Woo. That was a lot. Networking is the foundation that connects all components in a distributed system. While the field is vast, focusing on these key areas will prepare you for most system design interviews:</p>
+<ol>
+<li><strong>Understand the basics</strong>: IP addressing, DNS, and the TCP/IP model</li>
+<li><strong>Know your protocols</strong>: TCP vs. UDP, HTTP/HTTPS, WebSockets, and gRPC</li>
+<li><strong>Master load balancing</strong>: Client-side load balancing and dedicated load balancers</li>
+<li><strong>Plan for practical realities</strong>: Regionalization and patterns for handling failures</li>
+</ol>
+<p>Remember that networking decisions impact every aspect of your system - from latency and throughput to reliability and security. By making informed choices about networking components and patterns, you&#39;ll design systems that are not just functional, but robust and scalable.</p>
+<p>In your interviews, be prepared to justify your networking choices based on the specific requirements of the system you&#39;re designing. We&#39;ve outlined a bunch of sensible defaults, but the reality for most problems is there&#39;s no single right answer and your interviewer wants to see how you think through tradeoffs.</p>
+<h3 id="follow-up-opportunities">Follow-Up Opportunities</h3>
+<p>Learning by reading or watching is sometimes not the best way for builders to integrate new knowledge. One of the easiest ways to learn about networking is to create some network traffic and watch it flow through the network yourself. Download <a href="https://www.wireshark.org/">Wireshark</a> and try to capture some network traffic on your own machine. This will give you a good idea of the entire protocol stack in action!</p>
+<p>After you&#39;ve done that, try simulating some common networking failures. Mac&#39;s Network Link Conditioner (available through XCode) is a great tool that allows you to simulate what happens when there is latency in the network or packet loss. Try simulating a really nasty cell-phone connection and see how websites and apps respond. You&#39;ll often find some surprises (and a lot of bugs). Have fun!</p>
+<p>Answer the question below to find your gaps.</p>
+<p>Get a quick-reference sheet for this topic, perfect for last-minute review.</p>
+<h2 id="key-takeaways">🎓 Key Takeaways</h2>
+<ul>
+<li><strong>Think in layers</strong>: the network stack is a set of abstractions — IP handles routing and addressing, the transport layer adds reliability/ordering, and application protocols build on top — so you rarely need to reason about the layers below the one you&#39;re using.</li>
+<li><strong>TCP by default, UDP when you must</strong>: TCP gives reliable, ordered, connection-oriented delivery for basically everything; reach for UDP only when low latency matters more than reliability (streaming, gaming, VoIP, DNS) and occasional loss is acceptable.</li>
+<li><strong>Pick the right application protocol</strong>: REST is the sane default; use gRPC for high-performance internal service-to-service calls, GraphQL when the frontend needs flexible data fetching, and SSE / WebSockets / WebRTC when you need server push, bidirectional, or peer-to-peer real-time communication.</li>
+<li><strong>Load balancing scales horizontally</strong>: choose client-side load balancing for controllable internal clients (or DNS-style slow updates), L4 for persistent connections like WebSockets, and L7 for content-aware HTTP routing — with health checks enabling automatic failover.</li>
+<li><strong>Physics sets the floor on latency</strong>: geographic distance is unavoidable (New York↔London is ~56ms just from signal propagation), so push data close to users with CDNs and regional partitioning.</li>
+<li><strong>Design for failure</strong>: never assume the network is reliable — use timeouts, retries with exponential backoff and jitter, idempotency keys to make retries safe, and circuit breakers to stop cascading failures.</li>
+</ul>
+<h2 id="related-concepts">📚 Related Concepts</h2>
+<ul>
+<li><a href="/concepts/api-design/">API Design</a> — practical REST, GraphQL, and gRPC API design patterns that build on these protocols.</li>
+<li><a href="/notes/networking/">Networking</a> — deeper hand-written notes on networking fundamentals.</li>
+<li><a href="/deep-dives/api-gateway/">API Gateway</a> — the L7 routing/edge layer that extends load balancing with content-aware routing.</li>
+<li><a href="/deep-dives/redis/">Redis</a> — Redis Cluster&#39;s gossip-based client-side load balancing in action.</li>
+<li><a href="/patterns/real-time-updates/">Real-Time Updates</a> — server-side design for SSE and WebSocket push described here.</li>
+<li><a href="/patterns/scaling-reads/">Scaling Reads</a> — CDN and edge caching for read-heavy, globally distributed traffic.</li>
+<li><a href="/breakdowns/payment-system/">Payment System</a> — idempotency keys and retry safety applied to a real problem.</li>
+</ul>
+<hr>
+<p><em>Source: <a href="https://www.hellointerview.com/learn/system-design/core-concepts/networking-essentials">https://www.hellointerview.com/learn/system-design/core-concepts/networking-essentials</a></em></p>
+</div>
+</article>
+<nav class="pager">
+<a href="/concepts/database-indexing/"><span>Previous</span><b>Database Indexing</b></a>
+<a class="nx" href="/concepts/numbers-to-know/"><span>Next</span><b>Numbers to Know</b></a>
+</nav>
+</main>
+<aside class="toc"><h4>On this page</h4><ol><li><a class="" href="#laymans-explanation">Layman's Explanation</a></li><li><a class="" href="#networking-101">Networking 101</a></li><li><a class="h3" href="#networking-layers">Networking Layers</a></li><li><a class="h3" href="#example-a-simple-web-request">Example: A Simple Web Request</a></li><li><a class="" href="#network-layer-protocols">Network Layer Protocols</a></li><li><a class="" href="#transport-layer-protocols">Transport Layer Protocols</a></li><li><a class="h3" href="#udp-fast-but-unreliable">UDP: Fast but Unreliable</a></li><li><a class="h3" href="#tcp-reliable-but-with-overhead">TCP: Reliable but with Overhead</a></li><li><a class="h3" href="#when-to-choose-each-protocol">When to Choose Each Protocol</a></li><li><a class="" href="#application-layer-protocols">Application Layer Protocols</a></li><li><a class="h3" href="#httphttps-the-webs-foundation">HTTP/HTTPS: The Web's Foundation</a></li><li><a class="h3" href="#rest-simple-and-flexible">REST: Simple and Flexible</a></li><li><a class="h3" href="#graphql-flexible-data-fetching">GraphQL: Flexible Data Fetching</a></li><li><a class="h3" href="#grpc-efficient-service-communication">gRPC: Efficient Service Communication</a></li><li><a class="h3" href="#server-sent-events-sse-real-time-push-communication">Server-Sent Events (SSE): Real-Time Push Communication</a></li><li><a class="h3" href="#websockets-real-time-bidirectional-communication">WebSockets: Real-Time Bidirectional Communication</a></li><li><a class="h3" href="#webrtc-peer-to-peer-communication">WebRTC: Peer-to-Peer Communication</a></li><li><a class="" href="#load-balancing">Load Balancing</a></li><li><a class="h3" href="#types-of-load-balancing">Types of Load Balancing</a></li><li><a class="" href="#common-deep-dives-and-challenges">Common Deep Dives and Challenges</a></li><li><a class="h3" href="#regionalization-and-latency">Regionalization and Latency</a></li><li><a class="h3" href="#handling-failures-and-fault-modes">Handling Failures and Fault Modes</a></li><li><a class="" href="#wrapping-up">Wrapping Up</a></li><li><a class="h3" href="#follow-up-opportunities">Follow-Up Opportunities</a></li><li><a class="" href="#key-takeaways">Key Takeaways</a></li><li><a class="" href="#related-concepts">Related Concepts</a></li></ol></aside>
+</div>
+<script src="/assets/doc.js" defer></script>
+<footer class="foot"><div class="foot-in">
+<span>InterviewVault — system design study vault</span>
+<span>122 documents · 607 diagrams</span>
+</div></footer>
+</body>
+</html>

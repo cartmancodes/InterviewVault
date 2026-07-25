@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Numbers to Know — InterviewVault</title>
+<meta name="description" content="Numbers to Know: The vocabulary every design rests on — caching, sharding, indexing, CAP.">
+<meta property="og:title" content="Numbers to Know — InterviewVault">
+<meta property="og:description" content="Numbers to Know: The vocabulary every design rests on — caching, sharding, indexing, CAP.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+</head>
+<body class="">
+<header class="hdr"><div class="hdr-in">
+<a class="brand" href="/"><span class="brand-mark">IV</span><span class="brand-name">Interview<span>Vault</span></span></a>
+<nav class="hdr-nav"><a href="/#in-a-hurry">In a Hurry</a><a href="/#notes">Deep Notes</a><a href="/#concepts" aria-current="page">Core Concepts</a><a href="/#patterns">Patterns</a><a href="/#deep-dives">Deep Dives</a><a href="/#breakdowns">Problem Breakdowns</a><a href="/#in-the-wild">In the Wild</a><a href="/#answers">Interview Answers</a><a href="/#dsa">Data Structures</a></nav>
+</div></header>
+<div class="doc-shell">
+<nav class="side"><h4>Core Concepts</h4><ol><li><a href="/concepts/api-design/">API Design</a></li><li><a href="/concepts/caching/">Caching</a></li><li><a href="/concepts/cap-theorem/">CAP Theorem</a></li><li><a href="/concepts/consistent-hashing/">Consistent Hashing</a></li><li><a href="/concepts/data-modeling/">Data Modeling</a></li><li><a href="/concepts/database-indexing/">Database Indexing</a></li><li><a href="/concepts/networking-essentials/">Networking Essentials</a></li><li><a href="/concepts/numbers-to-know/" aria-current="page">Numbers to Know</a></li><li><a href="/concepts/sharding/">Sharding</a></li></ol></nav>
+<main>
+<article class="art">
+<div class="art-head">
+<div class="art-kicker">Core Concepts</div>
+<h1>Numbers to Know</h1>
+<div class="art-meta"><span>3,279 words</span><span>1 diagram</span></div>
+</div>
+<div class="prose"><blockquote>
+<p><strong>Overview</strong>: Modern hardware has changed the calculus of system design — a single machine now holds terabytes of RAM, single databases handle dozens of terabytes at millisecond latency, and message queues push millions of messages per second. This page collects the numbers that actually matter in 2026 so you can estimate capacity accurately, know where the real limits are, and avoid over-engineering systems based on outdated constraints.</p>
+</blockquote>
+<h2 id="laymans-explanation">🧒 Layman&#39;s Explanation</h2>
+<p>Imagine you&#39;re moving house and you assume you&#39;ll need a whole fleet of trucks making dozens of trips. But you&#39;re picturing the little handcart your grandparents used decades ago. In reality, a modern moving truck is enormous — one trip might carry everything you own. If you plan the whole move around the old handcart, you&#39;ll hire far too many trucks, coordinate a needlessly complex convoy, and spend money and effort solving a problem you don&#39;t actually have.</p>
+<p>System design is the same. Many engineers still &quot;pack for the handcart&quot; — they reach for sharding, message queues, and distributed caches because they remember when a database maxed out at 100GB and a Redis instance held 32GB. But today&#39;s single &quot;truck&quot; is huge: one database holds tens of terabytes, one cache holds ~1TB in RAM, one server juggles 100k+ connections. Knowing the real size of the modern truck is what lets you make the right call — one machine when one will do, and scaling out only when you&#39;ve done the math and genuinely need it.</p>
+<p>Our industry moves fast. The hardware we build systems on evolves constantly, which means even recent textbooks can become outdated quickly. A book published just a few years ago might be teaching patterns that still make sense, but quoting numbers that are off by orders of magnitude.</p>
+<p>One of the biggest giveaways that a candidate has book knowledge but no hands-on experience during a system design interview is when they rely on outdated hardware constraints. They do scale calculations using numbers from 2015 (or even 2020!) that dramatically underestimate what modern systems can handle. You&#39;ll hear concerns about database sizes, memory limits, and storage costs that made sense then, but would lead to significantly over-engineered systems today.</p>
+<p>This isn&#39;t the candidate&#39;s fault – they&#39;re doing the right thing by studying. But understanding modern hardware capabilities is crucial for making good system design decisions. When to shard a database, whether to cache aggressively, how to handle large objects – these choices all depend on having an accurate sense of what today&#39;s hardware can handle.</p>
+<p>Let&#39;s look at the numbers that actually matter in 2026.</p>
+<h2 id="modern-hardware-limits">🖥️ Modern Hardware Limits</h2>
+<p>Modern servers pack serious computing power. An AWS <a href="https://aws.amazon.com/ec2/instance-types/m6i/">M6i.32xlarge</a> comes with 512 GiB of memory and 128 vCPUs for general workloads. Memory-optimized instances go further: the <a href="https://aws.amazon.com/ec2/instance-types/x1e/">X1e.32xlarge</a> provides 4 TB of RAM, while the <a href="https://aws.amazon.com/blogs/aws/ec2-high-memory-update-new-18-tb-and-24-tb-instances/">U-24tb1.metal</a> reaches 24 TB of RAM. This shift matters because many applications that once required distributed systems can now run on a single machine.</p>
+<p>Storage capacity has seen similar growth. Modern instances like AWS&#39;s <a href="https://aws.amazon.com/ec2/instance-types/i3en/">i3en.24xlarge</a> provide 60 TB of local SSD (solid-state drive) storage. If you need more, the <a href="https://aws.amazon.com/ec2/instance-types/d3/">D3en.12xlarge</a> offers 336 TB of HDD (hard disk drive) storage for data-heavy workloads. Object storage like <a href="https://aws.amazon.com/s3/">S3</a> is effectively unlimited, handling petabyte-scale deployments as a standard practice. The days of storage being a primary constraint are largely behind us.</p>
+<p>Network capabilities haven&#39;t stagnated either. Within a datacenter, 25 Gbps is common for standard instances, with high-performance instances supporting 50-100 Gbps or more. Bandwidth across availability zones (AZs) within a region is limited only by instance network capacity. Latency remains predictable: sub-1ms within a single AZ, 1-2ms across AZs in the same region, and 50-150ms cross-region. This consistent performance allows for reliable distributed system design.</p>
+<p>These aren&#39;t just incremental improvements – they represent a step change in what&#39;s possible. When textbooks talk about splitting databases at 100GB or avoiding large objects in memory, they&#39;re working from outdated constraints. The hardware running our systems today would have been unimaginable a decade ago, and these capabilities fundamentally change how we approach system design.</p>
+<h2 id="applying-these-numbers-in-system-design-interviews">🎤 Applying These Numbers in System Design Interviews</h2>
+<p>Let&#39;s look at how these numbers impact specific components and the decisions we make when designing systems in an interview.</p>
+<p>The mental model these numbers unlock is the same for every component: estimate your load, compare it against what a single modern machine can actually handle, and only reach for distributed complexity once you&#39;ve confirmed you&#39;ve crossed a real scale trigger.</p>
+<div class="diagram"><svg preserveAspectRatio="xMidYMid meet" id="m8a714ba20afa5a0c" width="100%" xmlns="http://www.w3.org/2000/svg" class="flowchart" style="max-width:742.15625px;width:100%;height:auto;" viewBox="0 0 742.15625 252" role="graphics-document document" aria-roledescription="flowchart-v2"><style>#m8a714ba20afa5a0c{font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;font-size:14px;fill:#0E1A2B;}@keyframes edge-animation-frame{from{stroke-dashoffset:0;}}@keyframes dash{to{stroke-dashoffset:0;}}#m8a714ba20afa5a0c .edge-animation-slow{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 50s linear infinite;stroke-linecap:round;}#m8a714ba20afa5a0c .edge-animation-fast{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 20s linear infinite;stroke-linecap:round;}#m8a714ba20afa5a0c .error-icon{fill:#FFFFFF;}#m8a714ba20afa5a0c .error-text{fill:#000000;stroke:#000000;}#m8a714ba20afa5a0c .edge-thickness-normal{stroke-width:1px;}#m8a714ba20afa5a0c .edge-thickness-thick{stroke-width:3.5px;}#m8a714ba20afa5a0c .edge-pattern-solid{stroke-dasharray:0;}#m8a714ba20afa5a0c .edge-thickness-invisible{stroke-width:0;fill:none;}#m8a714ba20afa5a0c .edge-pattern-dashed{stroke-dasharray:3;}#m8a714ba20afa5a0c .edge-pattern-dotted{stroke-dasharray:2;}#m8a714ba20afa5a0c .marker{fill:#5B7BB4;stroke:#5B7BB4;}#m8a714ba20afa5a0c .marker.cross{stroke:#5B7BB4;}#m8a714ba20afa5a0c svg{font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;font-size:14px;}#m8a714ba20afa5a0c p{margin:0;}#m8a714ba20afa5a0c .label{font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;color:#0E1A2B;}#m8a714ba20afa5a0c .cluster-label text{fill:#000000;}#m8a714ba20afa5a0c .cluster-label span{color:#000000;}#m8a714ba20afa5a0c .cluster-label span p{background-color:transparent;}#m8a714ba20afa5a0c .label text,#m8a714ba20afa5a0c span{fill:#0E1A2B;color:#0E1A2B;}#m8a714ba20afa5a0c .node rect,#m8a714ba20afa5a0c .node circle,#m8a714ba20afa5a0c .node ellipse,#m8a714ba20afa5a0c .node polygon,#m8a714ba20afa5a0c .node path{fill:#EEF3FF;stroke:#2563EB;stroke-width:1px;}#m8a714ba20afa5a0c .rough-node .label text,#m8a714ba20afa5a0c .node .label text,#m8a714ba20afa5a0c .image-shape .label,#m8a714ba20afa5a0c .icon-shape .label{text-anchor:middle;}#m8a714ba20afa5a0c .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#m8a714ba20afa5a0c .rough-node .label,#m8a714ba20afa5a0c .node .label,#m8a714ba20afa5a0c .image-shape .label,#m8a714ba20afa5a0c .icon-shape .label{text-align:center;}#m8a714ba20afa5a0c .node.clickable{cursor:pointer;}#m8a714ba20afa5a0c .root .anchor path{fill:#5B7BB4!important;stroke-width:0;stroke:#5B7BB4;}#m8a714ba20afa5a0c .arrowheadPath{fill:rgba(255, 255, 255, 0);}#m8a714ba20afa5a0c .edgePath .path{stroke:#5B7BB4;stroke-width:1px;}#m8a714ba20afa5a0c .flowchart-link{stroke:#5B7BB4;fill:none;}#m8a714ba20afa5a0c .edgeLabel{background-color:#F0F4FF;text-align:center;}#m8a714ba20afa5a0c .edgeLabel p{background-color:#F0F4FF;}#m8a714ba20afa5a0c .edgeLabel rect{opacity:0.5;background-color:#F0F4FF;fill:#F0F4FF;}#m8a714ba20afa5a0c .labelBkg{background-color:rgba(240, 244, 255, 0.5);}#m8a714ba20afa5a0c .cluster rect{fill:#FFFFFF;stroke:hsl(0, 0%, 90%);stroke-width:1px;}#m8a714ba20afa5a0c .cluster text{fill:#000000;}#m8a714ba20afa5a0c .cluster span{color:#000000;}#m8a714ba20afa5a0c div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;font-size:12px;background:#FFFFFF;border:1px solid hsl(0, 0%, 90%);border-radius:2px;pointer-events:none;z-index:100;}#m8a714ba20afa5a0c .flowchartTitleText{text-anchor:middle;font-size:18px;fill:#0E1A2B;}#m8a714ba20afa5a0c rect.text{fill:none;stroke-width:0;}#m8a714ba20afa5a0c .icon-shape,#m8a714ba20afa5a0c .image-shape{background-color:#F0F4FF;text-align:center;}#m8a714ba20afa5a0c .icon-shape p,#m8a714ba20afa5a0c .image-shape p{background-color:#F0F4FF;padding:2px;}#m8a714ba20afa5a0c .icon-shape .label rect,#m8a714ba20afa5a0c .image-shape .label rect{opacity:0.5;background-color:#F0F4FF;fill:#F0F4FF;}#m8a714ba20afa5a0c .label-icon{display:inline-block;height:1em;overflow:visible;vertical-align:-0.125em;}#m8a714ba20afa5a0c .node .label-icon path{fill:currentColor;stroke:revert;stroke-width:revert;}#m8a714ba20afa5a0c .node .neo-node{stroke:#2563EB;}#m8a714ba20afa5a0c [data-look="neo"].node rect,#m8a714ba20afa5a0c [data-look="neo"].cluster rect,#m8a714ba20afa5a0c [data-look="neo"].node polygon{stroke:url(#m8a714ba20afa5a0c-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#m8a714ba20afa5a0c [data-look="neo"].swimlane.cluster rect{filter:none;}#m8a714ba20afa5a0c [data-look="neo"].node path{stroke:url(#m8a714ba20afa5a0c-gradient);stroke-width:1px;}#m8a714ba20afa5a0c [data-look="neo"].node .outer-path{filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#m8a714ba20afa5a0c [data-look="neo"].node .neo-line path{stroke:#2563EB;filter:none;}#m8a714ba20afa5a0c [data-look="neo"].node circle{stroke:url(#m8a714ba20afa5a0c-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#m8a714ba20afa5a0c [data-look="neo"].node circle .state-start{fill:#000000;}#m8a714ba20afa5a0c [data-look="neo"].icon-shape .icon{fill:url(#m8a714ba20afa5a0c-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#m8a714ba20afa5a0c [data-look="neo"].icon-shape .icon-neo path{stroke:url(#m8a714ba20afa5a0c-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#m8a714ba20afa5a0c :root{--mermaid-font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;}</style><g><marker id="m8a714ba20afa5a0c_flowchart-v2-pointEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></path></marker><marker id="m8a714ba20afa5a0c_flowchart-v2-pointStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="4.5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 5 L 10 10 L 10 0 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></path></marker><marker id="m8a714ba20afa5a0c_flowchart-v2-pointEnd-margin" class="marker flowchart-v2" viewBox="0 0 11.5 14" refX="11.5" refY="7" markerUnits="userSpaceOnUse" markerWidth="10.5" markerHeight="14" orient="auto"><path d="M 0 0 L 11.5 7 L 0 14 z" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"></path></marker><marker id="m8a714ba20afa5a0c_flowchart-v2-pointStart-margin" class="marker flowchart-v2" viewBox="0 0 11.5 14" refX="1" refY="7" markerUnits="userSpaceOnUse" markerWidth="11.5" markerHeight="14" orient="auto"><polygon points="0,7 11.5,14 11.5,0" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"></polygon></marker><marker id="m8a714ba20afa5a0c_flowchart-v2-circleEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="11" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></circle></marker><marker id="m8a714ba20afa5a0c_flowchart-v2-circleStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-1" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></circle></marker><marker id="m8a714ba20afa5a0c_flowchart-v2-circleEnd-margin" class="marker flowchart-v2" viewBox="0 0 10 10" refY="5" refX="12.25" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"></circle></marker><marker id="m8a714ba20afa5a0c_flowchart-v2-circleStart-margin" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-2" refY="5" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"></circle></marker><marker id="m8a714ba20afa5a0c_flowchart-v2-crossEnd" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="12" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"></path></marker><marker id="m8a714ba20afa5a0c_flowchart-v2-crossStart" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="-1" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"></path></marker><marker id="m8a714ba20afa5a0c_flowchart-v2-crossEnd-margin" class="marker cross flowchart-v2" viewBox="0 0 15 15" refX="17.7" refY="7.5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M 1,1 L 14,14 M 1,14 L 14,1" class="arrowMarkerPath" style="stroke-width: 2.5;"></path></marker><marker id="m8a714ba20afa5a0c_flowchart-v2-crossStart-margin" class="marker cross flowchart-v2" viewBox="0 0 15 15" refX="-3.5" refY="7.5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M 1,1 L 14,14 M 1,14 L 14,1" class="arrowMarkerPath" style="stroke-width: 2.5; stroke-dasharray: 1, 0;"></path></marker><g class="root"><g class="clusters"></g><g class="edgePaths"><path d="M231.969,126L236.135,126C240.302,126,248.635,126,256.302,126C263.969,126,270.969,126,274.469,126L277.969,126" id="m8a714ba20afa5a0c-L_E_C_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_E_C_0" data-points="W3sieCI6MjMxLjk2ODc1LCJ5IjoxMjZ9LHsieCI6MjU2Ljk2ODc1LCJ5IjoxMjZ9LHsieCI6MjgxLjk2ODc1LCJ5IjoxMjZ9XQ==" data-look="classic" marker-end="url(#m8a714ba20afa5a0c_flowchart-v2-pointEnd)"></path><path d="M439.554,92.351L451.171,86.042C462.788,79.734,486.023,67.117,502.983,60.808C519.943,54.5,530.628,54.5,535.97,54.5L541.313,54.5" id="m8a714ba20afa5a0c-L_C_S_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_C_S_0" data-points="W3sieCI6NDM5LjU1MzY0MDI2NTcwNzk0LCJ5Ijo5Mi4zNTA1MTUyNjU3MDc5MX0seyJ4Ijo1MDkuMjU3ODEyNSwieSI6NTQuNX0seyJ4Ijo1NDUuMzEyNSwieSI6NTQuNX1d" data-look="classic" marker-end="url(#m8a714ba20afa5a0c_flowchart-v2-pointEnd)"></path><path d="M439.554,159.649L451.171,165.958C462.788,172.266,486.023,184.883,505.711,191.192C525.398,197.5,541.539,197.5,549.609,197.5L557.68,197.5" id="m8a714ba20afa5a0c-L_C_X_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_C_X_0" data-points="W3sieCI6NDM5LjU1MzY0MDI2NTcwNzk0LCJ5IjoxNTkuNjQ5NDg0NzM0MjkyMX0seyJ4Ijo1MDkuMjU3ODEyNSwieSI6MTk3LjV9LHsieCI6NTYxLjY3OTY4NzUsInkiOjE5Ny41fV0=" data-look="classic" marker-end="url(#m8a714ba20afa5a0c_flowchart-v2-pointEnd)"></path></g><g class="edgeLabels"><g class="edgeLabel"><g class="label" data-id="L_E_C_0" transform="translate(0, 0)"><foreignObject width="0" height="0"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(509.2578125, 54.5)"><g class="label" data-id="L_C_S_0" transform="translate(-11.0546875, -10.5)"><foreignObject width="22.109375" height="21"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "><p>Yes</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(509.2578125, 197.5)"><g class="label" data-id="L_C_X_0" transform="translate(-8.875, -10.5)"><foreignObject width="17.75" height="21"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "><p>No</p></span></div></foreignObject></g></g></g><g class="nodes"><g class="node default  " id="m8a714ba20afa5a0c-flowchart-E-0" data-look="classic" transform="translate(119.984375, 126)"><rect class="basic label-container" style="fill:#FFE4B5 !important" x="-111.984375" y="-36" width="223.96875" height="72"></rect><g class="label" style="" transform="translate(-81.984375, -21)"><rect></rect><foreignObject width="163.96875" height="42"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>Estimate load<br/>data volume &amp; throughput</p></span></div></foreignObject></g></g><g class="node default  " id="m8a714ba20afa5a0c-flowchart-C-1" data-look="classic" transform="translate(377.5859375, 126)"><polygon points="95.6171875,0 191.234375,-95.6171875 95.6171875,-191.234375 0,-95.6171875" class="label-container" transform="translate(-95.1171875, 95.6171875)" style="fill:#e1f5ff !important"></polygon><g class="label" style="" transform="translate(-59.6171875, -21)"><rect></rect><foreignObject width="119.234375" height="42"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>Within modern<br/>single-node limits?</p></span></div></foreignObject></g></g><g class="node default  " id="m8a714ba20afa5a0c-flowchart-S-3" data-look="classic" transform="translate(639.734375, 54.5)"><rect class="basic label-container" style="fill:#90EE90 !important" x="-94.421875" y="-46.5" width="188.84375" height="93"></rect><g class="label" style="" transform="translate(-64.421875, -31.5)"><rect></rect><foreignObject width="128.84375" height="63"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>Stay simple<br/>single DB + replicas<br/>cache only if needed</p></span></div></foreignObject></g></g><g class="node default  " id="m8a714ba20afa5a0c-flowchart-X-5" data-look="classic" transform="translate(639.734375, 197.5)"><rect class="basic label-container" style="fill:#FFB6C1 !important" x="-78.0546875" y="-46.5" width="156.109375" height="93"></rect><g class="label" style="" transform="translate(-48.0546875, -31.5)"><rect></rect><foreignObject width="96.109375" height="63"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>Scale out<br/>shard · queue ·<br/>more instances</p></span></div></foreignObject></g></g></g></g></g><defs><filter id="m8a714ba20afa5a0c-drop-shadow" height="130%" width="130%"><feDropShadow dx="4" dy="4" stdDeviation="0" flood-opacity="0.06" flood-color="#000000"></feDropShadow></filter></defs><defs><filter id="m8a714ba20afa5a0c-drop-shadow-small" height="150%" width="150%"><feDropShadow dx="2" dy="2" stdDeviation="0" flood-opacity="0.06" flood-color="#000000"></feDropShadow></filter></defs><linearGradient id="m8a714ba20afa5a0c-gradient" gradientUnits="objectBoundingBox" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#2563EB" stop-opacity="1"></stop><stop offset="100%" stop-color="hsl(224, 60%, 87.0588235294%)" stop-opacity="1"></stop></linearGradient></svg></div>
+
+
+<h3 id="caching">🗄️ Caching</h3>
+<p>In-memory caches have grown exponentially in both size and capability. Gone are the days of 32-64GB Redis instances that required careful memory management and partial dataset caching. Today&#39;s caches routinely handle terabyte-scale datasets with single-digit millisecond latency, and a single instance can process hundreds of thousands of operations per second. This shift in scale changes the entire approach to caching strategy.</p>
+<p>Numbers to know:</p>
+<ul>
+<li>Memory: Up to 1TB on memory-optimized instances, with some configurations exceeding this for specialized use cases</li>
+<li>Latency<ul>
+<li>Reads: &lt; 1ms within the same region</li>
+<li>Writes: &lt; 1ms same-AZ, 1-2ms cross-AZ (within the same region) for optimized systems</li>
+</ul>
+</li>
+<li>Throughput: 100k-200k+ operations/second per instance for in-memory caches like ElastiCache Redis on modern Graviton-based nodes (reads and writes are roughly equivalent for simple operations)</li>
+</ul>
+<p>When to consider scaling:</p>
+<ul>
+<li>Dataset Size: Approaching 1TB in size</li>
+<li>Throughput: Sustained throughput of 100k+ ops/second</li>
+<li>Read Latency: Requirements below 0.5ms consistently</li>
+</ul>
+<p>These capabilities fundamentally change caching strategy. The ability to cache entire databases in memory, even at hundreds of gigabytes, means you can often avoid complex partial caching schemes altogether. This &quot;cache everything&quot; approach, while seemingly brute force, typically costs less than engineering time spent on selective caching logic. When you do need to scale, the bottleneck is usually operations per second or network bandwidth, not memory size – a counterintuitive shift from just a few years ago.</p>
+<h3 id="databases">🛢️ Databases</h3>
+<p>The raw power of modern databases surprises even experienced engineers. Single PostgreSQL or MySQL instances now routinely handle dozens of terabytes of data while maintaining millisecond-level response times. This isn&#39;t just about storage either. Modern databases efficiently handle tens of thousands of transactions per second on a single primary, with the bottleneck often being operational concerns rather than performance limits.</p>
+<p>Numbers to know:</p>
+<ul>
+<li>Storage: Single instances handle up to 64 TiB for most database engines, with Aurora supporting up to 256 TiB</li>
+<li>Latency<ul>
+<li>Reads: 1-5ms for cached data, 5-30ms for disk (optimized configurations for RDS and Aurora)</li>
+<li>Writes: 5-15ms for commit latency (for single-node, high-performance setups)</li>
+</ul>
+</li>
+<li>Throughput<ul>
+<li>Reads: Up to 50k TPS (transactions per second) in single-node configurations on Aurora and RDS</li>
+<li>Writes: 10-20k TPS in single-node configurations on Aurora and RDS</li>
+</ul>
+</li>
+<li>Connections: 5-20k concurrent connections, depending on database and instance type</li>
+</ul>
+<p>When to consider sharding:</p>
+<ul>
+<li>Dataset Size: Approaching or exceeding 50 TiB may require sharding or distributed solutions</li>
+<li>Write Throughput: Consistently exceeding 10k TPS indicates scaling considerations</li>
+<li>Read Latency: Requirements below 5ms for uncached data may necessitate optimization</li>
+<li>Geographic Distribution: Cross-region replication or distribution needs</li>
+<li>Backup/Recovery: Backup windows that stretch into hours or become operationally impractical</li>
+</ul>
+<p>While the largest systems in the world (social networks, e-commerce giants, etc.) absolutely need sharding to handle their scale, many candidates jump to distributed solutions too early. For systems handling millions or even tens of millions of users, a well-tuned single database can often handle the load. When you do need to scale, carefully consider what&#39;s driving the decision: is it pure data volume, operational concerns like backup windows, or the need for geographic distribution? Understanding these tradeoffs leads to better scaling decisions.</p>
+<blockquote>
+<p>💡 A &quot;single instance&quot; doesn&#39;t mean a single point of failure. In practice, you&#39;d still run a primary with read replicas for availability (e.g. Aurora&#39;s multi-AZ failover). The point here is that you often don&#39;t need to shard the data — replication for HA is a separate concern from horizontal partitioning for scale.</p>
+</blockquote>
+<blockquote>
+<p>⚠️ More often than not I see candidates reaching for scaling too quickly. They have 500GB or a couple of terabytes of data and they&#39;re start explaining how they&#39;d shard the database. Slow down, do the math, and make sure sharding is actually needed before you start explaining how you&#39;d do it.</p>
+</blockquote>
+<h3 id="application-servers">🖥️ Application Servers</h3>
+<p>Modern application servers have evolved beyond the resource constraints that shaped many traditional design patterns. Today&#39;s servers routinely handle thousands of concurrent connections with modest resource usage, while cloud platforms enable rapid scaling in response to load. CPU processing power, rather than memory or connection limits, typically determines your server&#39;s capabilities.</p>
+<p>Numbers to know:</p>
+<ul>
+<li>Connections: 100k+ concurrent connections per instance for optimized configurations</li>
+<li>CPU: 8-64 cores</li>
+<li>Memory: 64-512GB standard, up to 2TB available for high-memory instances</li>
+<li>Network: 25 Gbps standard, up to 50-100 Gbps on high-performance instances</li>
+<li>Startup Time: 30-60 seconds for containerized apps</li>
+</ul>
+<p>When to consider horizontal scaling:</p>
+<ul>
+<li>CPU Utilization: Consistently above 70-80%</li>
+<li>Response Latency: Exceeding SLA or critical thresholds</li>
+<li>Memory Usage: Trending above 70-80%</li>
+<li>Network Bandwidth: Approaching instance limits</li>
+</ul>
+<p>The implications for system design are significant. While the trend toward stateless services is valuable for scaling, don&#39;t forget that each server has substantial memory available. Local caching, in-memory computations, and session handling can all leverage this memory to improve performance dramatically. CPU is almost always your first bottleneck, not memory, so don&#39;t shy away from memory-intensive optimizations when they make sense. When you do need to scale, cloud platforms can spin up new instances in 30-60 seconds for containerized apps, making aggressive auto-scaling a viable alternative to over-provisioning. This combination of powerful individual instances and rapid scaling means you can often achieve high performance through simple architectures.</p>
+<h3 id="message-queues">📨 Message Queues</h3>
+<p>Message queues have transformed from simple task delegation systems into high-performance data highways. Modern systems like Kafka process <a href="https://engineering.linkedin.com/kafka/benchmarking-apache-kafka-2-million-writes-second-three-cheap-machines">millions of messages per second</a> with single-digit millisecond latency, while maintaining weeks or months of data. This combination of speed and durability has expanded their role far beyond traditional async processing.</p>
+<p>Numbers to know:</p>
+<ul>
+<li>Throughput: Up to 1 million messages/second per broker in modern configurations</li>
+<li>Latency: 1-5ms end-to-end within a region for optimized setups</li>
+<li>Message Size: 1KB-10MB efficiently handled</li>
+<li>Storage: Up to 50TB per broker in advanced configurations</li>
+<li>Retention: Weeks to months of data, depending on disk capacity and configuration</li>
+</ul>
+<p>When to consider scaling:</p>
+<ul>
+<li>Throughput: Nearing 800k messages/second per broker</li>
+<li>Partition Count: Approaching 200k per cluster</li>
+<li>Consumer Lag: Consistently growing, impacting real-time processing</li>
+<li>Cross-Region Replication: If geographic redundancy is required</li>
+</ul>
+<p>The performance characteristics of modern queues challenge traditional system design assumptions. With consistent sub-5ms latencies, you can now use queues within synchronous request flows—getting the benefits of reliable delivery and decoupling without forcing APIs to be async. This speed, combined with practically unlimited storage, means queues can serve as the backbone for event sourcing, real-time analytics, and data integration patterns that previously required specialized systems.</p>
+<h2 id="cheat-sheet">📋 Cheat Sheet</h2>
+<p>Here is a one-stop-shop for the numbers you need to know in 2026. These numbers represent typical values for well-tuned systems with specific workloads - your requirements may vary based on workload, hardware, and configuration. Use them as a starting point for capacity planning and system design discussions, not as hard limits. Remember that cloud providers regularly update their offerings, so while I&#39;ll try to keep this up to date, it should be treated more as a starting point than a hard limit.</p>
+<div class="tbl-wrap"><table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Key Metrics</th>
+<th>Scale Triggers</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Caching</strong></td>
+<td>- ~1 millisecond latency<br>- 100k+ operations/second<br>- Memory-bound (up to 1TB)</td>
+<td>- Hit rate &lt; 80%<br>- Latency &gt; 1ms<br>- Memory usage &gt; 80%<br>- Cache churn/thrashing</td>
+</tr>
+<tr>
+<td><strong>Databases</strong></td>
+<td>- Up to 50k transactions/second<br>- Sub-5ms read latency (cached)<br>- 64 TiB+ storage capacity</td>
+<td>- Write throughput &gt; 10k TPS<br>- Read latency &gt; 5ms uncached<br>- Geographic distribution needs</td>
+</tr>
+<tr>
+<td><strong>App Servers</strong></td>
+<td>- 100k+ concurrent connections<br>- 8-64 cores @ 2-4 GHz<br>- 64-512GB RAM standard, up to 2TB</td>
+<td>- CPU &gt; 70% utilization<br>- Response latency &gt; SLA<br>- Connections near 100k/instance<br>- Memory &gt; 80%</td>
+</tr>
+<tr>
+<td><strong>Message Queues</strong></td>
+<td>- Up to 1 million msgs/sec per broker<br>- Sub-5ms end-to-end latency<br>- Up to 50TB storage</td>
+<td>- Throughput near 800k msgs/sec<br>- Partition count ~200k per cluster<br>- Growing consumer lag</td>
+</tr>
+</tbody></table></div>
+<h2 id="common-mistakes-in-interviews">⚠️ Common Mistakes In Interviews</h2>
+<h3 id="premature-sharding">Premature sharding</h3>
+<p>The single biggest mistake I see candidates make is assuming <a href="https://www.hellointerview.com/learn/system-design/core-concepts/sharding">sharding</a> is always necessary. They introduce a data model and immediately explain which column they&#39;d shard on. It comes up almost every time with <a href="https://hellointerview.com/learn/system-design/problem-breakdowns/yelp">Design Yelp</a> in particular. Here we have 10M businesses, each of which is roughly 1KB of data. This is <code>10M * 1KB = 10GB</code> of data! 10x it to account for reviews which we can store in the same database and you&#39;re only at <code>100GB</code>, why would you shard?</p>
+<p>The same thing comes up a lot with caches. Take a <a href="https://hellointerview.com/learn/system-design/problem-breakdowns/leetcode">LeetCode</a> leaderboard where we have 100k competitions and up to 100k users per competition. We&#39;re looking at <code>100k * 100k * (36B ID + 4B float rating) = 400GB</code>. While even more than what we store on disk with Yelp, this can still fit on a single large cache -- no need to <a href="https://www.hellointerview.com/learn/system-design/core-concepts/sharding">shard</a>!</p>
+<h3 id="overestimating-latency">Overestimating latency</h3>
+<p>I see this most with SSDs. Candidates tend to vastly overestimate the latency to query an SSD (Database) for a simple key or row lookup. We&#39;re talking sub-millisecond to a few milliseconds for indexed lookups. It&#39;s fast! Candidates will oftentimes justify adding a caching layer to reduce latency when the simple row lookup is already fast enough -- no need to add additional infrastructure.</p>
+<blockquote>
+<p>💡 <strong>Note</strong>: this is only for simple row lookups with an index. It is still wise to cache expensive queries.</p>
+</blockquote>
+<h3 id="over-engineering-given-a-high-write-throughput">Over-engineering given a high write throughput</h3>
+<p>Similar to the above, incorrect estimates routinely lead to over-engineering. Imagine we have a system with 5k writes per second. Candidates will often jump to adding a message queue to buffer this &quot;high&quot; write throughput. But they don&#39;t need to!</p>
+<p>Let&#39;s put this in perspective. A well-tuned Postgres instance with simple writes can handle 20k+ writes per second. What actually limits write capacity are things like complex transactions spanning multiple tables, write amplification from excessive indexes, writes that trigger expensive cascading updates, or heavy concurrent reads competing with writes. If you&#39;re just inserting rows or doing simple updates with proper indexes, there&#39;s no need for complex queueing systems at 5k WPS.</p>
+<p>Message queues become valuable when you need guaranteed delivery in case of downstream failures, event sourcing patterns, handling write spikes that exceed your database&#39;s capacity (e.g. above 20k+ WPS for a single Postgres instance), or decoupling producers from consumers. But they add complexity and should be justified by actual requirements. Before reaching for a message queue, consider simpler optimizations like batch writes, optimizing your schema and indexes, using connection pooling effectively, or using async commits for non-critical writes.</p>
+<p>The core point is to understand your actual write patterns and requirements before adding infrastructure complexity. Modern databases are incredibly capable, and simple solutions often perform better than you might expect.</p>
+<h2 id="what-about-costs">💰 What about costs?</h2>
+<p>When you&#39;re actually designing a real system, cost is often a major factor. You&#39;ll sketch out estimates for your usage, multiply those by pricing tables, and try to compare the exact dollar costs of different options to establish a TCO (Total Cost of Ownership).</p>
+<p>But in system design interviews, this is rarely the focus. First, most candidates and interviewers don&#39;t care to memorize pricing tables (and RAM or SSD prices are changing <em>constantly</em>). And secondly, accurate pricing requires good estimates, and remember for our SD estimates we&#39;re usually looking for an order of magnitude: not an exact dollar amount.</p>
+<p>So interviewers tend to not be especially sensitive to exact costs. That&#39;s not to say you should ignore the abstract idea of whether something is cost-effective or not. Having 100 machines when 1 will do, or using a bank of in-memory caches when users only need their data in hundreds of milliseconds will trigger a flag from an interviewer. But we would not recommend you memorize AWS pricing tables — spend your time elsewhere.</p>
+<h2 id="conclusion">📝 Conclusion</h2>
+<p>Modern hardware capabilities have fundamentally changed the calculus of system design. While distributed systems and horizontal scaling remain necessary for the world&#39;s largest applications, many systems can be significantly simpler than what traditional wisdom suggests.</p>
+<p>Understanding these numbers helps you make better scaling decisions:</p>
+<ul>
+<li>Single databases can handle terabytes of data</li>
+<li>Caches can hold entire datasets in memory</li>
+<li>Message queues are fast enough for synchronous flows (as long as there is no backlog!)</li>
+<li>Application servers have enough memory for significant local optimization</li>
+</ul>
+<p>The key insight isn&#39;t that vertical scaling is always the answer – it&#39;s knowing where the real limits are. This knowledge helps you avoid premature optimization and build simpler systems that can grow with your needs. In system design interviews, demonstrating this understanding shows that you can balance theoretical knowledge with practical experience – a crucial skill, especially for the more senior levels.</p>
+<p>Answer the question below to find your gaps.</p>
+<h2 id="key-takeaways">🎓 Key Takeaways</h2>
+<ul>
+<li><strong>The hardware moved, so should your estimates.</strong> A single machine now offers up to ~24TB RAM; caches hold ~1TB in memory; single databases handle up to 64 TiB (256 TiB on Aurora) at millisecond latency. Quoting 2015-era limits is the clearest tell of book-only knowledge.</li>
+<li><strong>Do the math before you scale.</strong> 10M businesses at ~1KB each is only ~10GB — even 10x&#39;d for reviews that&#39;s ~100GB. A LeetCode leaderboard of 100k competitions × 100k users fits in ~400GB. Neither needs sharding.</li>
+<li><strong>CPU is usually the first bottleneck, not memory.</strong> App servers handle 100k+ concurrent connections with 64–512GB RAM standard; scale horizontally around 70–80% CPU, and use the spare memory for local caching and in-memory work.</li>
+<li><strong>Know the scale triggers per component:</strong> caches past ~1TB or 100k+ ops/sec; databases past ~50 TiB or 10k+ write TPS; message queues nearing 800k msgs/sec per broker or ~200k partitions per cluster.</li>
+<li><strong>Modern queues are fast enough for synchronous flows</strong> (1–5ms end-to-end) as long as there&#39;s no backlog — reliable delivery without forcing every API async.</li>
+<li><strong>Costs rarely decide interviews.</strong> Don&#39;t memorize pricing tables; aim for order-of-magnitude estimates and flag only egregiously wasteful designs (100 machines when 1 will do).</li>
+</ul>
+<h2 id="related-concepts">📚 Related Concepts</h2>
+<ul>
+<li><a href="/notes/sharding/">Sharding</a> — when horizontal partitioning is actually warranted (and when it&#39;s premature).</li>
+<li><a href="/notes/caching/">Caching</a> — the &quot;cache everything&quot; strategy these memory numbers enable.</li>
+<li><a href="/notes/data-indexing/">Data Indexing</a> — why indexed row lookups are sub-millisecond and rarely need a cache in front.</li>
+<li><a href="/patterns/scaling-reads/">Scaling Reads</a> — the ~50k–100k RPS rule of thumb before scaling out reads.</li>
+<li><a href="/patterns/scaling-writes/">Scaling Writes</a> — the write-throughput limits that justify (or don&#39;t) a message queue.</li>
+<li><a href="/deep-dives/kafka/">Kafka</a> — the message queue behind the million-messages-per-second figures.</li>
+<li><a href="/deep-dives/postgresql/">PostgreSQL</a> — the single-instance database whose limits anchor these estimates.</li>
+</ul>
+<hr>
+<p><em>Source: <a href="https://www.hellointerview.com/learn/system-design/core-concepts/numbers-to-know">https://www.hellointerview.com/learn/system-design/core-concepts/numbers-to-know</a></em></p>
+</div>
+</article>
+<nav class="pager">
+<a href="/concepts/networking-essentials/"><span>Previous</span><b>Networking Essentials</b></a>
+<a class="nx" href="/concepts/sharding/"><span>Next</span><b>Sharding</b></a>
+</nav>
+</main>
+<aside class="toc"><h4>On this page</h4><ol><li><a class="" href="#laymans-explanation">Layman's Explanation</a></li><li><a class="" href="#modern-hardware-limits">Modern Hardware Limits</a></li><li><a class="" href="#applying-these-numbers-in-system-design-interviews">Applying These Numbers in System Design Interviews</a></li><li><a class="h3" href="#caching">Caching</a></li><li><a class="h3" href="#databases">Databases</a></li><li><a class="h3" href="#application-servers">Application Servers</a></li><li><a class="h3" href="#message-queues">Message Queues</a></li><li><a class="" href="#cheat-sheet">Cheat Sheet</a></li><li><a class="" href="#common-mistakes-in-interviews">Common Mistakes In Interviews</a></li><li><a class="h3" href="#premature-sharding">Premature sharding</a></li><li><a class="h3" href="#overestimating-latency">Overestimating latency</a></li><li><a class="h3" href="#over-engineering-given-a-high-write-throughput">Over-engineering given a high write throughput</a></li><li><a class="" href="#what-about-costs">What about costs?</a></li><li><a class="" href="#conclusion">Conclusion</a></li><li><a class="" href="#key-takeaways">Key Takeaways</a></li><li><a class="" href="#related-concepts">Related Concepts</a></li></ol></aside>
+</div>
+<script src="/assets/doc.js" defer></script>
+<footer class="foot"><div class="foot-in">
+<span>InterviewVault — system design study vault</span>
+<span>122 documents · 607 diagrams</span>
+</div></footer>
+</body>
+</html>

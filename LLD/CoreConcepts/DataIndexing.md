@@ -1343,7 +1343,7 @@ graph TB
     WRITE --> I2[Update index: status: 1 I/O]
     WRITE --> I3[Update index: created_at: 1 I/O]
     WRITE --> I4[Update index: email: 1 I/O]
-    WRITE --> WAL[Write WAL (transaction log): 1 I/O]
+    WRITE --> WAL["Write WAL (transaction log): 1 I/O"]
 
     TOTAL[Total: 6 I/Os for 1 logical write]
 

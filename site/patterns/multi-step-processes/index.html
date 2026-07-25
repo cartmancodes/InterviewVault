@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Multi-step Processes — InterviewVault</title>
+<meta name="description" content="Multi-step Processes: Reusable solution shapes: scaling reads and writes, contention, real-time, blobs.">
+<meta property="og:title" content="Multi-step Processes — InterviewVault">
+<meta property="og:description" content="Multi-step Processes: Reusable solution shapes: scaling reads and writes, contention, real-time, blobs.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+</head>
+<body class="">
+<header class="hdr"><div class="hdr-in">
+<a class="brand" href="/"><span class="brand-mark">IV</span><span class="brand-name">Interview<span>Vault</span></span></a>
+<nav class="hdr-nav"><a href="/#in-a-hurry">In a Hurry</a><a href="/#notes">Deep Notes</a><a href="/#concepts">Core Concepts</a><a href="/#patterns" aria-current="page">Patterns</a><a href="/#deep-dives">Deep Dives</a><a href="/#breakdowns">Problem Breakdowns</a><a href="/#in-the-wild">In the Wild</a><a href="/#answers">Interview Answers</a><a href="/#dsa">Data Structures</a></nav>
+</div></header>
+<div class="doc-shell">
+<nav class="side"><h4>Patterns</h4><ol><li><a href="/patterns/dealing-with-contention/">Dealing with Contention</a></li><li><a href="/patterns/handling-large-blobs/">Handling Large Blobs</a></li><li><a href="/patterns/managing-long-running-tasks/">Managing Long Running Tasks</a></li><li><a href="/patterns/multi-step-processes/" aria-current="page">Multi-step Processes</a></li><li><a href="/patterns/real-time-updates/">Real-time Updates</a></li><li><a href="/patterns/scaling-reads/">Scaling Reads</a></li><li><a href="/patterns/scaling-writes/">Scaling Writes</a></li></ol></nav>
+<main>
+<article class="art">
+<div class="art-head">
+<div class="art-kicker">Patterns</div>
+<h1>Multi-step Processes</h1>
+<div class="art-meta"><span>6,084 words</span><span>1 diagram</span><span>6 figures</span></div>
+</div>
+<div class="prose"><blockquote>
+<p>📑 <strong>Quick Reference:</strong> <a href="/patterns/quick-reference/multi-step-processes/">condensed cheat-sheet</a> for last-minute review.</p>
+</blockquote>
+<p>Learn about multi-step processes and how to handle them in your system design with distributed transactions, sagas, workflow systems, and durable execution.</p>
+<blockquote>
+<p><strong>Overview</strong>: Real production systems must survive failures, retries, and long-running operations spanning hours or days. These often take the form of multi-step processes or sagas that coordinate dozens of (flaky) services and systems, and they are a continual source of operational and design challenges for engineers. Workflow systems, event-driven sagas, and durable execution are the solutions to this problem, and they show up constantly in system design interviews.</p>
+</blockquote>
+<h2 id="laymans-explanation">🧒 Layman&#39;s Explanation</h2>
+<p>Think about placing an online order. Behind that one click, a chain of steps has to happen in order: charge your card, reserve the item from the warehouse, print a shipping label, wait for a worker to physically pick it off the shelf, and email you a confirmation. Any step can fail or stall — the card gets declined, the item is out of stock, or the computer running the whole thing simply crashes halfway through.</p>
+<p>Now imagine doing all of this from memory. If you get distracted right after charging the card, you might forget the customer ever paid — and now they&#39;re out the money with nothing shipped. A workflow engine is like a meticulous assistant who writes every completed step in a notebook that survives even if the assistant goes home sick. A fresh assistant picks up the same notebook, sees exactly what&#39;s done, and continues from there. And if a late step falls through — say the item can&#39;t be found — the assistant knows how to walk the checklist <em>backwards</em> and undo what already happened: release the reservation, refund the card (these undo-steps are called <strong>compensations</strong>). That &quot;do the steps, remember your place across crashes, and undo cleanly when something breaks&quot; is the whole game.</p>
+<h2 id="the-problem">⚠️ The Problem</h2>
+<p>Building reliable multi-step processes in distributed systems is startlingly hard. While clean systems like databases often get to deal with a single &quot;write&quot; or &quot;read&quot;, real applications often need to coordinate dozens of (flaky) services and systems to do the user&#39;s bidding, and doing this quickly and reliably is a common challenge.</p>
+<p>Jimmy Bogard has a great talk about this titled <a href="https://www.youtube.com/watch?v=VvUdvte1V3s">&quot;Six Little Lines of Fail&quot;</a> with the premise that distributed systems make even a simple sequence of steps like this surprisingly hard (if you haven&#39;t had to deal with systems like this before, it&#39;s a great watch).</p>
+<p>Consider an e-commerce order fulfillment workflow: charge payment, reserve inventory, create a shipping label, wait for a warehouse worker to pick the item, and send the confirmation email. Each step involves calling different services or waiting on humans, any of which might fail or timeout. Some steps require us to call out to external systems (like a payment gateway) and wait for them to complete. During the orchestration, your server might crash or be deployed to. And maybe you want to make a change to the ordering or nature of steps! The messy complexity of business needs and real-world infrastructure quickly breaks down our otherwise pure flow chart of steps.</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/Patterns/assets/iwzGWwURy7Ss.1w2p6x57pmik0.svg" alt="Order Fulfillment Nightmare" loading="lazy"><figcaption>Order Fulfillment Nightmare</figcaption></figure></p>
+<p>There are, of course, patches we can organically make to processes like this. We can fortify each service to handle failures, use delay queues and hooks to handle waits and human tasks, etc. but overall each of these things makes the system more complex and brittle. We interweave system-level concerns (crashes, retries, failures) with business-level concerns (what happens if we can&#39;t find the item?). Not a great design!</p>
+<p>Workflow systems, event-driven sagas, and durable execution are the solutions to this problem, and they show up in many system design interviews, particularly when there is a lot of state and a lot of failure handling. AI system design interviews lean on this even harder, since agent pipelines are long chains of exactly these flaky, stateful steps. Interviewers love to ask questions about this because it dominates the oncall rotation for many production teams and gets at the heart of what makes many distributed systems hard to build well.</p>
+<p>In this article, we&#39;ll cover what they are, how they work, and how to use them in your interviews.</p>
+<p><a href="https://www.hellointerview.com/learn/system-design/problem-breakdowns/uber#multi-step-processes">Uber</a></p>
+<p><a href="https://www.hellointerview.com/learn/system-design/problem-breakdowns/payment-system#multi-step-processes">Payment System</a></p>
+<h2 id="solutions">🛠️ Solutions</h2>
+<p>To motivate the discussion, let&#39;s work through different approaches to building reliable multi-step processes, starting simple and building up to sophisticated workflow systems, with our e-commerce order fulfillment workflow as the running example.</p>
+<p>The approaches form a natural evolution, each one absorbing a problem the previous one forced you to hand-roll:</p>
+<div class="diagram"><svg preserveAspectRatio="xMidYMid meet" id="m19d88942a1cf535e" width="100%" xmlns="http://www.w3.org/2000/svg" class="flowchart" style="max-width:1193.59375px;width:100%;height:auto;" viewBox="0 0 1193.59375 130" role="graphics-document document" aria-roledescription="flowchart-v2"><style>#m19d88942a1cf535e{font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;font-size:14px;fill:#0E1A2B;}@keyframes edge-animation-frame{from{stroke-dashoffset:0;}}@keyframes dash{to{stroke-dashoffset:0;}}#m19d88942a1cf535e .edge-animation-slow{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 50s linear infinite;stroke-linecap:round;}#m19d88942a1cf535e .edge-animation-fast{stroke-dasharray:9,5!important;stroke-dashoffset:900;animation:dash 20s linear infinite;stroke-linecap:round;}#m19d88942a1cf535e .error-icon{fill:#FFFFFF;}#m19d88942a1cf535e .error-text{fill:#000000;stroke:#000000;}#m19d88942a1cf535e .edge-thickness-normal{stroke-width:1px;}#m19d88942a1cf535e .edge-thickness-thick{stroke-width:3.5px;}#m19d88942a1cf535e .edge-pattern-solid{stroke-dasharray:0;}#m19d88942a1cf535e .edge-thickness-invisible{stroke-width:0;fill:none;}#m19d88942a1cf535e .edge-pattern-dashed{stroke-dasharray:3;}#m19d88942a1cf535e .edge-pattern-dotted{stroke-dasharray:2;}#m19d88942a1cf535e .marker{fill:#5B7BB4;stroke:#5B7BB4;}#m19d88942a1cf535e .marker.cross{stroke:#5B7BB4;}#m19d88942a1cf535e svg{font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;font-size:14px;}#m19d88942a1cf535e p{margin:0;}#m19d88942a1cf535e .label{font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;color:#0E1A2B;}#m19d88942a1cf535e .cluster-label text{fill:#000000;}#m19d88942a1cf535e .cluster-label span{color:#000000;}#m19d88942a1cf535e .cluster-label span p{background-color:transparent;}#m19d88942a1cf535e .label text,#m19d88942a1cf535e span{fill:#0E1A2B;color:#0E1A2B;}#m19d88942a1cf535e .node rect,#m19d88942a1cf535e .node circle,#m19d88942a1cf535e .node ellipse,#m19d88942a1cf535e .node polygon,#m19d88942a1cf535e .node path{fill:#EEF3FF;stroke:#2563EB;stroke-width:1px;}#m19d88942a1cf535e .rough-node .label text,#m19d88942a1cf535e .node .label text,#m19d88942a1cf535e .image-shape .label,#m19d88942a1cf535e .icon-shape .label{text-anchor:middle;}#m19d88942a1cf535e .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#m19d88942a1cf535e .rough-node .label,#m19d88942a1cf535e .node .label,#m19d88942a1cf535e .image-shape .label,#m19d88942a1cf535e .icon-shape .label{text-align:center;}#m19d88942a1cf535e .node.clickable{cursor:pointer;}#m19d88942a1cf535e .root .anchor path{fill:#5B7BB4!important;stroke-width:0;stroke:#5B7BB4;}#m19d88942a1cf535e .arrowheadPath{fill:rgba(255, 255, 255, 0);}#m19d88942a1cf535e .edgePath .path{stroke:#5B7BB4;stroke-width:1px;}#m19d88942a1cf535e .flowchart-link{stroke:#5B7BB4;fill:none;}#m19d88942a1cf535e .edgeLabel{background-color:#F0F4FF;text-align:center;}#m19d88942a1cf535e .edgeLabel p{background-color:#F0F4FF;}#m19d88942a1cf535e .edgeLabel rect{opacity:0.5;background-color:#F0F4FF;fill:#F0F4FF;}#m19d88942a1cf535e .labelBkg{background-color:rgba(240, 244, 255, 0.5);}#m19d88942a1cf535e .cluster rect{fill:#FFFFFF;stroke:hsl(0, 0%, 90%);stroke-width:1px;}#m19d88942a1cf535e .cluster text{fill:#000000;}#m19d88942a1cf535e .cluster span{color:#000000;}#m19d88942a1cf535e div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;font-size:12px;background:#FFFFFF;border:1px solid hsl(0, 0%, 90%);border-radius:2px;pointer-events:none;z-index:100;}#m19d88942a1cf535e .flowchartTitleText{text-anchor:middle;font-size:18px;fill:#0E1A2B;}#m19d88942a1cf535e rect.text{fill:none;stroke-width:0;}#m19d88942a1cf535e .icon-shape,#m19d88942a1cf535e .image-shape{background-color:#F0F4FF;text-align:center;}#m19d88942a1cf535e .icon-shape p,#m19d88942a1cf535e .image-shape p{background-color:#F0F4FF;padding:2px;}#m19d88942a1cf535e .icon-shape .label rect,#m19d88942a1cf535e .image-shape .label rect{opacity:0.5;background-color:#F0F4FF;fill:#F0F4FF;}#m19d88942a1cf535e .label-icon{display:inline-block;height:1em;overflow:visible;vertical-align:-0.125em;}#m19d88942a1cf535e .node .label-icon path{fill:currentColor;stroke:revert;stroke-width:revert;}#m19d88942a1cf535e .node .neo-node{stroke:#2563EB;}#m19d88942a1cf535e [data-look="neo"].node rect,#m19d88942a1cf535e [data-look="neo"].cluster rect,#m19d88942a1cf535e [data-look="neo"].node polygon{stroke:url(#m19d88942a1cf535e-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#m19d88942a1cf535e [data-look="neo"].swimlane.cluster rect{filter:none;}#m19d88942a1cf535e [data-look="neo"].node path{stroke:url(#m19d88942a1cf535e-gradient);stroke-width:1px;}#m19d88942a1cf535e [data-look="neo"].node .outer-path{filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#m19d88942a1cf535e [data-look="neo"].node .neo-line path{stroke:#2563EB;filter:none;}#m19d88942a1cf535e [data-look="neo"].node circle{stroke:url(#m19d88942a1cf535e-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#m19d88942a1cf535e [data-look="neo"].node circle .state-start{fill:#000000;}#m19d88942a1cf535e [data-look="neo"].icon-shape .icon{fill:url(#m19d88942a1cf535e-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#m19d88942a1cf535e [data-look="neo"].icon-shape .icon-neo path{stroke:url(#m19d88942a1cf535e-gradient);filter:drop-shadow( 1px 2px 2px rgba(185,185,185,1));}#m19d88942a1cf535e :root{--mermaid-font-family:"IBM Plex Sans",ui-sans-serif,system-ui,sans-serif;}</style><g><marker id="m19d88942a1cf535e_flowchart-v2-pointEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></path></marker><marker id="m19d88942a1cf535e_flowchart-v2-pointStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="4.5" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M 0 5 L 10 10 L 10 0 z" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></path></marker><marker id="m19d88942a1cf535e_flowchart-v2-pointEnd-margin" class="marker flowchart-v2" viewBox="0 0 11.5 14" refX="11.5" refY="7" markerUnits="userSpaceOnUse" markerWidth="10.5" markerHeight="14" orient="auto"><path d="M 0 0 L 11.5 7 L 0 14 z" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"></path></marker><marker id="m19d88942a1cf535e_flowchart-v2-pointStart-margin" class="marker flowchart-v2" viewBox="0 0 11.5 14" refX="1" refY="7" markerUnits="userSpaceOnUse" markerWidth="11.5" markerHeight="14" orient="auto"><polygon points="0,7 11.5,14 11.5,0" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"></polygon></marker><marker id="m19d88942a1cf535e_flowchart-v2-circleEnd" class="marker flowchart-v2" viewBox="0 0 10 10" refX="11" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></circle></marker><marker id="m19d88942a1cf535e_flowchart-v2-circleStart" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-1" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 1; stroke-dasharray: 1, 0;"></circle></marker><marker id="m19d88942a1cf535e_flowchart-v2-circleEnd-margin" class="marker flowchart-v2" viewBox="0 0 10 10" refY="5" refX="12.25" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"></circle></marker><marker id="m19d88942a1cf535e_flowchart-v2-circleStart-margin" class="marker flowchart-v2" viewBox="0 0 10 10" refX="-2" refY="5" markerUnits="userSpaceOnUse" markerWidth="14" markerHeight="14" orient="auto"><circle cx="5" cy="5" r="5" class="arrowMarkerPath" style="stroke-width: 0; stroke-dasharray: 1, 0;"></circle></marker><marker id="m19d88942a1cf535e_flowchart-v2-crossEnd" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="12" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"></path></marker><marker id="m19d88942a1cf535e_flowchart-v2-crossStart" class="marker cross flowchart-v2" viewBox="0 0 11 11" refX="-1" refY="5.2" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto"><path d="M 1,1 l 9,9 M 10,1 l -9,9" class="arrowMarkerPath" style="stroke-width: 2; stroke-dasharray: 1, 0;"></path></marker><marker id="m19d88942a1cf535e_flowchart-v2-crossEnd-margin" class="marker cross flowchart-v2" viewBox="0 0 15 15" refX="17.7" refY="7.5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M 1,1 L 14,14 M 1,14 L 14,1" class="arrowMarkerPath" style="stroke-width: 2.5;"></path></marker><marker id="m19d88942a1cf535e_flowchart-v2-crossStart-margin" class="marker cross flowchart-v2" viewBox="0 0 15 15" refX="-3.5" refY="7.5" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="12" orient="auto"><path d="M 1,1 L 14,14 M 1,14 L 14,1" class="arrowMarkerPath" style="stroke-width: 2.5; stroke-dasharray: 1, 0;"></path></marker><g class="root"><g class="clusters"></g><g class="edgePaths"><path d="M154.125,65L168.552,65C182.979,65,211.833,65,240.021,65C268.208,65,295.729,65,309.49,65L323.25,65" id="m19d88942a1cf535e-L_S_SA_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_S_SA_0" data-points="W3sieCI6MTU0LjEyNSwieSI6NjV9LHsieCI6MjQwLjY4NzUsInkiOjY1fSx7IngiOjMyNy4yNSwieSI6NjV9XQ==" data-look="classic" marker-end="url(#m19d88942a1cf535e_flowchart-v2-pointEnd)"></path><path d="M494.859,65L509.029,65C523.198,65,551.536,65,579.208,65C606.88,65,633.885,65,647.388,65L660.891,65" id="m19d88942a1cf535e-L_SA_EC_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_SA_EC_0" data-points="W3sieCI6NDk0Ljg1OTM3NSwieSI6NjV9LHsieCI6NTc5Ljg3NSwieSI6NjV9LHsieCI6NjY0Ljg5MDYyNSwieSI6NjV9XQ==" data-look="classic" marker-end="url(#m19d88942a1cf535e_flowchart-v2-pointEnd)"></path><path d="M851.5,65L866.154,65C880.807,65,910.115,65,938.755,65C967.396,65,995.37,65,1009.357,65L1023.344,65" id="m19d88942a1cf535e-L_EC_WO_0" class=" edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link" style=";" data-edge="true" data-et="edge" data-id="L_EC_WO_0" data-points="W3sieCI6ODUxLjUsInkiOjY1fSx7IngiOjkzOS40MjE4NzUsInkiOjY1fSx7IngiOjEwMjcuMzQzNzUsInkiOjY1fV0=" data-look="classic" marker-end="url(#m19d88942a1cf535e_flowchart-v2-pointEnd)"></path></g><g class="edgeLabels"><g class="edgeLabel" transform="translate(240.6875, 65)"><g class="label" data-id="L_S_SA_0" transform="translate(-61.5625, -21)"><foreignObject width="123.125" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "><p>persist state +<br/>add compensations</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(579.875, 65)"><g class="label" data-id="L_SA_EC_0" transform="translate(-60.015625, -21)"><foreignObject width="120.03125" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "><p>store the stream<br/>of events, not state</p></span></div></foreignObject></g></g><g class="edgeLabel" transform="translate(939.421875, 65)"><g class="label" data-id="L_EC_WO_0" transform="translate(-62.921875, -21)"><foreignObject width="125.84375" height="42"><div xmlns="http://www.w3.org/1999/xhtml" class="labelBkg" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="edgeLabel "><p>want central control<br/>+ visibility</p></span></div></foreignObject></g></g></g><g class="nodes"><g class="node default  " id="m19d88942a1cf535e-flowchart-S-0" data-look="classic" transform="translate(81.0625, 65)"><rect class="basic label-container" style="fill:#FFB6C1 !important" x="-73.0625" y="-57" width="146.125" height="114"></rect><g class="label" style="" transform="translate(-43.0625, -42)"><rect></rect><foreignObject width="86.125" height="84"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>Single-server<br/>primitives<br/>(a crash loses<br/>all progress)</p></span></div></foreignObject></g></g><g class="node default  " id="m19d88942a1cf535e-flowchart-SA-1" data-look="classic" transform="translate(411.0546875, 65)"><rect class="basic label-container" style="fill:#FFE4B5 !important" x="-83.8046875" y="-46.5" width="167.609375" height="93"></rect><g class="label" style="" transform="translate(-53.8046875, -31.5)"><rect></rect><foreignObject width="107.609375" height="63"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>Saga pattern<br/>steps + matching<br/>undo actions</p></span></div></foreignObject></g></g><g class="node default  " id="m19d88942a1cf535e-flowchart-EC-3" data-look="classic" transform="translate(758.1953125, 65)"><rect class="basic label-container" style="fill:#FFE4B5 !important" x="-93.3046875" y="-46.5" width="186.609375" height="93"></rect><g class="label" style="" transform="translate(-63.3046875, -31.5)"><rect></rect><foreignObject width="126.609375" height="63"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>Event-driven<br/>choreography<br/>(durable log · Kafka)</p></span></div></foreignObject></g></g><g class="node default  " id="m19d88942a1cf535e-flowchart-WO-5" data-look="classic" transform="translate(1106.46875, 65)"><rect class="basic label-container" style="fill:#90EE90 !important" x="-79.125" y="-57" width="158.25" height="114"></rect><g class="label" style="" transform="translate(-49.125, -42)"><rect></rect><foreignObject width="98.25" height="84"><div xmlns="http://www.w3.org/1999/xhtml" style="display: table-cell; white-space: nowrap; line-height: 1.5; max-width: 200px; text-align: center;"><span class="nodeLabel "><p>Workflow<br/>orchestration<br/>(Temporal ·<br/>Step Functions)</p></span></div></foreignObject></g></g></g></g></g><defs><filter id="m19d88942a1cf535e-drop-shadow" height="130%" width="130%"><feDropShadow dx="4" dy="4" stdDeviation="0" flood-opacity="0.06" flood-color="#000000"></feDropShadow></filter></defs><defs><filter id="m19d88942a1cf535e-drop-shadow-small" height="150%" width="150%"><feDropShadow dx="2" dy="2" stdDeviation="0" flood-opacity="0.06" flood-color="#000000"></feDropShadow></filter></defs><linearGradient id="m19d88942a1cf535e-gradient" gradientUnits="objectBoundingBox" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#2563EB" stop-opacity="1"></stop><stop offset="100%" stop-color="hsl(224, 60%, 87.0588235294%)" stop-opacity="1"></stop></linearGradient></svg></div>
+
+
+<h3 id="single-server-primitives">Single Server Primitives</h3>
+<p>The simplest thing we can build is let one server handle the whole thing. Our API server gets an order from a user and just walks through the steps in order: charge the payment, reserve the inventory, create the shipping label, send the confirmation email. One after another, top to bottom, then it responds.</p>
+<pre><code>async function fulfillOrder(order: Order): Promise&lt;OrderResult&gt; {
+    try {
+      await chargePayment(order);
+      await reserveInventory(order);
+
+      // Woops, server crashed here! Sorry, customer!
+
+      await createShippingLabel(order);
+      await sendConfirmationEmail(order);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+}
+</code></pre>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/Patterns/assets/uHBFzN_zB36O.0v_la8ybk-r-3.svg" alt="Single Server Primitive" loading="lazy"><figcaption>Single Server Primitive</figcaption></figure></p>
+<p>If we&#39;d never had to think about anything going wrong, or scaling, this is exactly where we&#39;d start. But it has at least two serious problems as soon as you need reliability guarantees and more complex coordination.</p>
+<ol>
+<li><strong>Crashes and Failures</strong>: What happens when the server crashes after charging payment but before reserving inventory? When the server restarts, it has no memory of what happened.</li>
+<li><strong>Callback Routing</strong>: And think about the payment gateway: it doesn&#39;t answer on the same connection. Instead it calls us back minutes later with a webhook, an HTTP request the gateway makes to an endpoint we host. If we&#39;ve scaled out to several API servers behind a load balancer, that callback can land on a completely different host than the one that started the order, and that host has no idea which in-flight order the callback belongs to. Are we stuck with a single host with no way to scale or replicate?</li>
+</ol>
+<p>Not really. You could patch over this: persist the order&#39;s state to a database after each step so no single host has to remember it, and route callbacks through a pub/sub layer so whichever server is free can load the order and continue where the last one left off. That would give you something like this:</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/Patterns/assets/CTn-pHyO_XR8.2h74lvq9va74f.svg" alt="Single Server Orchestration with State" loading="lazy"><figcaption>Single Server Orchestration with State</figcaption></figure></p>
+<p>But we <strong>still</strong> have more problems to solve.</p>
+<ul>
+<li>We&#39;re manually building a state machine with careful database checkpoints after each step. And the database remembers our progress, but it doesn&#39;t <em>act</em> on it. If a server dies mid-order, the row just sits there. Something has to notice the stalled order, decide which step is safe to retry, and claim the work without a second server grabbing it at the same time. That&#39;s a poller, a locking scheme, and retry logic, all hand-rolled.</li>
+<li>We still haven&#39;t solved <em>compensation</em> (undoing steps that already committed). If inventory reservation fails, we need to refund the payment. If shipping fails, we need to release the inventory reservation.</li>
+</ul>
+<p>The never-ending list is indicative of a structural problem. Our architecture becomes a mess of state management, error handling, and compensation logic scattered across our application servers. The diagram actually doesn&#39;t look <em>that bad</em>, but a real world implementation is a tangled ball of wires and spaghetti code.</p>
+<blockquote>
+<p>If you&#39;re just reading about systems like this for the first time, these problems might not sound that bad. But if you&#39;ve operated one, there&#39;s a good chance it&#39;s been an ongoing source of pain for your company! That&#39;s why this pattern tends to show up in interviews: it probes the candidate&#39;s experience in addition to their problem-solving knowledge.</p>
+</blockquote>
+<p>Where do we go from here?</p>
+<h3 id="the-saga-pattern">The Saga Pattern</h3>
+<p>Once we start to accumulate a lot of steps and interesting failure handling, we&#39;re usually looking at a <strong>saga</strong>. The word means a long, detailed series of events (think the Star Wars saga), which is exactly what these processes become.</p>
+<p>In software, a saga is a sequence of local steps where each step has a matching <em>compensating action</em> that undoes it. You run the steps one at a time, and if a later one fails, you walk backwards firing those compensations to unwind whatever already happened.</p>
+<p>Why not just wrap all the steps in one big distributed transaction? Because nobody can hold a lock that long. Two-phase commit keeps every participant locked while the slowest one decides, a stalled coordinator stalls everyone, and external systems like your payment gateway don&#39;t speak your transaction protocol anyway. No amount of cleverness gets us atomicity across services we don&#39;t control. Sagas accept this and work with it: rather than guaranteeing that all the steps happen together or not at all, they guarantee that whatever did happen can be undone.</p>
+<p>Our order is a textbook saga: if shipping falls through, you release the inventory and refund the charge. Each step commits on its own, so nothing holds a lock across services while it waits. The price is a brief window of inconsistency. Right after the charge, the customer is out the money for an order that hasn&#39;t shipped, so you let the order sit in a &quot;pending&quot; state until it does. And compensations deserve the same paranoia as forward steps: a refund can fail just like a charge, so they need their own retries and idempotency, with a human escape hatch for the ones that still won&#39;t go through.</p>
+<p>There are two ways to coordinate a saga.</p>
+<ol>
+<li>The first is called <strong>choreography</strong>: there is no coordinator at all. Each worker subscribes to the events it cares about, does its piece, and emits new events for the next worker to react to. The overall flow isn&#39;t written down anywhere; it emerges from those reactions, like dancers who each know their own steps. Choreography works great for fully independent services (e.g. those owned by independent teams that are not tightly coupled) and for mid-complexity workflows.</li>
+<li>The other is <strong>orchestration</strong>, where a single coordinator owns the flow and tells workers what to do. Because the whole sequence lives in one place, orchestration works best for very complex workflows where you need central control and visibility.</li>
+</ol>
+<p>Either way, that coordination has to survive crashes. If the thing running your saga dies after charging the payment but before reserving inventory, it has to come back and know exactly where it left off. That bookkeeping, state that outlives crashes, retries, and all the compensation logic, is the hard part, and it&#39;s the part we&#39;d rather not build by hand.</p>
+<h3 id="event-driven-choreography">Event-Driven Choreography</h3>
+<p>If we want to move toward choreography, a more principled evolution of our primitive single-server approach is to stop storing the <em>current</em> state and instead store the <em>stream of events</em> that got us there, then let workers react to those events to drive the process forward.</p>
+<p>The most common way to store events is to use a durable log and Kafka is a popular choice, although <a href="https://www.hellointerview.com/learn/system-design/deep-dives/redis#redis-for-event-sourcing">Redis Streams</a> could work in some places. If you&#39;ve heard the term <em>event sourcing</em>, it&#39;s a close cousin: event sourcing treats this log as the source of truth and derives state from it, while here we&#39;re mainly using the log to coordinate work. The two often travel together but don&#39;t have to.</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/Patterns/assets/G3gao4pA_BBD.1d6f4kl1bq4i_.svg" alt="Event Store" loading="lazy"><figcaption>Event Store</figcaption></figure></p>
+<p>The event store does double duty: it holds the entire history of the system, and it drives the next steps. Whenever something happens that we need to react to, we write an event to the store. Workers (ordinary service processes subscribed to the log) consume events, perform their work, and emit new events.</p>
+<p>So the payment worker sees &quot;OrderPlaced&quot; and calls our payment service. When the payment service calls back later with the status, the Payment Worker emits &quot;PaymentCharged&quot; or &quot;PaymentFailed&quot;. The inventory worker sees &quot;PaymentCharged&quot; and emits &quot;InventoryReserved&quot; or &quot;InventoryFailed&quot;. And so on. Compensation flows the same way, just backwards: the payment worker also subscribes to &quot;InventoryFailed&quot;, and reacts by issuing the refund and emitting &quot;PaymentRefunded&quot;.</p>
+<p>Our API service is now just a thin initiating wrapper around the event store. When the order request comes in, we emit an &quot;OrderPlaced&quot; event and the system springs to life to carry the event through the system. Rather than services exposing APIs, they are now just workers who consume events.</p>
+<blockquote>
+<p>LinkedIn has a great post from 2013 about architecture around durable logs which may help you to understand the intuition behind using durable logs for this pattern.</p>
+</blockquote>
+<p>This gives us:</p>
+<ul>
+<li><strong>Fault tolerance</strong>: Workers consume the log as a consumer group, committing their position only after an event is fully processed. If a worker dies, its partitions are reassigned and the next worker resumes from the last committed position, so nothing is lost. Some events may get processed twice in the handoff, which is why workers need to be idempotent (a theme that will keep coming back).</li>
+<li><strong>Scalability</strong>: We can add more workers to handle higher load, up to the topic&#39;s partition count.</li>
+<li><strong>Observability</strong>: The log itself is a complete audit trail of everything that happened.</li>
+<li><strong>Flexibility</strong>: Appending a new reaction is easy, since it&#39;s just a new worker consuming existing events. Inserting a step into the middle of the chain is harder: the neighbors&#39; event contracts have to change.</li>
+</ul>
+<p>Good stuff! But we&#39;re building significant infrastructure to make it work like event stores, message queues, and worker orchestration. For complex business processes, this becomes its own distributed systems engineering project.</p>
+<p>The audit trail is real, but the hard part is making sense of it at scale. Why was there no worker pool to pick up this particular PaymentFailed event? What chain of events led to this InventoryReserved event? Answering those means building tooling on top of the log. Thousands of redundant internal tools have been built across the industry to do exactly that, and good engineers will be skeptical of oversimple solutions to these problems.</p>
+<p>All told, choreography is a good solution for mid-complexity processes. Past that, the implicit flow becomes the problem: no single place knows the whole sequence, so changing it means changing event contracts across many workers. The hairiest workflows want a central coordinator, which brings us to orchestration.</p>
+<h3 id="workflow-orchestration">Workflow Orchestration</h3>
+<p>For orchestration, what we really want to do is to describe a <em>workflow</em>, a reliable, long-running process that can survive failures and continue where it left off. Our ideal system needs to be robust to server crashes or restarts instead of losing all progress and it shouldn&#39;t require us to hand-roll the infrastructure to make it work.</p>
+<p>Enter workflow systems and durable execution engines. These give you the event-driven benefits we just covered plus a durable saga coordinator, without requiring you to build the infrastructure yourself. Just as <a href="https://www.hellointerview.com/learn/system-design/deep-dives/flink">Flink</a> gives you a higher-level way to describe streaming event processing, workflow systems and durable execution engines give you a language to describe the high-level flow of your system while they handle the orchestration. Where the two camps differ is in how those workflows are described and managed.</p>
+<h4 id="durable-execution-engines">Durable Execution Engines</h4>
+<p>Durable execution is a way to write long-running code that can move between machines and survive system failures and restarts. Instead of losing all progress when a server crashes or restarts, durable execution systems automatically resume workflows from their last successful step on a new, running host. Most durable execution engines use <em>code</em> to describe the workflow. You write a function that represents the workflow, and the engine handles the orchestration of it.</p>
+<p>The most popular durable execution engine is <a href="https://temporal.io">Temporal</a>, a 2019 fork of Cadence, the engine its founders built at Uber after working on AWS&#39;s Simple Workflow Service. The lineage shows: it&#39;s mature, open source, and used by many large companies.</p>
+<p>For example, here&#39;s a simple workflow in Temporal:</p>
+<pre><code>const {
+    processPayment,
+    reserveInventory,
+    shipOrder,
+    sendConfirmationEmail,
+    refundPayment
+} = proxyActivities&lt;Activities&gt;({
+    startToCloseTimeout: &#39;5 minute&#39;,
+    retry: {
+        maximumAttempts: 3,
+    }
+});
+
+async function myWorkflow(input: Order): Promise&lt;OrderResult&gt; {
+    const paymentResult = await processPayment(input);
+
+    if(paymentResult.success) {
+        const inventoryResult = await reserveInventory(input);
+
+        if(inventoryResult.success) {
+            await shipOrder(input);
+            await sendConfirmationEmail(input);
+            return { success: true };
+        } else {
+            await refundPayment(input);
+            return { success: false, error: &quot;Inventory reservation failed&quot; };
+        }
+    } else {
+        return { success: false, error: &quot;Payment failed&quot; };
+    }
+}
+</code></pre>
+<p>If this looks a lot like the single-server orchestration we saw earlier, that&#39;s because it is! The big difference is how this code is run, and it&#39;s worth understanding in some detail because it&#39;ll help you understand what&#39;s actually going on here.</p>
+<h4 id="how-durable-execution-works">How Durable Execution Works</h4>
+<p>Almost all durable execution engines operate the same way but we&#39;ll use Temporal as an example. Temporal builds everything from two pieces: a <code>Workflow</code> is the high-level flow of your system, and an <code>Activity</code> is one step in that flow. Picture the <code>Workflow</code> as the recipe (the ordered steps and the decisions between them), and the <code>Activities</code> as the individual cooking actions that actually touch the outside world, like calling a service, charging a card, or sending an email.</p>
+<p>Each piece carries one obligation. <code>Workflow</code> code must be <em>deterministic</em>: given the same inputs and history, it always makes the same decisions. The TypeScript SDK sandboxes the runtime to help enforce this, so timestamps and random numbers replay consistently, and anything genuinely nondeterministic, like a network call or a database read, belongs in an <code>Activity</code>. <code>Activities</code>, in turn, need to be <em>idempotent</em>: safe to attempt more than once. Temporal won&#39;t retry an <code>Activity</code> that reported success, but a crash can leave the engine unsure whether one finished, and in that gray zone it retries. Idempotency makes that retry harmless.</p>
+<p>Why determinism? Because recovery works by <em>replay</em>. Every <code>Activity</code> result is recorded into a history database, and if a workflow runner crashes, another runner re-executes the <code>Workflow</code> function from the top. Every time the replay hits an <code>Activity</code> that already ran, the history hands back the recorded result instead of running it again. Because the code is deterministic and no <code>Activities</code> re-fire, replay is side-effect free, and execution lands exactly where it left off.</p>
+<p>Let&#39;s run our order through a crash to make that concrete:</p>
+<ol>
+<li><code>myWorkflow</code> starts. <code>processPayment</code> runs and its result lands in history.</li>
+<li><code>reserveInventory</code> runs and its result lands in history.</li>
+<li>The server executing the workflow dies.</li>
+<li>A new worker picks up the workflow and re-executes <code>myWorkflow</code> from the top. At <code>processPayment</code> the history already holds a result, so the engine returns it without calling the payment service again. Same at <code>reserveInventory</code>.</li>
+<li>The replay reaches <code>shipOrder</code>, finds nothing in history, and execution continues live from the exact point the crash interrupted.</li>
+</ol>
+<p>The customer was charged once, the inventory was reserved once, and none of the business code had to know a crash happened.</p>
+<p>A typical Temporal deployment has a lot in common with the event-driven choreography we just covered:</p>
+<ol>
+<li><strong>Temporal Server</strong>: The bookkeeper. It hands out tasks, tracks timeouts, and records progress. It never runs your code.</li>
+<li><strong>History Database</strong>: Append-only log of all workflow decisions and <code>Activity</code> results</li>
+<li><strong>Worker Pools</strong>: Processes you run that host your code. Workflow workers run the <code>Workflow</code> function to decide what happens next, and activity workers execute the <code>Activities</code>. (One process can host both; teams often split them for isolation.)</li>
+</ol>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/Patterns/assets/pX570jgoosk8.3lye-iqdmbvjd.svg" alt="(Simplified) Temporal Deployment" loading="lazy"><figcaption>(Simplified) Temporal Deployment</figcaption></figure></p>
+<p>The division of labor trips people up, so let&#39;s be concrete. When <code>myWorkflow</code> hits <code>await processPayment(input)</code>, the workflow worker doesn&#39;t call the payment service itself. It tells the Temporal Server &quot;schedule this <code>Activity</code>&quot;, and the server queues the task for an activity worker, which makes the actual call and reports the result back. The workflow worker then picks the workflow up where the recorded history ends and decides the next step. The big difference from choreography is that the flow lives <em>explicitly</em> in one piece of code, rather than implicitly in which workers consume which topics.</p>
+<p><code>Workflows</code> can also use <em>signals</em> to wait for external events. For example, if you&#39;re waiting for a human to pick up an order, your workflow can wait for a signal that the human has picked up the order before continuing. Most durable execution engines provide a way to wait for signals that is more efficient and lower-latency than polling. While it waits, the workflow isn&#39;t holding a thread or burning CPU. The engine persists its state and frees the worker to do other work, then rehydrates the workflow when the signal arrives. That&#39;s how a workflow can &quot;wait&quot; 30 days for a signature without costing you anything in the meantime.</p>
+<h4 id="managed-workflow-systems">Managed Workflow Systems</h4>
+<p>Managed workflow systems take a more declarative approach. Instead of writing code that looks like regular programming, you describe the workflow as a state machine or DAG (directed acyclic graph) in JSON, YAML, or a specialized DSL, and the engine runs it. The most popular are <a href="https://aws.amazon.com/step-functions/">AWS Step Functions</a> and <a href="https://cloud.google.com/workflows">Google Cloud Workflows</a>.</p>
+<p>Here&#39;s the same order fulfillment workflow in AWS Step Functions:</p>
+<pre><code>{
+  &quot;Comment&quot;: &quot;Order fulfillment workflow&quot;,
+  &quot;StartAt&quot;: &quot;ProcessPayment&quot;,
+  &quot;States&quot;: {
+    &quot;ProcessPayment&quot;: {
+      &quot;Type&quot;: &quot;Task&quot;,
+      &quot;Resource&quot;: &quot;arn:aws:lambda:us-east-1:123456789012:function:processPayment&quot;,
+      &quot;Next&quot;: &quot;CheckPaymentResult&quot;,
+      &quot;Catch&quot;: [
+        {
+          &quot;ErrorEquals&quot;: [&quot;States.TaskFailed&quot;],
+          &quot;Next&quot;: &quot;PaymentFailed&quot;
+        }
+      ]
+    },
+    &quot;CheckPaymentResult&quot;: {
+      &quot;Type&quot;: &quot;Choice&quot;,
+      &quot;Choices&quot;: [
+        {
+          &quot;Variable&quot;: &quot;$.paymentResult.success&quot;,
+          &quot;BooleanEquals&quot;: true,
+          &quot;Next&quot;: &quot;ReserveInventory&quot;
+        }
+      ],
+      &quot;Default&quot;: &quot;PaymentFailed&quot;
+    },
+    /** More and more lines of ugly, declarative JSON ... **/
+  }
+}
+</code></pre>
+<p>Ugly but functional! In practice, if you&#39;re in an AWS shop you&#39;d rarely hand-write this: tools like the <a href="https://docs.aws.amazon.com/step-functions/latest/dg/tutorial-lambda-state-machine-cdk.html">AWS CDK</a> generate the same state machine from real code. So go easy on the &quot;ugly JSON&quot; complaint, especially at Amazon, where your interviewer probably writes CDK and may hear it as a gap in your AWS knowledge. The deeper limitation isn&#39;t the syntax, it&#39;s that your logic still has to fit the state machine model, however you author it.</p>
+<p>Under the covers the managed workflow systems are doing the same thing as the durable execution engines: they are orchestrating a workflow, calling activities, and recording progress in such a way that they can be resumed in the case of failures.</p>
+<p>The declarative approach has real advantages, the biggest being that workflows can be visualized as diagrams, which makes for a much nicer UI. The cost is expressiveness: you may find yourself writing a lot of custom code to squeeze your logic into the declarative model.</p>
+<p>Ultimately, the decision to use a declarative workflow system versus a more imperative, code-driven approach depends largely on the preferences of the team and rarely is a point of debate in a system design interview. Both can be made to work for similar purposes.</p>
+<h4 id="implementations">Implementations</h4>
+<p>Both approaches provide <strong>durable execution</strong> so your workflow&#39;s state persists across failures, restarts, and even code deployments. The recovery mechanics differ: engines like Temporal rebuild a workflow&#39;s state by replaying your code against the recorded history, while managed systems like Step Functions track the state machine&#39;s position server-side and simply continue from it. Either way, you can write logic very similar to the single-server orchestration we saw earlier, but with the added guarantees of fault-tolerance, scalability, and observability.</p>
+<p><strong><a href="https://temporal.io">Temporal</a></strong> is the most powerful open-source option. Workflows can wait for days or months, survive crashes, and keep a complete history of every decision they make. Because workflows are just code, you get loops, conditionals, and complex branching for free. The catch is you have to operate it (or buy <a href="https://temporal.io/cloud">Temporal Cloud</a>).</p>
+<p><strong><a href="https://aws.amazon.com/step-functions/">AWS Step Functions</a></strong> is the managed, serverless counterpart. You define workflows as state machines in JSON, which is less expressive than code, but there are no clusters to run. Its standard workflows cap execution duration at one year and payloads between states at 256KB.</p>
+<p><strong><a href="https://docs.microsoft.com/en-us/azure/azure-functions/durable/durable-functions-overview">Durable Functions</a></strong> (Azure) and <strong><a href="https://cloud.google.com/workflows">Google Cloud Workflows</a></strong> provide similar cloud-native options. They&#39;re easier to operate than Temporal but less flexible.</p>
+<p><strong><a href="https://airflow.apache.org/">Apache Airflow</a></strong> excels at scheduled batch workflows but wasn&#39;t designed for event-driven, long-running processes. Its DAGs are defined in Python code rather than declarative JSON, and it&#39;s great for ETL (extract-transform-load) data pipelines, less suitable for user-facing workflows.</p>
+<p>Newer entrants like <a href="https://www.dbos.dev/">DBOS</a> (durable execution layered on Postgres), Hatchet, and Netflix&#39;s <a href="https://conductor-oss.org/">Conductor</a> (JSON-defined workflows) come up occasionally and are fine to name-drop if asked. Temporal and Step Functions still cover the vast majority of interviews.</p>
+<p>For interviews, the specific pick matters less than you&#39;d think. These tools are nearly interchangeable in a design discussion, and what gets you marked down isn&#39;t the choice, it&#39;s not understanding how the one you chose works. Pick one, know its recovery model and its limits, and be ready to say why it fits your problem.</p>
+<h2 id="when-to-use-in-interviews">When to Use in Interviews</h2>
+<p>Workflow systems shine in specific scenarios. Don&#39;t force them into every design; recognize when their benefits outweigh the complexity. The topic shows up at every level, but the depth expected scales with seniority: for mid-level candidates, spotting that a problem needs a workflow engine and naming one is usually enough, while senior and staff candidates should expect to defend the choice, walk through failure handling and compensation, and field the deep dives below.</p>
+<h3 id="common-interview-scenarios">Common interview scenarios</h3>
+<p>Workflows often show up when there is a <em>state machine</em> or a <em>stateful</em> process in the design. If you find a sequence of steps that require a flow chart, there&#39;s a good chance you should be using a workflow system to design the system around it.</p>
+<p>A couple examples:</p>
+<p><strong>Payment Systems</strong>: In <a href="https://www.hellointerview.com/learn/system-design/problem-breakdowns/payment-system">Payment Systems</a> or systems that engage with them (like e-commerce systems), there&#39;s frequently a lot of state and a strong need to be able to handle failures gracefully. You don&#39;t want a user to end up with a charge for a product they didn&#39;t receive!</p>
+<p><strong>Human-in-the-Loop Workflows</strong>: In products like <a href="https://www.hellointerview.com/learn/system-design/problem-breakdowns/uber">Uber</a>, there are a bunch of places where the user is waiting on a human to complete a task. When a user requests a driver, for instance, the driver has to accept the ride. These make for great workflow candidates.</p>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/Patterns/assets/vfagjPUGOsCs.0cky2b3h6sl29.svg" alt="Workflow in an Interview" loading="lazy"><figcaption>Workflow in an Interview</figcaption></figure></p>
+<p>In your interview, listen for phrases like &quot;if step X fails, we need to undo step Y&quot; or &quot;we need to ensure all steps complete or none do.&quot; That&#39;s a clear signal for workflows.</p>
+<h3 id="when-not-to-use-it-in-an-interview">When NOT to use it in an interview</h3>
+<p>Most CRUD operations, simple request/response APIs, and single-service operations don&#39;t need workflows. Don&#39;t overcomplicate:</p>
+<p><strong>Simple async processing</strong>: If you just need to resize an image or send an email, use a message queue. Workflows are overkill for single-step operations.</p>
+<p><strong>Synchronous operations</strong>: If the client waits for the response, or there is a lot of sensitivity around latency, you probably don&#39;t need (or can&#39;t use) a workflow. Save them for truly async, multi-step processes.</p>
+<p><strong>High-frequency, low-value operations</strong>: Workflows add overhead. Every activity costs round trips through the engine plus a handful of history writes, so for millions of simple operations the cost and complexity aren&#39;t justified.</p>
+<blockquote>
+<p>In interviews, demonstrate maturity by starting simple. Only introduce workflows when you identify specific problems they solve: partial failure handling, long-running processes, complex orchestration, or audit requirements. Show you understand the tradeoffs.</p>
+</blockquote>
+<h2 id="common-deep-dives">Common Deep Dives</h2>
+<p>Interviewers often probe specific challenges with workflow systems, and a few come up again and again.</p>
+<h3 id="what-happens-if-the-process-running-your-saga-crashes-partway-through">&quot;What happens if the process running your saga crashes partway through?&quot;</h3>
+<p>This is the failure mode a saga has to get right. Say you&#39;ve charged the payment and reserved the inventory, and the process dies before it ships. When it comes back, what does it actually know? If you were only tracking progress in memory, the answer is nothing, and now you can&#39;t tell whether to push forward, retry the last step, or run compensations to unwind what already happened.</p>
+<p>The fix is durable progress. You record which steps have completed to a store that survives the crash, so on restart the coordinator reads that record and knows exactly where it left off. From there it either resumes forward or fires the compensations to roll back. Because a recovering coordinator might re-run a step it isn&#39;t sure finished, those steps and their compensations need to be idempotent (more on that in the exactly-once deep dive below).</p>
+<p>This durable bookkeeping is exactly what a workflow engine gives you for free. It records every completed step in history and resumes the saga on a new worker after a crash, so you get crash-safe progress without hand-rolling the checkpointing yourself.</p>
+<h3 id="how-will-you-handle-updates-to-the-workflow">&quot;How will you handle updates to the workflow?&quot;</h3>
+<p>The interviewer asks: &quot;You have 10,000 running workflows for loan approvals. You need to add a new compliance check. How do you update the workflow without breaking existing executions?&quot;</p>
+<p>The challenge is that workflows can run for days or weeks. You can&#39;t just deploy new code and expect running workflows to handle it correctly. If a workflow started with 5 steps and you deploy a version with 6 steps, what happens when it resumes?</p>
+<p>Workflow versioning and workflow migrations are the two main approaches to this.</p>
+<h4 id="workflow-versioning">Workflow Versioning</h4>
+<p>In workflow versioning, we simply create a new version of the workflow code and deploy it separately. Old workflows will continue to run with the old version of the code, and new workflows will run with the new version of the code.</p>
+<p>This is the simplest approach but it&#39;s not always feasible. If you need the change to take place immediately, you can&#39;t wait for all the legacy workflows to complete.</p>
+<h4 id="workflow-migrations">Workflow Migrations</h4>
+<p>Workflow migrations are a more complex approach: you update the workflow definition in place so that running executions can pick up the change.</p>
+<p>Declarative workflow systems give you less migration to do, but also less control. In AWS Step Functions, a running execution is pinned to the definition it started with, so updating the state machine only affects new executions. If in-flight executions genuinely need the new step, you stop and restart them, or model the branch into the definition ahead of time.</p>
+<p>With durable execution engines, you&#39;ll often use a &quot;patch&quot; to decide <em>deterministically</em> which path a given workflow should take. The <code>patched()</code> call returns true for new executions (and for in-flight ones that reach this point for the first time), so they run the new behavior. Executions whose recorded history already extends past this point from running the old code return false and stay on the legacy behavior. That way a single deploy can serve both old and new workflows without breaking replay.</p>
+<pre><code>if (workflow.patched(&quot;change-behavior&quot;)) {
+  await a.newBehavior();    // new executions take this path
+} else {
+  await a.legacyBehavior(); // workflows that ran before the patch stay here
+}
+</code></pre>
+<h3 id="how-do-we-keep-the-workflow-state-size-in-check">&quot;How do we keep the workflow state size in check?&quot;</h3>
+<p>When using a durable execution engine like Temporal, the entire history of the workflow execution needs to be persisted. When a worker crashes, the workflow is replayed from the beginning, using the results in the history of previous activity invocations instead of re-running the activities. This means your workflow state can grow very large very quickly, and some interviewers like to poke on this.</p>
+<p>There&#39;s a few aspects of the solution: first, we should try to minimize the size of the activity input and results. If you can pass an identifier which can be looked up in a database or external system rather than a huge payload, you can do that.</p>
+<p>Second, we can periodically snapshot a long-running workflow and hand off to a fresh copy of itself. Temporal calls this &quot;Continue-as-New&quot;. Instead of dragging the full event history along, you capture the workflow&#39;s current state, start a new run with an empty history, and seed it with just that state so it picks up right where the old one left off. The new run starts at the current position, not back at step 1. This is the standard fix for workflows that loop for a long time or rack up huge histories, like a per-user workflow that keeps processing events for months.</p>
+<h3 id="how-do-we-deal-with-external-events">&quot;How do we deal with external events?&quot;</h3>
+<p>The interviewer asks: &quot;Your workflow needs to wait for a customer to sign documents. They might take 5 minutes or 5 days. How do you handle this efficiently?&quot;</p>
+<p>Workflows excel at waiting without consuming resources, using signals for external events. Here&#39;s the document-signing flow in Temporal&#39;s TypeScript SDK:</p>
+<pre><code>const documentSigned = defineSignal&lt;[SignatureData]&gt;(&#39;documentSigned&#39;);
+
+// sendForSignature, sendReminder, etc. are proxied activities
+async function documentSigningWorkflow(docId: string) {
+  let signature: SignatureData | undefined;
+  setHandler(documentSigned, (data) =&gt; { signature = data; });
+
+  await sendForSignature(docId);
+
+  // Wait up to 30 days for the signature
+  if (!(await condition(() =&gt; signature !== undefined, &#39;30 days&#39;))) {
+    await sendReminder(docId);
+
+    // One more week, then give up
+    if (!(await condition(() =&gt; signature !== undefined, &#39;7 days&#39;))) {
+      await cancelDocument(docId);
+      return;
+    }
+  }
+
+  await processSignature(signature);
+}
+</code></pre>
+<p>External systems deliver signals through the workflow engine&#39;s API. When the signing service&#39;s webhook fires, the handler calls the engine with the workflow&#39;s ID, and the engine wakes the right execution. In the meantime the waiting workflow holds no thread and no worker memory, just persisted state and a durable timer. This pattern handles human tasks, webhook callbacks, and integration with external systems.</p>
+<h3 id="how-can-we-ensure-x-step-runs-exactly-once">&quot;How can we ensure X step runs exactly once?&quot;</h3>
+<p>Most workflow systems provide a way to ensure an activity runs <em>exactly once</em> ... for a very specific definition of &quot;run&quot;. If the activity finishes successfully, but its success report never reaches the workflow engine, the engine will retry the activity. This might be a bad thing if the activity is a refund or an email send.</p>
+<p>The solution is to make the activity <strong>idempotent</strong>. This means that the activity can be called multiple times with the same inputs and get the same result. Storing off a key to a database (e.g. the idempotency key of the email) and then checking if it exists before performing the irreversible action is a common pattern to accomplish this.</p>
+<p>Sharp readers will notice the check and the action still aren&#39;t atomic: the process can die after sending the email but before recording the key. You can&#39;t close that window completely, but you can shrink it by recording state on both sides of the action, marking the key IN_PROGRESS before and COMPLETED after. A retry that finds COMPLETED skips the action, a retry that finds nothing proceeds, and the rare IN_PROGRESS case is the only one that needs real care: park it for reconciliation (e.g. ask the email provider what it received) rather than blindly re-firing.</p>
+<p>The precise version of the guarantee is that attempts are at-least-once, and it&#39;s the <em>effect</em> that&#39;s exactly-once, because the idempotency check makes repeat attempts harmless. (True exactly-once <em>delivery</em> is impossible across a network, which is exactly why we lean on idempotency.) None of this means you should keep side effects out of activities. Charging a card or sending an email is a perfectly good activity, and idempotency makes those side effects safe to retry.</p>
+<h2 id="conclusion">Conclusion</h2>
+<p>Workflow systems are a perfect fit for hairy state machines that are otherwise difficult to get right. They allow you to build reliable distributed systems by centralizing state management, retry logic, and error handling in a purpose-built engine. This lets us write business logic that reads like business requirements, not infrastructure gymnastics.</p>
+<p>Most of the skill here is recognizing when you&#39;re manually building what a workflow engine provides: state persistence across failures, orchestration of multiple services, handling of long-running processes, and automatic retries with compensation. If you find yourself implementing distributed sagas by hand or building state machines in Redis, it&#39;s time to consider a workflow system.</p>
+<p>Be ready to discuss the tradeoffs. Yes, you&#39;re adding operational complexity with another distributed system to manage. Yes, there&#39;s a learning curve for developers. But for the right problems, it&#39;s the difference between an oncall rotation that dreads stuck orders and one that reads the workflow history and moves on.</p>
+<p>Answer the question below to find your gaps.</p>
+<p>Get a quick-reference sheet for this topic, perfect for last-minute review.</p>
+<hr>
+<p><em>Source: <a href="https://www.hellointerview.com/learn/system-design/patterns/multi-step-processes">https://www.hellointerview.com/learn/system-design/patterns/multi-step-processes</a></em></p>
+</div>
+</article>
+<nav class="pager">
+<a href="/patterns/managing-long-running-tasks/"><span>Previous</span><b>Managing Long Running Tasks</b></a>
+<a class="nx" href="/patterns/real-time-updates/"><span>Next</span><b>Real-time Updates</b></a>
+</nav>
+</main>
+<aside class="toc"><h4>On this page</h4><ol><li><a class="" href="#laymans-explanation">Layman's Explanation</a></li><li><a class="" href="#the-problem">The Problem</a></li><li><a class="" href="#solutions">Solutions</a></li><li><a class="h3" href="#single-server-primitives">Single Server Primitives</a></li><li><a class="h3" href="#the-saga-pattern">The Saga Pattern</a></li><li><a class="h3" href="#event-driven-choreography">Event-Driven Choreography</a></li><li><a class="h3" href="#workflow-orchestration">Workflow Orchestration</a></li><li><a class="" href="#when-to-use-in-interviews">When to Use in Interviews</a></li><li><a class="h3" href="#common-interview-scenarios">Common interview scenarios</a></li><li><a class="h3" href="#when-not-to-use-it-in-an-interview">When NOT to use it in an interview</a></li><li><a class="" href="#common-deep-dives">Common Deep Dives</a></li><li><a class="h3" href="#what-happens-if-the-process-running-your-saga-crashes-partway-through">&quot;What happens if the process running your saga crashes partway through?&quot;</a></li><li><a class="h3" href="#how-will-you-handle-updates-to-the-workflow">&quot;How will you handle updates to the workflow?&quot;</a></li><li><a class="h3" href="#how-do-we-keep-the-workflow-state-size-in-check">&quot;How do we keep the workflow state size in check?&quot;</a></li><li><a class="h3" href="#how-do-we-deal-with-external-events">&quot;How do we deal with external events?&quot;</a></li><li><a class="h3" href="#how-can-we-ensure-x-step-runs-exactly-once">&quot;How can we ensure X step runs exactly once?&quot;</a></li><li><a class="" href="#conclusion">Conclusion</a></li></ol></aside>
+</div>
+<script src="/assets/doc.js" defer></script>
+<footer class="foot"><div class="foot-in">
+<span>InterviewVault — system design study vault</span>
+<span>122 documents · 607 diagrams</span>
+</div></footer>
+</body>
+</html>

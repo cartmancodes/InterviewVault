@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scaling Reads — InterviewVault</title>
+<meta name="description" content="Scaling Reads: Condensed cheat-sheets for each pattern. Built for the last hour before an interview.">
+<meta property="og:title" content="Scaling Reads — InterviewVault">
+<meta property="og:description" content="Scaling Reads: Condensed cheat-sheets for each pattern. Built for the last hour before an interview.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/site.css">
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+</head>
+<body class="">
+<header class="hdr"><div class="hdr-in">
+<a class="brand" href="/"><span class="brand-mark">IV</span><span class="brand-name">Interview<span>Vault</span></span></a>
+<nav class="hdr-nav"><a href="/#in-a-hurry">In a Hurry</a><a href="/#notes">Deep Notes</a><a href="/#concepts">Core Concepts</a><a href="/#patterns">Patterns</a><a href="/#deep-dives">Deep Dives</a><a href="/#breakdowns">Problem Breakdowns</a><a href="/#in-the-wild">In the Wild</a><a href="/#answers">Interview Answers</a><a href="/#dsa">Data Structures</a></nav>
+</div></header>
+<div class="doc-shell">
+<nav class="side"><h4>Quick Reference</h4><ol><li><a href="/patterns/quick-reference/dealing-with-contention/">Dealing with Contention</a></li><li><a href="/patterns/quick-reference/handling-large-blobs/">Handling Large Blobs</a></li><li><a href="/patterns/quick-reference/managing-long-running-tasks/">Managing Long Running Tasks</a></li><li><a href="/patterns/quick-reference/multi-step-processes/">Multi-step Processes</a></li><li><a href="/patterns/quick-reference/real-time-updates/">Real-time Updates</a></li><li><a href="/patterns/quick-reference/scaling-reads/" aria-current="page">Scaling Reads</a></li><li><a href="/patterns/quick-reference/scaling-writes/">Scaling Writes</a></li></ol></nav>
+<main>
+<article class="art">
+<div class="art-head">
+<div class="art-kicker">Quick Reference</div>
+<h1>Scaling Reads</h1>
+<div class="art-meta"><span>639 words</span><span>7 figures</span></div>
+</div>
+<div class="prose"><blockquote>
+<p><strong>Quick Reference</strong> for <a href="/patterns/scaling-reads/">ScalingReads</a> — condensed cheat-sheet.</p>
+</blockquote>
+<h2 id="read-scaling-decisions">Read Scaling Decisions</h2>
+<h3 id="when-to-apply">When To Apply</h3>
+<p>High-volume external endpoints where many users repeatedly read the same data.</p>
+<p>Write-heavy 2:1 or 1:1 workloads and 1000-user apps do not need complex read scaling.</p>
+<p>Financial, inventory, and real-time collaboration may reject stale cached reads.</p>
+<h3 id="scaling-progression">Scaling Progression</h3>
+<p>1</p>
+<p>Add indexes, tune data model, and denormalize before adding infrastructure.</p>
+<p>2</p>
+<p>Add read replicas or shard when one database server hits limits.</p>
+<p>3</p>
+<p>Use application caches or CDNs when repeated reads dominate.</p>
+<h2 id="key-numbers">Key Numbers</h2>
+<p>Standard starts at 10:1; content-heavy apps often reach 100:1+.</p>
+<p>Consider replicas/cache above 50,000-100,000 read requests per second.</p>
+<p>Cache hits are sub-millisecond versus tens of milliseconds for DB queries.</p>
+<p>Tokyo edge example cuts Virginia round trip from 200ms to under 10ms.</p>
+<p>Short TTLs of 5-15 minutes often pair with active invalidation.</p>
+<h2 id="database-optimization">Database Optimization</h2>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/Patterns/QuickReference/assets/aa3cd63cf82688fa-65d347996e23e36c.png" alt="Indexing is the default first move for queried, joined, or sorted columns; denormalization stores redundant data to avoid joins; materialized views precompute expensive aggregations." loading="lazy"><figcaption>Indexing is the default first move for queried, joined, or sorted columns; denormalization stores redundant data to avoid joins; materialized views precompute expensive aggregations.</figcaption></figure></p>
+<ul>
+<li><strong>Indexing</strong>: Default first move; index columns frequently queried, joined, or sorted.</li>
+<li><strong>Denormalization</strong>: Store redundant data to avoid joins; faster reads, more complex writes.</li>
+<li><strong>Materialized Views</strong>: Precompute expensive aggregations in background and store the results.</li>
+</ul>
+<h2 id="horizontal-scaling">Horizontal Scaling</h2>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/Patterns/QuickReference/assets/aa3cd63cf82688fa-30b2257387020581.png" alt="Read replicas send writes to the primary and reads to replicas but can lag; database sharding splits large datasets; geographic sharding stores regional data near users." loading="lazy"><figcaption>Read replicas send writes to the primary and reads to replicas but can lag; database sharding splits large datasets; geographic sharding stores regional data near users.</figcaption></figure></p>
+<ul>
+<li><strong>Read Replicas</strong>: Writes go to primary and reads to replicas; distributes load but can lag.</li>
+<li><strong>Database Sharding</strong>: Split large datasets across databases so each query scans less data.</li>
+<li><strong>Geographic Sharding</strong>: Store regional data near users to reduce global read latency and load.</li>
+</ul>
+<h2 id="cache-strategy">Cache Strategy</h2>
+<h3 id="cache-layers">Cache Layers</h3>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/Patterns/QuickReference/assets/3da8beb6c333950e-2ec919a3aa1ea7f1.png" alt="Application-level caching keeps popular data in Redis or Memcached between the app and DB; CDN and edge caching stores shared content globally but skips user-specific data." loading="lazy"><figcaption>Application-level caching keeps popular data in Redis or Memcached between the app and DB; CDN and edge caching stores shared content globally but skips user-specific data.</figcaption></figure></p>
+<ul>
+<li><strong>Application-Level Caching</strong>: Redis or Memcached between app and DB; popular data stays in memory.</li>
+<li><strong>CDN and Edge Caching</strong>: Cache shared content at global edge locations; skip user-specific data.</li>
+</ul>
+<h3 id="invalidation-choices">Invalidation Choices</h3>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/Patterns/QuickReference/assets/aa3cd63cf82688fa-2b6397463d1eafb9.png" alt="Time-based expiration is simple but can serve stale data; write-through invalidation updates cache on writes with extra latency; write-behind invalidation queues work with a stale window; versioned keys avoid delete races but need version tracking." loading="lazy"><figcaption>Time-based expiration is simple but can serve stale data; write-through invalidation updates cache on writes with extra latency; write-behind invalidation queues work with a stale window; versioned keys avoid delete races but need version tracking.</figcaption></figure></p>
+<ul>
+<li><strong>Time-based expiration (TTL)</strong>: Fixed lifetime; simple, but stale data may serve until expiration.</li>
+<li><strong>Write-through invalidation</strong>: Update or delete cache on DB write; consistent but adds write latency.</li>
+<li><strong>Write-behind invalidation</strong>: Queue invalidations asynchronously; lowers write latency but opens a stale window.</li>
+<li><strong>Versioned keys</strong>: Change key version on update; avoids delete races but needs version tracking.</li>
+</ul>
+<h2 id="failure-modes">Failure Modes</h2>
+<h3 id="hot-key-fixes">Hot Key Fixes</h3>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/Patterns/QuickReference/assets/3da8beb6c333950e-a57d97d1107e032f.png" alt="Request coalescing combines same-key fetches so the backend gets one request per app server; cache key fanout stores copies under multiple keys to spread a hot key." loading="lazy"><figcaption>Request coalescing combines same-key fetches so the backend gets one request per app server; cache key fanout stores copies under multiple keys to spread a hot key.</figcaption></figure></p>
+<ul>
+<li><strong>Request coalescing</strong>: Combine same-key fetches; backend gets one request per app server.</li>
+<li><strong>Cache key fanout</strong>: Store identical copies under multiple keys; spreads one hot key across caches.</li>
+</ul>
+<h3 id="stampede-fixes">Stampede Fixes</h3>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/Patterns/QuickReference/assets/aa3cd63cf82688fa-bff69362d0cbaf73.png" alt="Probabilistic early refresh is smarter than locks because refresh chance rises near expiry while serving cached data; distributed locks serialize rebuilds but are fragile; background refresh keeps critical entries warm before expiration." loading="lazy"><figcaption>Probabilistic early refresh is smarter than locks because refresh chance rises near expiry while serving cached data; distributed locks serialize rebuilds but are fragile; background refresh keeps critical entries warm before expiration.</figcaption></figure></p>
+<ul>
+<li><strong>Probabilistic early refresh</strong>: Smarter than locks; refresh chance rises near expiry while serving cached data.</li>
+<li><strong>Distributed locks</strong>: Only first miss rebuilds; fragile if rebuild fails or waiters time out.</li>
+<li><strong>Background refresh</strong>: Continuously refresh critical entries before expiration so users never rebuild.</li>
+</ul>
+<h2 id="interview-scenarios">Interview Scenarios</h2>
+<p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/Patterns/QuickReference/assets/3da8beb6c333950e-a949e179d7be1357.png" alt="Bitly or URL shorteners should aggressively cache short-to-long mappings because URLs do not change; Ticketmaster should cache event details but not seat availability and use replicas for browsing." loading="lazy"><figcaption>Bitly or URL shorteners should aggressively cache short-to-long mappings because URLs do not change; Ticketmaster should cache event details but not seat availability and use replicas for browsing.</figcaption></figure></p>
+<ul>
+<li><strong>Bitly/URL Shortener</strong>: Cache short-to-long mappings aggressively; URLs do not change.</li>
+<li><strong>Ticketmaster</strong>: Cache event details, not seat availability; use replicas for browsing.</li>
+</ul>
+<hr>
+<p><em>Source: <a href="https://www.hellointerview.com/learn/system-design/patterns/scaling-reads/quick-reference">https://www.hellointerview.com/learn/system-design/patterns/scaling-reads/quick-reference</a></em></p>
+</div>
+</article>
+<nav class="pager">
+<a href="/patterns/quick-reference/real-time-updates/"><span>Previous</span><b>Real-time Updates</b></a>
+<a class="nx" href="/patterns/quick-reference/scaling-writes/"><span>Next</span><b>Scaling Writes</b></a>
+</nav>
+</main>
+<aside class="toc"><h4>On this page</h4><ol><li><a class="" href="#read-scaling-decisions">Read Scaling Decisions</a></li><li><a class="h3" href="#when-to-apply">When To Apply</a></li><li><a class="h3" href="#scaling-progression">Scaling Progression</a></li><li><a class="" href="#key-numbers">Key Numbers</a></li><li><a class="" href="#database-optimization">Database Optimization</a></li><li><a class="" href="#horizontal-scaling">Horizontal Scaling</a></li><li><a class="" href="#cache-strategy">Cache Strategy</a></li><li><a class="h3" href="#cache-layers">Cache Layers</a></li><li><a class="h3" href="#invalidation-choices">Invalidation Choices</a></li><li><a class="" href="#failure-modes">Failure Modes</a></li><li><a class="h3" href="#hot-key-fixes">Hot Key Fixes</a></li><li><a class="h3" href="#stampede-fixes">Stampede Fixes</a></li><li><a class="" href="#interview-scenarios">Interview Scenarios</a></li></ol></aside>
+</div>
+<script src="/assets/doc.js" defer></script>
+<footer class="foot"><div class="foot-in">
+<span>InterviewVault — system design study vault</span>
+<span>122 documents · 607 diagrams</span>
+</div></footer>
+</body>
+</html>

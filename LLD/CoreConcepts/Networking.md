@@ -1041,7 +1041,7 @@ graph TB
         CONN --> S1[Stream 1: Request A]
         CONN --> S2[Stream 2: Request B]
         CONN --> S3[Stream 3: Request C]
-        NOTE2[1 connection, 3 parallel streams<br/>1 TLS handshake<br/>Header compression (HPACK)]
+        NOTE2["1 connection, 3 parallel streams<br/>1 TLS handshake<br/>Header compression (HPACK)"]
     end
 
     style NOTE1 fill:#FFB6C1
