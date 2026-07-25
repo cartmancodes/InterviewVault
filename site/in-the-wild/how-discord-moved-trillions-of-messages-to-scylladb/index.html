@@ -93,7 +93,7 @@
 
 <p>Once the requests met in the same process, the data service could apply <a href="https://www.hellointerview.com/learn/system-design/patterns/scaling-reads#how-do-you-handle-millions-of-concurrent-reads-for-the-same-cached-data">request coalescing</a>.</p>
 <p>A simplified implementation keeps a map from each query key to the task already fetching it:</p>
-<pre><code>// Simplified sketch. get_or_start checks and inserts atomically.
+<pre><code class="language-rust">// Simplified sketch. get_or_start checks and inserts atomically.
 async fn get_message(channel_id: u64, message_id: u64) -&gt; Message {
     let key = (channel_id, message_id);
 

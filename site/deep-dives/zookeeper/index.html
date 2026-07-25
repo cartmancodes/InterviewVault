@@ -25,7 +25,7 @@
 <div class="art-head">
 <div class="art-kicker">Deep Dives</div>
 <h1>ZooKeeper</h1>
-<div class="art-meta"><span>6,976 words</span><span>2 diagrams</span><span>11 figures</span></div>
+<div class="art-meta"><span>6,985 words</span><span>2 diagrams</span><span>11 figures</span></div>
 </div>
 <div class="prose"><p>Learn about how you can use ZooKeeper to solve a large number of problems in System Design.</p>
 <blockquote>
@@ -110,10 +110,15 @@ create -s /chat-app/channels/global/msg- &quot;Alice: Hello everyone!&quot;</li>
 </ol>
 <p>This distributed design addresses the single point of failure problem we encountered when using a database for user-server mapping. If one ZooKeeper server fails, the ensemble continues to function as long as a majority (quorum) of servers are available. For example, with our 3-server ensemble, ZooKeeper can tolerate 1 server failure.</p>
 <p>When our chat servers connect to ZooKeeper, they connect to all servers in the ensemble:</p>
-<pre><code>// Chat Server 1 connecting to ZooKeeper
-ZooKeeper zk = new ZooKeeper(&quot;zk1:2181,zk2:2181,zk3:2181&quot;, 
-                             3000, /* session timeout */ 
-                             watcher /* callback */);
+<pre><code class="language-python">from kazoo.client import KazooClient
+
+# Chat Server 1 connecting to ZooKeeper
+zk = KazooClient(
+    hosts=&quot;zk1:2181,zk2:2181,zk3:2181&quot;,
+    timeout=3.0,  # session timeout, in seconds
+)
+zk.start()
+zk.add_listener(watcher)  # callback on session state changes
 </code></pre>
 <p>This ensemble design ensures our critical coordination data—which users are connected to which servers—remains highly available and durable, even when individual ZooKeeper servers fail.</p>
 <h3 id="watches-knowing-when-things-change">Watches: Knowing When Things Change</h3>
@@ -166,7 +171,7 @@ ZooKeeper zk = new ZooKeeper(&quot;zk1:2181,zk2:2181,zk3:2181&quot;,
 <h3 id="zookeeper-for-service-discovery">ZooKeeper for Service Discovery</h3>
 <p>Service discovery is the process of automatically detecting services and endpoints in a distributed system. As services come online, they register themselves; as they go offline, they deregister (or their ephemeral nodes expire).</p>
 <p>We saw this in action with our chat servers registering themselves:</p>
-<pre><code>create -e /chat-app/servers/server2 &quot;192.168.1.102:8080&quot;
+<pre><code class="language-bash">create -e /chat-app/servers/server2 &quot;192.168.1.102:8080&quot;
 </code></pre>
 <p>This pattern enables dynamic scaling, load balancing, and health checking.</p>
 <p>Consider a microservice architecture for an online streaming platform:</p>
@@ -200,7 +205,7 @@ ZooKeeper zk = new ZooKeeper(&quot;zk1:2181,zk2:2181,zk3:2181&quot;,
 <li>If a leader fails, its node disappears, and the next server in sequence steps up</li>
 </ol>
 <p>Here&#39;s how it might look in our chat application if we wanted to elect a server to handle global announcements:</p>
-<pre><code># Server 1 creates:
+<pre><code class="language-bash"># Server 1 creates:
 create -s -e /chat-app/leader/node- &quot;server1&quot;  # Creates /chat-app/leader/node-0000000001
 
 # Server 2 creates:
@@ -226,7 +231,7 @@ create -s -e /chat-app/leader/node- &quot;server3&quot;  # Creates /chat-app/lea
 <li>When a client releases the lock (or crashes), its ZNode is removed, and the next client is notified</li>
 </ol>
 <p>For our chat application, imagine implementing rate limiting on message sending:</p>
-<pre><code># Client 1 wants to send a message:
+<pre><code class="language-bash"># Client 1 wants to send a message:
 create -s -e /chat-app/locks/send_message- &quot;client1&quot;  # Creates /chat-app/locks/send_message-0000000001
 
 # Client 2 also wants to send:

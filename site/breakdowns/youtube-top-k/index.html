@@ -25,7 +25,7 @@
 <div class="art-head">
 <div class="art-kicker">Problem Breakdowns</div>
 <h1>YouTube Top K</h1>
-<div class="art-meta"><span>10,143 words</span><span>3 diagrams</span><span>16 figures</span></div>
+<div class="art-meta"><span>10,100 words</span><span>3 diagrams</span><span>16 figures</span></div>
 </div>
 <div class="prose"><p>Practice with guided hints and real-time feedback</p>
 <p>Watch the author walk through the problem step-by-step</p>
@@ -251,59 +251,53 @@ Total Videos = 1M videos/day * 365 days/year * 10 years = 3.6B videos
 <p>For completeness, a final approach would be to keep the aggregates in Flink, using Flink&#39;s native distributed state management instead of reading and writing to the Views DB. We can use an external state storage, like RocksDB to move state off the heap onto disk so that it scales to the large size of data we&#39;re dealing with.</p>
 <p>By maintaining state inside of our Flink jobs, we can get rid of the Postgres database entirely. We can also have the top-K calculations performed natively in Flink, meaning we write the output directly to our Cache at the conclusion of every minute rather than requiring a top-K cron.</p>
 <p>Our Flink job would look something like this:</p>
-<pre><code>public final class VideoTopKJob {
-    private static final int TOP_K = 100;
-    private static final List&lt;WindowSpec&gt; WINDOWS = List.of(
-        new WindowSpec(&quot;last_hour&quot;, java.time.Duration.ofHours(1)),
-        new WindowSpec(&quot;last_day&quot;, java.time.Duration.ofDays(1)),
-        new WindowSpec(&quot;last_month&quot;, java.time.Duration.ofDays(30))
-    );
+<pre><code class="language-python">TOP_K = 100
+WINDOWS = [
+    WindowSpec(&quot;last_hour&quot;, timedelta(hours=1)),
+    WindowSpec(&quot;last_day&quot;, timedelta(days=1)),
+    WindowSpec(&quot;last_month&quot;, timedelta(days=30)),
+]
 
-    private VideoTopKJob() {
-    }
 
-    public static void main(String[] args) throws Exception {
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        // ... setup Flink job
+class RollingWindowAggregator(KeyedProcessFunction):
+    def __init__(self, windows):
+        self.windows = windows
+    # ...
 
-        KafkaSource&lt;VideoViewEvent&gt; source = KafkaSource.&lt;VideoViewEvent&gt;builder()
-            // ...
 
-        DataStream&lt;VideoViewEvent&gt; events = env.fromSource(
-            source,
-            WatermarkStrategy.&lt;VideoViewEvent&gt;forBoundedOutOfOrderness(java.time.Duration.ofSeconds(30))
-                .withTimestampAssigner((event, timestamp) -&gt; event.eventTime()),
-            &quot;video-views-source&quot;
-        );
+class TopKAggregator(KeyedProcessFunction):
+    def __init__(self, k):
+        self.k = k
+    # ...
 
-        DataStream&lt;VideoWindowCount&gt; windowCounts = events
-            .name(&quot;video-views-with-watermarks&quot;)
-            .keyBy(VideoViewEvent::videoId)
-            .process(new RollingWindowAggregator(WINDOWS))
-            .name(&quot;rolling-window-aggregator&quot;);
 
-        windowCounts
-            .keyBy(VideoWindowCount::window)
-            .process(new TopKAggregator(TOP_K))
-            .name(&quot;top-k-per-window&quot;)
-            .addSink(new RedisSortedSetSink(/* */)
-            .name(&quot;write-top-k-to-cache&quot;);
+def main():
+    env = StreamExecutionEnvironment.get_execution_environment()
+    # ... setup Flink job
 
-        env.execute(&quot;Video Top-K Sliding Window&quot;);
-    }
+    source = KafkaSource.builder().build()  # ...
 
-    private static final class RollingWindowAggregator extends KeyedProcessFunction&lt;String, VideoViewEvent, VideoWindowCount&gt; {
-      // ...
-    }
+    events = env.from_source(
+        source,
+        WatermarkStrategy
+        .for_bounded_out_of_orderness(timedelta(seconds=30))
+        .with_timestamp_assigner(lambda event, timestamp: event.event_time),
+        &quot;video-views-source&quot;,
+    ).name(&quot;video-views-with-watermarks&quot;)
 
-    private static final class TopKAggregator extends KeyedProcessFunction&lt;String, VideoWindowCount, TopKResult&gt; {
-        // ...
-    }
+    window_counts = (events
+        .key_by(lambda event: event.video_id)
+        .process(RollingWindowAggregator(WINDOWS))
+        .name(&quot;rolling-window-aggregator&quot;))
 
-    private static final class RedisSortedSetSink extends RichSinkFunction&lt;TopKResult&gt; {
-        // ...
-    }
-}
+    (window_counts
+        .key_by(lambda count: count.window)
+        .process(TopKAggregator(TOP_K))
+        .name(&quot;top-k-per-window&quot;)
+        .add_sink(RedisSortedSetSink())
+        .name(&quot;write-top-k-to-cache&quot;))
+
+    env.execute(&quot;Video Top-K Sliding Window&quot;)
 </code></pre>
 <p>Because our Flink jobs are reading from Kafka, you can think of them like reading off a tape recorder. If things fail, we can always rewind our Kafka offsets to the last good checkpoint and replay processing from there.</p>
 <p>The rolling window aggregator is keeping, in memory, the count of views for each window for each video. When the window is complete, it emits a <code>VideoWindowCount</code> object which contains the window and the count of views for each video in that window.</p>
@@ -342,8 +336,8 @@ Total Videos = 1M videos/day * 365 days/year * 10 years = 3.6B videos
 <p>Count-Min sketch is described in more detail, together with some intuition, in the Data Structures for Big Data deep dive.</p>
 </blockquote>
 <p>A traditional CMS supports two operations: <code>add</code> and <code>estimate</code></p>
-<pre><code>void add(item: string, count: number);
-number estimate(item: string);
+<pre><code class="language-python">def add(item: str, count: int) -&gt; None: ...
+def estimate(item: str) -&gt; int: ...
 </code></pre>
 <p>Notice there is not a <code>list</code> operation here, we&#39;ve lost track of the ID of the item we&#39;ve added as soon as the operation completes. But we can pair a CMS together with a sorted list or heap to solve our top-K problem.</p>
 <ol>

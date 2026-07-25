@@ -25,7 +25,7 @@
 <div class="art-head">
 <div class="art-kicker">Patterns</div>
 <h1>Multi-step Processes</h1>
-<div class="art-meta"><span>6,084 words</span><span>1 diagram</span><span>6 figures</span></div>
+<div class="art-meta"><span>6,089 words</span><span>1 diagram</span><span>6 figures</span></div>
 </div>
 <div class="prose"><blockquote>
 <p>📑 <strong>Quick Reference:</strong> <a href="/patterns/quick-reference/multi-step-processes/">condensed cheat-sheet</a> for last-minute review.</p>
@@ -55,20 +55,18 @@
 
 <h3 id="single-server-primitives">Single Server Primitives</h3>
 <p>The simplest thing we can build is let one server handle the whole thing. Our API server gets an order from a user and just walks through the steps in order: charge the payment, reserve the inventory, create the shipping label, send the confirmation email. One after another, top to bottom, then it responds.</p>
-<pre><code>async function fulfillOrder(order: Order): Promise&lt;OrderResult&gt; {
-    try {
-      await chargePayment(order);
-      await reserveInventory(order);
+<pre><code class="language-python">async def fulfill_order(order: Order) -&gt; OrderResult:
+    try:
+        await charge_payment(order)
+        await reserve_inventory(order)
 
-      // Woops, server crashed here! Sorry, customer!
+        # Woops, server crashed here! Sorry, customer!
 
-      await createShippingLabel(order);
-      await sendConfirmationEmail(order);
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-}
+        await create_shipping_label(order)
+        await send_confirmation_email(order)
+        return OrderResult(success=True)
+    except Exception as error:
+        return OrderResult(success=False, error=str(error))
 </code></pre>
 <p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/Patterns/assets/uHBFzN_zB36O.0v_la8ybk-r-3.svg" alt="Single Server Primitive" loading="lazy"><figcaption>Single Server Primitive</figcaption></figure></p>
 <p>If we&#39;d never had to think about anything going wrong, or scaling, this is exactly where we&#39;d start. But it has at least two serious problems as soon as you need reliability guarantees and more complex coordination.</p>
@@ -126,37 +124,32 @@
 <p>Durable execution is a way to write long-running code that can move between machines and survive system failures and restarts. Instead of losing all progress when a server crashes or restarts, durable execution systems automatically resume workflows from their last successful step on a new, running host. Most durable execution engines use <em>code</em> to describe the workflow. You write a function that represents the workflow, and the engine handles the orchestration of it.</p>
 <p>The most popular durable execution engine is <a href="https://temporal.io">Temporal</a>, a 2019 fork of Cadence, the engine its founders built at Uber after working on AWS&#39;s Simple Workflow Service. The lineage shows: it&#39;s mature, open source, and used by many large companies.</p>
 <p>For example, here&#39;s a simple workflow in Temporal:</p>
-<pre><code>const {
-    processPayment,
-    reserveInventory,
-    shipOrder,
-    sendConfirmationEmail,
-    refundPayment
-} = proxyActivities&lt;Activities&gt;({
-    startToCloseTimeout: &#39;5 minute&#39;,
-    retry: {
-        maximumAttempts: 3,
-    }
-});
+<pre><code class="language-python">from datetime import timedelta
+from temporalio import workflow
+from temporalio.common import RetryPolicy
 
-async function myWorkflow(input: Order): Promise&lt;OrderResult&gt; {
-    const paymentResult = await processPayment(input);
 
-    if(paymentResult.success) {
-        const inventoryResult = await reserveInventory(input);
+@workflow.defn
+class OrderWorkflow:
+    @workflow.run
+    async def run(self, order: Order) -&gt; OrderResult:
+        opts = dict(
+            start_to_close_timeout=timedelta(minutes=5),
+            retry_policy=RetryPolicy(maximum_attempts=3),
+        )
 
-        if(inventoryResult.success) {
-            await shipOrder(input);
-            await sendConfirmationEmail(input);
-            return { success: true };
-        } else {
-            await refundPayment(input);
-            return { success: false, error: &quot;Inventory reservation failed&quot; };
-        }
-    } else {
-        return { success: false, error: &quot;Payment failed&quot; };
-    }
-}
+        payment = await workflow.execute_activity(process_payment, order, **opts)
+        if not payment.success:
+            return OrderResult(success=False, error=&quot;Payment failed&quot;)
+
+        inventory = await workflow.execute_activity(reserve_inventory, order, **opts)
+        if not inventory.success:
+            await workflow.execute_activity(refund_payment, order, **opts)
+            return OrderResult(success=False, error=&quot;Inventory reservation failed&quot;)
+
+        await workflow.execute_activity(ship_order, order, **opts)
+        await workflow.execute_activity(send_confirmation_email, order, **opts)
+        return OrderResult(success=True)
 </code></pre>
 <p>If this looks a lot like the single-server orchestration we saw earlier, that&#39;s because it is! The big difference is how this code is run, and it&#39;s worth understanding in some detail because it&#39;ll help you understand what&#39;s actually going on here.</p>
 <h4 id="how-durable-execution-works">How Durable Execution Works</h4>
@@ -184,7 +177,7 @@ async function myWorkflow(input: Order): Promise&lt;OrderResult&gt; {
 <h4 id="managed-workflow-systems">Managed Workflow Systems</h4>
 <p>Managed workflow systems take a more declarative approach. Instead of writing code that looks like regular programming, you describe the workflow as a state machine or DAG (directed acyclic graph) in JSON, YAML, or a specialized DSL, and the engine runs it. The most popular are <a href="https://aws.amazon.com/step-functions/">AWS Step Functions</a> and <a href="https://cloud.google.com/workflows">Google Cloud Workflows</a>.</p>
 <p>Here&#39;s the same order fulfillment workflow in AWS Step Functions:</p>
-<pre><code>{
+<pre><code class="language-json">{
   &quot;Comment&quot;: &quot;Order fulfillment workflow&quot;,
   &quot;StartAt&quot;: &quot;ProcessPayment&quot;,
   &quot;States&quot;: {
@@ -260,11 +253,10 @@ async function myWorkflow(input: Order): Promise&lt;OrderResult&gt; {
 <p>Workflow migrations are a more complex approach: you update the workflow definition in place so that running executions can pick up the change.</p>
 <p>Declarative workflow systems give you less migration to do, but also less control. In AWS Step Functions, a running execution is pinned to the definition it started with, so updating the state machine only affects new executions. If in-flight executions genuinely need the new step, you stop and restart them, or model the branch into the definition ahead of time.</p>
 <p>With durable execution engines, you&#39;ll often use a &quot;patch&quot; to decide <em>deterministically</em> which path a given workflow should take. The <code>patched()</code> call returns true for new executions (and for in-flight ones that reach this point for the first time), so they run the new behavior. Executions whose recorded history already extends past this point from running the old code return false and stay on the legacy behavior. That way a single deploy can serve both old and new workflows without breaking replay.</p>
-<pre><code>if (workflow.patched(&quot;change-behavior&quot;)) {
-  await a.newBehavior();    // new executions take this path
-} else {
-  await a.legacyBehavior(); // workflows that ran before the patch stay here
-}
+<pre><code class="language-python">if workflow.patched(&quot;change-behavior&quot;):
+    await workflow.execute_activity(new_behavior)      # new executions take this path
+else:
+    await workflow.execute_activity(legacy_behavior)   # workflows that ran before the patch stay here
 </code></pre>
 <h3 id="how-do-we-keep-the-workflow-state-size-in-check">&quot;How do we keep the workflow state size in check?&quot;</h3>
 <p>When using a durable execution engine like Temporal, the entire history of the workflow execution needs to be persisted. When a worker crashes, the workflow is replayed from the beginning, using the results in the history of previous activity invocations instead of re-running the activities. This means your workflow state can grow very large very quickly, and some interviewers like to poke on this.</p>
@@ -273,28 +265,41 @@ async function myWorkflow(input: Order): Promise&lt;OrderResult&gt; {
 <h3 id="how-do-we-deal-with-external-events">&quot;How do we deal with external events?&quot;</h3>
 <p>The interviewer asks: &quot;Your workflow needs to wait for a customer to sign documents. They might take 5 minutes or 5 days. How do you handle this efficiently?&quot;</p>
 <p>Workflows excel at waiting without consuming resources, using signals for external events. Here&#39;s the document-signing flow in Temporal&#39;s TypeScript SDK:</p>
-<pre><code>const documentSigned = defineSignal&lt;[SignatureData]&gt;(&#39;documentSigned&#39;);
+<pre><code class="language-python">from datetime import timedelta
+from temporalio import workflow
 
-// sendForSignature, sendReminder, etc. are proxied activities
-async function documentSigningWorkflow(docId: string) {
-  let signature: SignatureData | undefined;
-  setHandler(documentSigned, (data) =&gt; { signature = data; });
+# send_for_signature, send_reminder, etc. are activities
 
-  await sendForSignature(docId);
 
-  // Wait up to 30 days for the signature
-  if (!(await condition(() =&gt; signature !== undefined, &#39;30 days&#39;))) {
-    await sendReminder(docId);
+@workflow.defn
+class DocumentSigningWorkflow:
+    def __init__(self) -&gt; None:
+        self.signature: SignatureData | None = None
 
-    // One more week, then give up
-    if (!(await condition(() =&gt; signature !== undefined, &#39;7 days&#39;))) {
-      await cancelDocument(docId);
-      return;
-    }
-  }
+    @workflow.signal
+    def document_signed(self, data: SignatureData) -&gt; None:
+        self.signature = data
 
-  await processSignature(signature);
-}
+    @workflow.run
+    async def run(self, doc_id: str) -&gt; None:
+        await workflow.execute_activity(send_for_signature, doc_id)
+
+        # Wait up to 30 days for the signature
+        signed = await workflow.wait_condition(
+            lambda: self.signature is not None, timeout=timedelta(days=30)
+        )
+        if not signed:
+            await workflow.execute_activity(send_reminder, doc_id)
+
+            # One more week, then give up
+            signed = await workflow.wait_condition(
+                lambda: self.signature is not None, timeout=timedelta(days=7)
+            )
+            if not signed:
+                await workflow.execute_activity(cancel_document, doc_id)
+                return
+
+        await workflow.execute_activity(process_signature, self.signature)
 </code></pre>
 <p>External systems deliver signals through the workflow engine&#39;s API. When the signing service&#39;s webhook fires, the handler calls the engine with the workflow&#39;s ID, and the engine wakes the right execution. In the meantime the waiting workflow holds no thread and no worker memory, just persisted state and a durable timer. This pattern handles human tasks, webhook callbacks, and integration with external systems.</p>
 <h3 id="how-can-we-ensure-x-step-runs-exactly-once">&quot;How can we ensure X step runs exactly once?&quot;</h3>

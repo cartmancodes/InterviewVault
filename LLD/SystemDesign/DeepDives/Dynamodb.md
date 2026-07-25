@@ -59,7 +59,7 @@ Setting up DynamoDB is straightforward: you can create tables directly in the AW
 
 Consider a `users` table in DynamoDB, structured as follows:
 
-```
+```json
 {
   "PersonID": 101,
   "LastName": "Smith",
@@ -209,19 +209,15 @@ SELECT * FROM users WHERE user_id = 101
 
 But in DynamoDB, this would be translated to a query operation like this:
 
-```
-const params = {
-  TableName: 'users',
-  KeyConditionExpression: 'user_id = :id',
-  ExpressionAttributeValues: {
-    ':id': 101
-  }
-};
+```python
+import boto3
+from boto3.dynamodb.conditions import Key
 
-dynamodb.query(params, (err, data) => {
-  if (err) console.error(err);
-  else console.log(data);
-});
+table = boto3.resource("dynamodb").Table("users")
+
+# Query hits the partition key directly — one targeted read
+response = table.query(KeyConditionExpression=Key("user_id").eq(101))
+print(response["Items"])
 ```
 
 To perform a scan operation, you'd use the `scan` method instead of `query`.
@@ -234,15 +230,10 @@ SELECT * FROM users
 
 DynamoDB scan operation:
 
-```
-const params = {
-  TableName: 'users'
-};
-
-dynamodb.scan(params, (err, data) => {
-  if (err) console.error(err);
-  else console.log(data);
-});
+```python
+# Scan reads every item in the table, then filters — expensive at scale
+response = table.scan()
+print(response["Items"])
 ```
 
 When working with Dynamo, you typically want to avoid expensive scan operations where ever possible. This is where careful data modeling comes into play. By choosing the right partition key and sort key, you can ensure that your queries are efficient and performant.

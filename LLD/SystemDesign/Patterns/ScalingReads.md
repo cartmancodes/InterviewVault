@@ -281,7 +281,7 @@ The problem is that traditional caching assumes load distributes across many key
 
 The first solution is request coalescing - basically combining multiple requests for the same key into a single request. This helps when your backend can't handle the load of everyone asking for the same thing at once.
 
-```
+```python
 # Request coalescing pattern
 class CoalescingCache:
     def __init__(self):

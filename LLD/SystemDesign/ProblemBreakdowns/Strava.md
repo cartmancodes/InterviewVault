@@ -447,7 +447,7 @@ redis.zrange(f"leaderboard:run:global", 0, -1, desc=True, withscores=True)
 
 Here's a pseudo-code example of how this might work:
 
-```
+```python
 # When logging a new activity
 activity_id = generate_unique_id()
 redis.zadd("activities:timestamps", {activity_id: timestamp})

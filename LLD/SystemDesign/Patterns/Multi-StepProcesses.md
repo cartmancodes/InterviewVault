@@ -67,21 +67,19 @@ graph LR
 
 The simplest thing we can build is let one server handle the whole thing. Our API server gets an order from a user and just walks through the steps in order: charge the payment, reserve the inventory, create the shipping label, send the confirmation email. One after another, top to bottom, then it responds.
 
-```
-async function fulfillOrder(order: Order): Promise<OrderResult> {
-    try {
-      await chargePayment(order);
-      await reserveInventory(order);
+```python
+async def fulfill_order(order: Order) -> OrderResult:
+    try:
+        await charge_payment(order)
+        await reserve_inventory(order)
 
-      // Woops, server crashed here! Sorry, customer!
+        # Woops, server crashed here! Sorry, customer!
 
-      await createShippingLabel(order);
-      await sendConfirmationEmail(order);
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
-}
+        await create_shipping_label(order)
+        await send_confirmation_email(order)
+        return OrderResult(success=True)
+    except Exception as error:
+        return OrderResult(success=False, error=str(error))
 ```
 
 ![Single Server Primitive](assets/uHBFzN_zB36O.0v_la8ybk-r-3.svg)
@@ -166,38 +164,33 @@ The most popular durable execution engine is [Temporal](https://temporal.io), a 
 
 For example, here's a simple workflow in Temporal:
 
-```
-const {
-    processPayment,
-    reserveInventory,
-    shipOrder,
-    sendConfirmationEmail,
-    refundPayment
-} = proxyActivities<Activities>({
-    startToCloseTimeout: '5 minute',
-    retry: {
-        maximumAttempts: 3,
-    }
-});
+```python
+from datetime import timedelta
+from temporalio import workflow
+from temporalio.common import RetryPolicy
 
-async function myWorkflow(input: Order): Promise<OrderResult> {
-    const paymentResult = await processPayment(input);
 
-    if(paymentResult.success) {
-        const inventoryResult = await reserveInventory(input);
+@workflow.defn
+class OrderWorkflow:
+    @workflow.run
+    async def run(self, order: Order) -> OrderResult:
+        opts = dict(
+            start_to_close_timeout=timedelta(minutes=5),
+            retry_policy=RetryPolicy(maximum_attempts=3),
+        )
 
-        if(inventoryResult.success) {
-            await shipOrder(input);
-            await sendConfirmationEmail(input);
-            return { success: true };
-        } else {
-            await refundPayment(input);
-            return { success: false, error: "Inventory reservation failed" };
-        }
-    } else {
-        return { success: false, error: "Payment failed" };
-    }
-}
+        payment = await workflow.execute_activity(process_payment, order, **opts)
+        if not payment.success:
+            return OrderResult(success=False, error="Payment failed")
+
+        inventory = await workflow.execute_activity(reserve_inventory, order, **opts)
+        if not inventory.success:
+            await workflow.execute_activity(refund_payment, order, **opts)
+            return OrderResult(success=False, error="Inventory reservation failed")
+
+        await workflow.execute_activity(ship_order, order, **opts)
+        await workflow.execute_activity(send_confirmation_email, order, **opts)
+        return OrderResult(success=True)
 ```
 
 If this looks a lot like the single-server orchestration we saw earlier, that's because it is! The big difference is how this code is run, and it's worth understanding in some detail because it'll help you understand what's actually going on here.
@@ -238,7 +231,7 @@ Managed workflow systems take a more declarative approach. Instead of writing co
 
 Here's the same order fulfillment workflow in AWS Step Functions:
 
-```
+```json
 {
   "Comment": "Order fulfillment workflow",
   "StartAt": "ProcessPayment",
@@ -358,12 +351,11 @@ Declarative workflow systems give you less migration to do, but also less contro
 
 With durable execution engines, you'll often use a "patch" to decide _deterministically_ which path a given workflow should take. The `patched()` call returns true for new executions (and for in-flight ones that reach this point for the first time), so they run the new behavior. Executions whose recorded history already extends past this point from running the old code return false and stay on the legacy behavior. That way a single deploy can serve both old and new workflows without breaking replay.
 
-```
-if (workflow.patched("change-behavior")) {
-  await a.newBehavior();    // new executions take this path
-} else {
-  await a.legacyBehavior(); // workflows that ran before the patch stay here
-}
+```python
+if workflow.patched("change-behavior"):
+    await workflow.execute_activity(new_behavior)      # new executions take this path
+else:
+    await workflow.execute_activity(legacy_behavior)   # workflows that ran before the patch stay here
 ```
 
 ### "How do we keep the workflow state size in check?"
@@ -380,29 +372,42 @@ The interviewer asks: "Your workflow needs to wait for a customer to sign docume
 
 Workflows excel at waiting without consuming resources, using signals for external events. Here's the document-signing flow in Temporal's TypeScript SDK:
 
-```
-const documentSigned = defineSignal<[SignatureData]>('documentSigned');
+```python
+from datetime import timedelta
+from temporalio import workflow
 
-// sendForSignature, sendReminder, etc. are proxied activities
-async function documentSigningWorkflow(docId: string) {
-  let signature: SignatureData | undefined;
-  setHandler(documentSigned, (data) => { signature = data; });
+# send_for_signature, send_reminder, etc. are activities
 
-  await sendForSignature(docId);
 
-  // Wait up to 30 days for the signature
-  if (!(await condition(() => signature !== undefined, '30 days'))) {
-    await sendReminder(docId);
+@workflow.defn
+class DocumentSigningWorkflow:
+    def __init__(self) -> None:
+        self.signature: SignatureData | None = None
 
-    // One more week, then give up
-    if (!(await condition(() => signature !== undefined, '7 days'))) {
-      await cancelDocument(docId);
-      return;
-    }
-  }
+    @workflow.signal
+    def document_signed(self, data: SignatureData) -> None:
+        self.signature = data
 
-  await processSignature(signature);
-}
+    @workflow.run
+    async def run(self, doc_id: str) -> None:
+        await workflow.execute_activity(send_for_signature, doc_id)
+
+        # Wait up to 30 days for the signature
+        signed = await workflow.wait_condition(
+            lambda: self.signature is not None, timeout=timedelta(days=30)
+        )
+        if not signed:
+            await workflow.execute_activity(send_reminder, doc_id)
+
+            # One more week, then give up
+            signed = await workflow.wait_condition(
+                lambda: self.signature is not None, timeout=timedelta(days=7)
+            )
+            if not signed:
+                await workflow.execute_activity(cancel_document, doc_id)
+                return
+
+        await workflow.execute_activity(process_signature, self.signature)
 ```
 
 External systems deliver signals through the workflow engine's API. When the signing service's webhook fires, the handler calls the engine with the workflow's ID, and the engine wakes the right execution. In the meantime the waiting workflow holds no thread and no worker memory, just persisted state and a durable timer. This pattern handles human tasks, webhook callbacks, and integration with external systems.

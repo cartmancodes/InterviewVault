@@ -384,60 +384,54 @@ By maintaining state inside of our Flink jobs, we can get rid of the Postgres da
 
 Our Flink job would look something like this:
 
-```
-public final class VideoTopKJob {
-    private static final int TOP_K = 100;
-    private static final List<WindowSpec> WINDOWS = List.of(
-        new WindowSpec("last_hour", java.time.Duration.ofHours(1)),
-        new WindowSpec("last_day", java.time.Duration.ofDays(1)),
-        new WindowSpec("last_month", java.time.Duration.ofDays(30))
-    );
+```python
+TOP_K = 100
+WINDOWS = [
+    WindowSpec("last_hour", timedelta(hours=1)),
+    WindowSpec("last_day", timedelta(days=1)),
+    WindowSpec("last_month", timedelta(days=30)),
+]
 
-    private VideoTopKJob() {
-    }
 
-    public static void main(String[] args) throws Exception {
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        // ... setup Flink job
+class RollingWindowAggregator(KeyedProcessFunction):
+    def __init__(self, windows):
+        self.windows = windows
+    # ...
 
-        KafkaSource<VideoViewEvent> source = KafkaSource.<VideoViewEvent>builder()
-            // ...
 
-        DataStream<VideoViewEvent> events = env.fromSource(
-            source,
-            WatermarkStrategy.<VideoViewEvent>forBoundedOutOfOrderness(java.time.Duration.ofSeconds(30))
-                .withTimestampAssigner((event, timestamp) -> event.eventTime()),
-            "video-views-source"
-        );
+class TopKAggregator(KeyedProcessFunction):
+    def __init__(self, k):
+        self.k = k
+    # ...
 
-        DataStream<VideoWindowCount> windowCounts = events
-            .name("video-views-with-watermarks")
-            .keyBy(VideoViewEvent::videoId)
-            .process(new RollingWindowAggregator(WINDOWS))
-            .name("rolling-window-aggregator");
 
-        windowCounts
-            .keyBy(VideoWindowCount::window)
-            .process(new TopKAggregator(TOP_K))
-            .name("top-k-per-window")
-            .addSink(new RedisSortedSetSink(/* */)
-            .name("write-top-k-to-cache");
+def main():
+    env = StreamExecutionEnvironment.get_execution_environment()
+    # ... setup Flink job
 
-        env.execute("Video Top-K Sliding Window");
-    }
+    source = KafkaSource.builder().build()  # ...
 
-    private static final class RollingWindowAggregator extends KeyedProcessFunction<String, VideoViewEvent, VideoWindowCount> {
-      // ...
-    }
+    events = env.from_source(
+        source,
+        WatermarkStrategy
+        .for_bounded_out_of_orderness(timedelta(seconds=30))
+        .with_timestamp_assigner(lambda event, timestamp: event.event_time),
+        "video-views-source",
+    ).name("video-views-with-watermarks")
 
-    private static final class TopKAggregator extends KeyedProcessFunction<String, VideoWindowCount, TopKResult> {
-        // ...
-    }
+    window_counts = (events
+        .key_by(lambda event: event.video_id)
+        .process(RollingWindowAggregator(WINDOWS))
+        .name("rolling-window-aggregator"))
 
-    private static final class RedisSortedSetSink extends RichSinkFunction<TopKResult> {
-        // ...
-    }
-}
+    (window_counts
+        .key_by(lambda count: count.window)
+        .process(TopKAggregator(TOP_K))
+        .name("top-k-per-window")
+        .add_sink(RedisSortedSetSink())
+        .name("write-top-k-to-cache"))
+
+    env.execute("Video Top-K Sliding Window")
 ```
 
 Because our Flink jobs are reading from Kafka, you can think of them like reading off a tape recorder. If things fail, we can always rewind our Kafka offsets to the last good checkpoint and replay processing from there.
@@ -502,9 +496,9 @@ To do this, we'll use a data structure/approach called Count-Min Sketch (CMS). C
 
 A traditional CMS supports two operations: `add` and `estimate`
 
-```
-void add(item: string, count: number);
-number estimate(item: string);
+```python
+def add(item: str, count: int) -> None: ...
+def estimate(item: str) -> int: ...
 ```
 
 Notice there is not a `list` operation here, we've lost track of the ID of the item we've added as soon as the operation completes. But we can pair a CMS together with a sorted list or heap to solve our top-K problem.

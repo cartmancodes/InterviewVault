@@ -90,7 +90,7 @@ Let's define our API before getting into the high-level design, as it establishe
 
 For creating auctions, we need a POST endpoint that takes the auction details and returns the created auction:
 
-```
+```http
 POST /auctions -> Auction & Item
 {
     item: Item,
@@ -102,7 +102,7 @@ POST /auctions -> Auction & Item
 
 For placing bids, we need a POST endpoint that takes the bid details and returns the created bid:
 
-```
+```http
 POST /auctions/:auctionId/bids -> Bid
 {
     Bid
@@ -111,7 +111,7 @@ POST /auctions/:auctionId/bids -> Bid
 
 For viewing auctions, we need a GET endpoint that takes an auctionId and returns the auction and item details:
 
-```
+```http
 GET /auctions/:auctionId -> Auction & Item
 ```
 
@@ -378,7 +378,7 @@ The server holds the request open instead of responding immediately. When a new 
 
 The client side implementation typically looks something like this:
 
-```
+```javascript
 async function pollMaxBid(auctionId) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -416,7 +416,7 @@ When a user views an auction, their browser establishes a single SSE connection.
 
 The client-side implementation is remarkably simple:
 
-```
+```javascript
 const eventSource = new EventSource(`/api/auctions/${auctionId}/bid-stream`);
 
 eventSource.onmessage = (event) => {
@@ -427,25 +427,23 @@ eventSource.onmessage = (event) => {
 
 On the server side, we maintain a set of active SSE connections for each auction. When a new bid is accepted, we push the updated maximum bid to all connected clients for that auction. The server implementation might look something like this:
 
-```
-class AuctionEventManager {
-  private connections: Map<string, Set<Response>> = new Map();
-  
-  addConnection(auctionId: string, connection: Response) {
-    if (!this.connections.has(auctionId)) {
-      this.connections.set(auctionId, new Set());
-    }
-    this.connections.get(auctionId).add(connection);
-  }
-  
-  broadcastNewBid(auctionId: string, maxBid: number) {
-    const connections = this.connections.get(auctionId);
-    if (connections) {
-      const event = `data: ${JSON.stringify({ maxBid })}\n\n`;
-      connections.forEach(response => response.write(event));
-    }
-  }
-}
+```python
+import json
+from collections import defaultdict
+
+
+class AuctionEventManager:
+    def __init__(self) -> None:
+        # auction_id -> set of open client connections
+        self.connections: dict[str, set] = defaultdict(set)
+
+    def add_connection(self, auction_id: str, connection) -> None:
+        self.connections[auction_id].add(connection)
+
+    def broadcast_new_bid(self, auction_id: str, max_bid: float) -> None:
+        event = f"data: {json.dumps({'maxBid': max_bid})}\n\n"
+        for connection in self.connections.get(auction_id, ()):
+            connection.write(event)
 ```
 
 You could use websockets here as well, but SSE is arguably a better fit given the communication is unidirectional and SSE is typically lighter weight and easier to implement.

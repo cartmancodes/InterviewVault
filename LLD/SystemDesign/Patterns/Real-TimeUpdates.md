@@ -155,7 +155,7 @@ The simplest possible approach is to have the client regularly poll the server f
 
 How does it work? It's dead simple! The client makes a request to the server at a regular interval and the server responds with the current state of the world. In our chat app, we would just constantly be polling for "what messages have I not received yet?".
 
-```
+```javascript
 async function poll() {
   const response = await fetch('/api/updates');
   const data = await response.json();
@@ -199,7 +199,7 @@ For our chat app, we would keep making a request to get the _next message_. If t
 4. Client immediately makes new request
 5. Process repeats
 
-```
+```javascript
 // Client-side of long polling
 async function longPoll() {
   while (true) {
@@ -263,7 +263,7 @@ In our chat app, we would open up a request to stream messages and then each new
 
 Modern browsers have built-in support for SSE through the `EventSource` object, making the client-side implementation straightforward.
 
-```
+```javascript
 // Client-side
 const eventSource = new EventSource('/api/updates');
 
@@ -333,7 +333,7 @@ Once a connection is established, both client and server can send "messages" to 
 
 For our chat app, we'd connect to a WebSocket endpoint over HTTP, sharing our authentication token via cookies. The connection would get upgraded to a WebSocket connection and then we'd be able to receive messages back to the client over the connection as they happen. Bonus: we'd also be able to send messages to other users in the chat room!
 
-```
+```javascript
 // Client-side
 const ws = new WebSocket('ws://api.example.com/socket');
 
@@ -423,7 +423,7 @@ Ok, but how does it work?
 
 Pretty simple, apart from the acronyms and NAT traversal.
 
-```
+```javascript
 // Simplified WebRTC setup
 async function startCall() {
   const pc = new RTCPeerConnection();

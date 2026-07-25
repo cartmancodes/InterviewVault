@@ -151,7 +151,7 @@ Once the requests met in the same process, the data service could apply [request
 
 A simplified implementation keeps a map from each query key to the task already fetching it:
 
-```
+```rust
 // Simplified sketch. get_or_start checks and inserts atomically.
 async fn get_message(channel_id: u64, message_id: u64) -> Message {
     let key = (channel_id, message_id);

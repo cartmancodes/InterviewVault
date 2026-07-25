@@ -135,11 +135,16 @@ This distributed design addresses the single point of failure problem we encount
 
 When our chat servers connect to ZooKeeper, they connect to all servers in the ensemble:
 
-```
-// Chat Server 1 connecting to ZooKeeper
-ZooKeeper zk = new ZooKeeper("zk1:2181,zk2:2181,zk3:2181", 
-                             3000, /* session timeout */ 
-                             watcher /* callback */);
+```python
+from kazoo.client import KazooClient
+
+# Chat Server 1 connecting to ZooKeeper
+zk = KazooClient(
+    hosts="zk1:2181,zk2:2181,zk3:2181",
+    timeout=3.0,  # session timeout, in seconds
+)
+zk.start()
+zk.add_listener(watcher)  # callback on session state changes
 ```
 
 This ensemble design ensures our critical coordination data—which users are connected to which servers—remains highly available and durable, even when individual ZooKeeper servers fail.
@@ -224,7 +229,7 @@ Service discovery is the process of automatically detecting services and endpoin
 
 We saw this in action with our chat servers registering themselves:
 
-```
+```bash
 create -e /chat-app/servers/server2 "192.168.1.102:8080"
 ```
 
@@ -266,7 +271,7 @@ ZooKeeper's sequential ZNodes make leader election straightforward:
 
 Here's how it might look in our chat application if we wanted to elect a server to handle global announcements:
 
-```
+```bash
 # Server 1 creates:
 create -s -e /chat-app/leader/node- "server1"  # Creates /chat-app/leader/node-0000000001
 
@@ -317,7 +322,7 @@ ZooKeeper implements distributed locks using sequential ephemeral ZNodes:
 
 For our chat application, imagine implementing rate limiting on message sending:
 
-```
+```bash
 # Client 1 wants to send a message:
 create -s -e /chat-app/locks/send_message- "client1"  # Creates /chat-app/locks/send_message-0000000001
 

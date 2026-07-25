@@ -25,7 +25,7 @@
 <div class="art-head">
 <div class="art-kicker">Problem Breakdowns</div>
 <h1>Online Auction</h1>
-<div class="art-meta"><span>6,998 words</span><span>2 diagrams</span><span>10 figures</span></div>
+<div class="art-meta"><span>7,001 words</span><span>2 diagrams</span><span>10 figures</span></div>
 </div>
 <div class="prose"><blockquote>
 <p><strong>Overview</strong>: An online auction service lets users list items for sale while others compete by placing increasingly higher bids until the auction ends, with the highest bidder winning. The design is dominated by three hard requirements: <strong>strong consistency</strong> for bids (so no two users think they won), <strong>durability</strong> (never drop a bid), and <strong>real-time</strong> propagation of the current highest bid to everyone watching a hot auction.</p>
@@ -91,7 +91,7 @@ placing increasingly higher bids until the auction ends, with the highest bidder
 <h3 id="api-or-system-interface"><a href="https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#api-or-system-interface-5-minutes">API or System Interface</a></h3>
 <p>Let&#39;s define our API before getting into the high-level design, as it establishes the contract between our client and system. We&#39;ll go through each functional requirement and define the necessary APIs.</p>
 <p>For creating auctions, we need a POST endpoint that takes the auction details and returns the created auction:</p>
-<pre><code>POST /auctions -&gt; Auction &amp; Item
+<pre><code class="language-http">POST /auctions -&gt; Auction &amp; Item
 {
     item: Item,
     startDate: Date,
@@ -100,13 +100,13 @@ placing increasingly higher bids until the auction ends, with the highest bidder
 }
 </code></pre>
 <p>For placing bids, we need a POST endpoint that takes the bid details and returns the created bid:</p>
-<pre><code>POST /auctions/:auctionId/bids -&gt; Bid
+<pre><code class="language-http">POST /auctions/:auctionId/bids -&gt; Bid
 {
     Bid
 }
 </code></pre>
 <p>For viewing auctions, we need a GET endpoint that takes an auctionId and returns the auction and item details:</p>
-<pre><code>GET /auctions/:auctionId -&gt; Auction &amp; Item
+<pre><code class="language-http">GET /auctions/:auctionId -&gt; Auction &amp; Item
 </code></pre>
 <h2 id="high-level-design">🏗️ <a href="https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes">High-Level Design</a></h2>
 <h3 id="1-users-should-be-able-to-post-an-item-for-auction-with-a-starting-price-and-end-date">1) Users should be able to post an item for auction with a starting price and end date.</h3>
@@ -327,7 +327,7 @@ end`
 <p>Long polling offers a significant improvement over regular polling by maintaining an open connection to the server until new data is available or a timeout occurs. When a client wants to monitor an auction&#39;s current bid, they establish a connection that remains open until either the maximum bid changes or a timeout is reached (typically 30-60 seconds).</p>
 <p>The server holds the request open instead of responding immediately. When a new bid is accepted, the server responds to all waiting requests with the updated maximum bid. The clients then immediately initiate a new long-polling request, maintaining a near-continuous connection.</p>
 <p>The client side implementation typically looks something like this:</p>
-<pre><code>async function pollMaxBid(auctionId) {
+<pre><code class="language-javascript">async function pollMaxBid(auctionId) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() =&gt; controller.abort(), 30000);
 
@@ -356,7 +356,7 @@ end`
 <p><a href="https://en.wikipedia.org/wiki/Server-sent_events">Server-Sent Events (SSE)</a> provides a more elegant solution for real-time bid updates. SSE establishes a unidirectional channel from server to client, allowing the server to push updates whenever they occur without requiring the client to poll or maintain multiple connections.</p>
 <p>When a user views an auction, their browser establishes a single SSE connection. The server can then push new maximum bid values through this connection whenever they change. This creates a true real-time experience while being more efficient than both regular polling and long polling.</p>
 <p>The client-side implementation is remarkably simple:</p>
-<pre><code>const eventSource = new EventSource(`/api/auctions/${auctionId}/bid-stream`);
+<pre><code class="language-javascript">const eventSource = new EventSource(`/api/auctions/${auctionId}/bid-stream`);
 
 eventSource.onmessage = (event) =&gt; {
   const { maxBid } = JSON.parse(event.data);
@@ -364,24 +364,22 @@ eventSource.onmessage = (event) =&gt; {
 };
 </code></pre>
 <p>On the server side, we maintain a set of active SSE connections for each auction. When a new bid is accepted, we push the updated maximum bid to all connected clients for that auction. The server implementation might look something like this:</p>
-<pre><code>class AuctionEventManager {
-  private connections: Map&lt;string, Set&lt;Response&gt;&gt; = new Map();
-  
-  addConnection(auctionId: string, connection: Response) {
-    if (!this.connections.has(auctionId)) {
-      this.connections.set(auctionId, new Set());
-    }
-    this.connections.get(auctionId).add(connection);
-  }
-  
-  broadcastNewBid(auctionId: string, maxBid: number) {
-    const connections = this.connections.get(auctionId);
-    if (connections) {
-      const event = `data: ${JSON.stringify({ maxBid })}\n\n`;
-      connections.forEach(response =&gt; response.write(event));
-    }
-  }
-}
+<pre><code class="language-python">import json
+from collections import defaultdict
+
+
+class AuctionEventManager:
+    def __init__(self) -&gt; None:
+        # auction_id -&gt; set of open client connections
+        self.connections: dict[str, set] = defaultdict(set)
+
+    def add_connection(self, auction_id: str, connection) -&gt; None:
+        self.connections[auction_id].add(connection)
+
+    def broadcast_new_bid(self, auction_id: str, max_bid: float) -&gt; None:
+        event = f&quot;data: {json.dumps({&#39;maxBid&#39;: max_bid})}\n\n&quot;
+        for connection in self.connections.get(auction_id, ()):
+            connection.write(event)
 </code></pre>
 <p>You could use websockets here as well, but SSE is arguably a better fit given the communication is unidirectional and SSE is typically lighter weight and easier to implement.</p>
 <p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/ProblemBreakdowns/assets/NVsBIjSI4LLg.3l8068eqgy0fm.svg" alt="SSE" loading="lazy"><figcaption>SSE</figcaption></figure></p>

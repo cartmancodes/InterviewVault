@@ -119,18 +119,19 @@ At its core, a cache is just a hash table. Every programming language has one: P
 
 Your interviewer may ask you to sketch out some pseudocode. Here is what that might look like:
 
-```
+```python
 class Cache:
-    data = {}  # Simple hash table
+    def __init__(self):
+        self.data = {}  # Simple hash table
 
-    get(key):
+    def get(self, key):
         return self.data[key]
 
-    set(key, value):
+    def set(self, key, value):
         self.data[key] = value
 
-    delete(key):
-        delete self.data[key]
+    def delete(self, key):
+        del self.data[key]
 ```
 
 > When asked to write pseudocode in a design interview, don't worry about the syntax. Just focus on the logic. You'll note that I don't handle corner cases like key not found or key already exists. No worries, that's not the point here. That said, as always, it's worth confirming this with your interviewer. "I'm going to write some pseudocode, is it ok that it's not syntactically correct or missing some details?"

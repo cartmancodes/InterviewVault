@@ -129,7 +129,7 @@ When an event occurs, the producer formats a message, also referred to as a reco
 
 As a quick example, here is how we might put a message on the topic `my-topic` using the Kafka command line tool `kafka-console-producer`:
 
-```
+```bash
 kafka-console-producer --bootstrap-server localhost:9092 --topic my_topic --property "parse.key=true" --property "key.separator=:"
 > key1: Hello, Kafka with key!
 > key2: Another message with a different key
@@ -139,29 +139,21 @@ kafka-console-producer --bootstrap-server localhost:9092 --topic my_topic --prop
 
 We can see what the same would look like using `kafkajs`, a popular Node.js client for Kafka:
 
-```
-// Initialize the Kafka client
-const kafka = new Kafka({
-  clientId: 'my-app',
-  brokers: ['localhost:9092']
-})
+```python
+from kafka import KafkaProducer
 
-// Initialize the producer
-const producer = kafka.producer()
+# Initialize the producer
+producer = KafkaProducer(
+    bootstrap_servers=["localhost:9092"],
+    client_id="my-app",
+)
 
-const run = async () => {
-  // Connecting the producer
-  await producer.connect()
+# Sending messages to the topic 'my_topic' with keys
+producer.send("my_topic", key=b"key1", value=b"Hello, Kafka with key!")
+producer.send("my_topic", key=b"key2", value=b"Another message with a different key")
 
-  // Sending messages to the topic 'my_topic' with keys
-  await producer.send({
-    topic: 'my_topic',
-    messages: [
-      { key: 'key1', value: 'Hello, Kafka with key!' },
-      { key: 'key2', value: 'Another message with a different key' }
-    ],
-  })
-}
+# Block until everything buffered is actually delivered
+producer.flush()
 ```
 
 When a message is published to a Kafka topic, Kafka first determines the appropriate partition for the message. This partition selection is critical because it influences the distribution of data across the cluster. This is a two-step process:
@@ -190,7 +182,7 @@ Last up, consumers read messages from Kafka topics using a **pull-based model**.
 
 To round out our earlier example, here is how we might consume messages from the `my-topic` topic using the Kafka command line tool `kafka-console-consumer`:
 
-```
+```bash
 kafka-console-consumer --bootstrap-server localhost:9092 --topic my_topic --from-beginning --property print.key=true --property key.separator=": "
 
 # Output
@@ -200,33 +192,25 @@ key2: Another message with a different key
 
 Similarly, with `kafkajs`, we can consume messages from the `my_topic` topic:
 
-```
-// Initialize the Kafka client
-const kafka = new Kafka({
-  clientId: 'my-app',
-  brokers: ['localhost:9092']
-})
+```python
+from kafka import KafkaConsumer
 
-// Initialize the consumer
-const consumer = kafka.consumer({ groupId: 'my-group' })
+# Initialize the consumer and subscribe to 'my_topic'
+consumer = KafkaConsumer(
+    "my_topic",
+    bootstrap_servers=["localhost:9092"],
+    client_id="my-app",
+    group_id="my-group",
+    auto_offset_reset="earliest",
+)
 
-const run = async () => {
-  // Connecting the consumer
-  await consumer.connect()
-
-  // Subscribing to the topic 'my_topic'
-  await consumer.subscribe({ topic: 'my_topic' })
-
-  // Consuming messages
-  await consumer.run({
-    eachMessage: async ({ topic, partition, message }) => {
-      console.log({
-        value: message.value?.toString(),
-        key: message.key?.toString()
-      })
-    },
-  })
-}
+# Consuming messages
+for message in consumer:
+    print({
+        "key": message.key.decode() if message.key else None,
+        "value": message.value.decode(),
+        "partition": message.partition,
+    })
 ```
 
 Tying it all together, we get something like this:
@@ -336,14 +320,13 @@ While Kafka itself handles most of the reliability (as we saw above), our system
 
 First up, we may fail to get a message to Kafka in the first place. Errors can occur due to network issues, broker unavailability, or transient failures. To handle these scenarios gracefully, Kafka producers support automatic retries. Here's a sneak peek of how you can configure them:
 
-```
-const producer = kafka.producer({
-  retry: {
-    retries: 5, // Retry up to 5 times
-    initialRetryTime: 100, // Wait 100ms between retries
-  },
-  idempotent: true,
-});
+```python
+producer = KafkaProducer(
+    bootstrap_servers=["localhost:9092"],
+    retries=5,                 # Retry up to 5 times
+    retry_backoff_ms=100,      # Wait 100ms between retries
+    enable_idempotence=True,   # Exactly-once semantics per partition
+)
 ```
 
 > You'll want to ensure that you enable idempotent producer mode to avoid duplicate messages when retries are enabled. This just ensures that messages are only sent once in the case we incorrectly think they weren't sent.
@@ -362,29 +345,28 @@ Especially when using Kafka as an event stream, we need to be mindful of perform
 
 The first thing we can do is batch messages by sending multiple messages in a single `send()` call. Kafka producers naturally batch messages before sending them over the network to reduce overhead. You can also use `sendBatch()` to send messages across multiple topics in one call.
 
-```
-await producer.send({
-  topic: 'my_topic',
-  messages: [
-    { key: 'key1', value: 'message1' },
-    { key: 'key2', value: 'message2' },
-    { key: 'key3', value: 'message3' },
-  ],
-});
+```python
+for key, value in [
+    (b"key1", b"message1"),
+    (b"key2", b"message2"),
+    (b"key3", b"message3"),
+]:
+    producer.send("my_topic", key=key, value=value)
+
+# One batched request per partition, rather than three round trips
+producer.flush()
 ```
 
 Another common way to improve throughput is by compressing messages. This can be done by setting the `compression` option when sending messages. Kafka supports several compression algorithms, including GZIP, Snappy, and LZ4. Essentially, we're just making the messages smaller so that they can be sent faster.
 
-```
-const { CompressionTypes } = require('kafkajs')
+```python
+producer = KafkaProducer(
+    bootstrap_servers=["localhost:9092"],
+    compression_type="gzip",
+)
 
-await producer.send({
-  topic: 'my_topic',
-  compression: CompressionTypes.GZIP,
-  messages: [
-    { key: 'key1', value: 'Hello, Kafka!' },
-  ],
-});
+producer.send("my_topic", key=b"key1", value=b"Hello, Kafka!")
+producer.flush()
 ```
 
 Arguably the biggest impact you can have to performance comes back to your choice of partition key. The goal is to maximize parallelism by ensuring that messages are evenly distributed across partitions. In your interview, discussing the partition strategy, as we go into above, should just about always be where you start.

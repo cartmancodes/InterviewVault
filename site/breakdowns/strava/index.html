@@ -356,7 +356,7 @@ redis.zrange(f&quot;leaderboard:run:global&quot;, 0, -1, desc=True, withscores=T
 </li>
 </ul>
 <p>Here&#39;s a pseudo-code example of how this might work:</p>
-<pre><code># When logging a new activity
+<pre><code class="language-python"># When logging a new activity
 activity_id = generate_unique_id()
 redis.zadd(&quot;activities:timestamps&quot;, {activity_id: timestamp})
 redis.hset(f&quot;activity:{activity_id}&quot;, mapping={&quot;user_id&quot;: user_id, &quot;distance&quot;: distance})

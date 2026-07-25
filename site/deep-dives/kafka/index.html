@@ -25,7 +25,7 @@
 <div class="art-head">
 <div class="art-kicker">Deep Dives</div>
 <h1>Kafka</h1>
-<div class="art-meta"><span>5,830 words</span><span>2 diagrams</span><span>9 figures</span></div>
+<div class="art-meta"><span>5,757 words</span><span>2 diagrams</span><span>9 figures</span></div>
 </div>
 <div class="prose"><blockquote>
 <p><strong>Overview</strong>: Apache Kafka is an open-source distributed event streaming platform that can be used either as a message queue or as a stream processing system. It stores messages as ordered, immutable partitions distributed across brokers, using producers to write data to topics and consumers (organized into consumer groups) to read it. Configured with appropriate replication and acknowledgment settings, Kafka delivers high performance, horizontal scalability, and strong durability guarantees for real-time data at scale.</p>
@@ -74,7 +74,7 @@
 <p>While not strictly required, the key is used to determine which partition the message is sent to. If you don&#39;t provide a key, Kafka will distribute messages across partitions using a default strategy (modern Kafka clients use a &quot;sticky&quot; partitioner that batches messages to the same partition for efficiency, then rotates). So when designing a large, distributed system like you&#39;re likely to be asked about in your interview, you&#39;ll want to use keys to ensure that related messages land on the same partition and are processed in order. The choice of that key is important. More on this later.</p>
 </blockquote>
 <p>As a quick example, here is how we might put a message on the topic <code>my-topic</code> using the Kafka command line tool <code>kafka-console-producer</code>:</p>
-<pre><code>kafka-console-producer --bootstrap-server localhost:9092 --topic my_topic --property &quot;parse.key=true&quot; --property &quot;key.separator=:&quot;
+<pre><code class="language-bash">kafka-console-producer --bootstrap-server localhost:9092 --topic my_topic --property &quot;parse.key=true&quot; --property &quot;key.separator=:&quot;
 &gt; key1: Hello, Kafka with key!
 &gt; key2: Another message with a different key
 </code></pre>
@@ -82,28 +82,20 @@
 <p>The --property &quot;parse.key=true&quot; and --property &quot;key.separator=:&quot; flags are used to specify that the key-value pairs are separated by a colon.</p>
 </blockquote>
 <p>We can see what the same would look like using <code>kafkajs</code>, a popular Node.js client for Kafka:</p>
-<pre><code>// Initialize the Kafka client
-const kafka = new Kafka({
-  clientId: &#39;my-app&#39;,
-  brokers: [&#39;localhost:9092&#39;]
-})
+<pre><code class="language-python">from kafka import KafkaProducer
 
-// Initialize the producer
-const producer = kafka.producer()
+# Initialize the producer
+producer = KafkaProducer(
+    bootstrap_servers=[&quot;localhost:9092&quot;],
+    client_id=&quot;my-app&quot;,
+)
 
-const run = async () =&gt; {
-  // Connecting the producer
-  await producer.connect()
+# Sending messages to the topic &#39;my_topic&#39; with keys
+producer.send(&quot;my_topic&quot;, key=b&quot;key1&quot;, value=b&quot;Hello, Kafka with key!&quot;)
+producer.send(&quot;my_topic&quot;, key=b&quot;key2&quot;, value=b&quot;Another message with a different key&quot;)
 
-  // Sending messages to the topic &#39;my_topic&#39; with keys
-  await producer.send({
-    topic: &#39;my_topic&#39;,
-    messages: [
-      { key: &#39;key1&#39;, value: &#39;Hello, Kafka with key!&#39; },
-      { key: &#39;key2&#39;, value: &#39;Another message with a different key&#39; }
-    ],
-  })
-}
+# Block until everything buffered is actually delivered
+producer.flush()
 </code></pre>
 <p>When a message is published to a Kafka topic, Kafka first determines the appropriate partition for the message. This partition selection is critical because it influences the distribution of data across the cluster. This is a two-step process:</p>
 <ol>
@@ -127,39 +119,31 @@ const run = async () =&gt; {
 </ol>
 <p>Last up, consumers read messages from Kafka topics using a <strong>pull-based model</strong>. Unlike some messaging systems that push data to consumers, Kafka consumers actively poll the broker for new messages at intervals they control. As explained by <a href="https://kafka.apache.org/documentation.html#design_pull">Apache Kafka&#39;s official documentation</a>, this pull approach was a deliberate design choice that provides several advantages: it lets consumers control their consumption rate, simplifies failure handling, prevents overwhelming slow consumers, and enables efficient batching.</p>
 <p>To round out our earlier example, here is how we might consume messages from the <code>my-topic</code> topic using the Kafka command line tool <code>kafka-console-consumer</code>:</p>
-<pre><code>kafka-console-consumer --bootstrap-server localhost:9092 --topic my_topic --from-beginning --property print.key=true --property key.separator=&quot;: &quot;
+<pre><code class="language-bash">kafka-console-consumer --bootstrap-server localhost:9092 --topic my_topic --from-beginning --property print.key=true --property key.separator=&quot;: &quot;
 
 # Output
 key1: Hello, Kafka with key!
 key2: Another message with a different key
 </code></pre>
 <p>Similarly, with <code>kafkajs</code>, we can consume messages from the <code>my_topic</code> topic:</p>
-<pre><code>// Initialize the Kafka client
-const kafka = new Kafka({
-  clientId: &#39;my-app&#39;,
-  brokers: [&#39;localhost:9092&#39;]
-})
+<pre><code class="language-python">from kafka import KafkaConsumer
 
-// Initialize the consumer
-const consumer = kafka.consumer({ groupId: &#39;my-group&#39; })
+# Initialize the consumer and subscribe to &#39;my_topic&#39;
+consumer = KafkaConsumer(
+    &quot;my_topic&quot;,
+    bootstrap_servers=[&quot;localhost:9092&quot;],
+    client_id=&quot;my-app&quot;,
+    group_id=&quot;my-group&quot;,
+    auto_offset_reset=&quot;earliest&quot;,
+)
 
-const run = async () =&gt; {
-  // Connecting the consumer
-  await consumer.connect()
-
-  // Subscribing to the topic &#39;my_topic&#39;
-  await consumer.subscribe({ topic: &#39;my_topic&#39; })
-
-  // Consuming messages
-  await consumer.run({
-    eachMessage: async ({ topic, partition, message }) =&gt; {
-      console.log({
-        value: message.value?.toString(),
-        key: message.key?.toString()
-      })
-    },
-  })
-}
+# Consuming messages
+for message in consumer:
+    print({
+        &quot;key&quot;: message.key.decode() if message.key else None,
+        &quot;value&quot;: message.value.decode(),
+        &quot;partition&quot;: message.partition,
+    })
 </code></pre>
 <p>Tying it all together, we get something like this:</p>
 <p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/DeepDives/assets/3waBqlnGSZeb.2m-ttfp_-4a-x.svg" alt="Output" loading="lazy"><figcaption>Output</figcaption></figure></p>
@@ -226,13 +210,12 @@ const run = async () =&gt; {
 <p>While Kafka itself handles most of the reliability (as we saw above), our system may fail getting messages into and out of Kafka. We need to handle these scenarios gracefully.</p>
 <h4 id="producer-retries">Producer Retries</h4>
 <p>First up, we may fail to get a message to Kafka in the first place. Errors can occur due to network issues, broker unavailability, or transient failures. To handle these scenarios gracefully, Kafka producers support automatic retries. Here&#39;s a sneak peek of how you can configure them:</p>
-<pre><code>const producer = kafka.producer({
-  retry: {
-    retries: 5, // Retry up to 5 times
-    initialRetryTime: 100, // Wait 100ms between retries
-  },
-  idempotent: true,
-});
+<pre><code class="language-python">producer = KafkaProducer(
+    bootstrap_servers=[&quot;localhost:9092&quot;],
+    retries=5,                 # Retry up to 5 times
+    retry_backoff_ms=100,      # Wait 100ms between retries
+    enable_idempotence=True,   # Exactly-once semantics per partition
+)
 </code></pre>
 <blockquote>
 <p>You&#39;ll want to ensure that you enable idempotent producer mode to avoid duplicate messages when retries are enabled. This just ensures that messages are only sent once in the case we incorrectly think they weren&#39;t sent.</p>
@@ -244,25 +227,24 @@ const run = async () =&gt; {
 <h3 id="performance-optimizations">⚡ Performance Optimizations</h3>
 <p>Especially when using Kafka as an event stream, we need to be mindful of performance so that we can process messages as quickly as possible.</p>
 <p>The first thing we can do is batch messages by sending multiple messages in a single <code>send()</code> call. Kafka producers naturally batch messages before sending them over the network to reduce overhead. You can also use <code>sendBatch()</code> to send messages across multiple topics in one call.</p>
-<pre><code>await producer.send({
-  topic: &#39;my_topic&#39;,
-  messages: [
-    { key: &#39;key1&#39;, value: &#39;message1&#39; },
-    { key: &#39;key2&#39;, value: &#39;message2&#39; },
-    { key: &#39;key3&#39;, value: &#39;message3&#39; },
-  ],
-});
+<pre><code class="language-python">for key, value in [
+    (b&quot;key1&quot;, b&quot;message1&quot;),
+    (b&quot;key2&quot;, b&quot;message2&quot;),
+    (b&quot;key3&quot;, b&quot;message3&quot;),
+]:
+    producer.send(&quot;my_topic&quot;, key=key, value=value)
+
+# One batched request per partition, rather than three round trips
+producer.flush()
 </code></pre>
 <p>Another common way to improve throughput is by compressing messages. This can be done by setting the <code>compression</code> option when sending messages. Kafka supports several compression algorithms, including GZIP, Snappy, and LZ4. Essentially, we&#39;re just making the messages smaller so that they can be sent faster.</p>
-<pre><code>const { CompressionTypes } = require(&#39;kafkajs&#39;)
+<pre><code class="language-python">producer = KafkaProducer(
+    bootstrap_servers=[&quot;localhost:9092&quot;],
+    compression_type=&quot;gzip&quot;,
+)
 
-await producer.send({
-  topic: &#39;my_topic&#39;,
-  compression: CompressionTypes.GZIP,
-  messages: [
-    { key: &#39;key1&#39;, value: &#39;Hello, Kafka!&#39; },
-  ],
-});
+producer.send(&quot;my_topic&quot;, key=b&quot;key1&quot;, value=b&quot;Hello, Kafka!&quot;)
+producer.flush()
 </code></pre>
 <p>Arguably the biggest impact you can have to performance comes back to your choice of partition key. The goal is to maximize parallelism by ensuring that messages are evenly distributed across partitions. In your interview, discussing the partition strategy, as we go into above, should just about always be where you start.</p>
 <h3 id="retention-policies">🗄️ Retention Policies</h3>

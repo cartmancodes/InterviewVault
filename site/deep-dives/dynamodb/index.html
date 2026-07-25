@@ -25,7 +25,7 @@
 <div class="art-head">
 <div class="art-kicker">Deep Dives</div>
 <h1>DynamoDB</h1>
-<div class="art-meta"><span>5,780 words</span><span>2 diagrams</span><span>5 figures</span></div>
+<div class="art-meta"><span>5,777 words</span><span>2 diagrams</span><span>5 figures</span></div>
 </div>
 <div class="prose"><blockquote>
 <p><strong>Overview</strong>: DynamoDB is a fully-managed, highly scalable, key-value NoSQL service from AWS that handles hardware, patching, and scaling for you while delivering single-digit millisecond latency at massive scale. It gives you nearly everything a system design interview needs from a database — flexible schema-less data modeling, secondary indexes, per-request tunable consistency, ACID transactions, an in-memory cache (DAX), and change data capture (Streams). This deep dive covers how you interact with it and what happens under the hood, so you can field any DynamoDB question with confidence.</p>
@@ -56,7 +56,7 @@
 <p>Setting up DynamoDB is straightforward: you can create tables directly in the AWS console, and start inserting data immediately. Unlike traditional RDBMS, DynamoDB is schema-less, meaning you don&#39;t need to define a schema before inserting data. This means items in the same table can have different sets of attributes, and new attributes can be added to items at any point without affecting existing items. This schema-less design provides high flexibility but requires careful data validation at the application level, as DynamoDB does not enforce attribute uniformity across items.</p>
 <p><figure class="fig"><img src="/assets/docs/LLD/SystemDesign/DeepDives/assets/dynamo-create-table.02ifgxoe-cmgv.png" alt="Create Table" loading="lazy"><figcaption>Create Table</figcaption></figure></p>
 <p>Consider a <code>users</code> table in DynamoDB, structured as follows:</p>
-<pre><code>{
+<pre><code class="language-json">{
   &quot;PersonID&quot;: 101,
   &quot;LastName&quot;: &quot;Smith&quot;,
   &quot;FirstName&quot;: &quot;Fred&quot;,
@@ -222,32 +222,23 @@
 <pre><code class="language-sql">SELECT * FROM users WHERE user_id = 101
 </code></pre>
 <p>But in DynamoDB, this would be translated to a query operation like this:</p>
-<pre><code>const params = {
-  TableName: &#39;users&#39;,
-  KeyConditionExpression: &#39;user_id = :id&#39;,
-  ExpressionAttributeValues: {
-    &#39;:id&#39;: 101
-  }
-};
+<pre><code class="language-python">import boto3
+from boto3.dynamodb.conditions import Key
 
-dynamodb.query(params, (err, data) =&gt; {
-  if (err) console.error(err);
-  else console.log(data);
-});
+table = boto3.resource(&quot;dynamodb&quot;).Table(&quot;users&quot;)
+
+# Query hits the partition key directly — one targeted read
+response = table.query(KeyConditionExpression=Key(&quot;user_id&quot;).eq(101))
+print(response[&quot;Items&quot;])
 </code></pre>
 <p>To perform a scan operation, you&#39;d use the <code>scan</code> method instead of <code>query</code>.</p>
 <p>SQL scan equivalent:</p>
 <pre><code class="language-sql">SELECT * FROM users
 </code></pre>
 <p>DynamoDB scan operation:</p>
-<pre><code>const params = {
-  TableName: &#39;users&#39;
-};
-
-dynamodb.scan(params, (err, data) =&gt; {
-  if (err) console.error(err);
-  else console.log(data);
-});
+<pre><code class="language-python"># Scan reads every item in the table, then filters — expensive at scale
+response = table.scan()
+print(response[&quot;Items&quot;])
 </code></pre>
 <p>When working with Dynamo, you typically want to avoid expensive scan operations where ever possible. This is where careful data modeling comes into play. By choosing the right partition key and sort key, you can ensure that your queries are efficient and performant.</p>
 <blockquote>

@@ -339,7 +339,7 @@ Value: {
 }
 ```
 
-```
+```python
 def get_key(user_a, user_b):
     # Sort IDs so (A->B) and (B->A) map to same key
     sorted_ids = sorted([user_a, user_b])

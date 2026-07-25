@@ -140,7 +140,7 @@
 <p>A lot of interview questions don&#39;t actually require real-time updates. Think critically about the product and ask yourself whether lower frequency updates (e.g. every 2-5 seconds) would work. If so, you may want to propose a simple, polling-based approach. It&#39;s better to suggest a less-than-perfect solution than to fail to implement a complex one. That said, do make this proposal to your interviewer before pulling the trigger. If they are dead-set on you talking about WebSockets, SSE, or WebRTC, you&#39;ll want to know that sooner than later!</p>
 </blockquote>
 <p>How does it work? It&#39;s dead simple! The client makes a request to the server at a regular interval and the server responds with the current state of the world. In our chat app, we would just constantly be polling for &quot;what messages have I not received yet?&quot;.</p>
-<pre><code>async function poll() {
+<pre><code class="language-javascript">async function poll() {
   const response = await fetch(&#39;/api/updates&#39;);
   const data = await response.json();
   processData(data);
@@ -179,7 +179,7 @@ setInterval(poll, 2000);
 <li>Client immediately makes new request</li>
 <li>Process repeats</li>
 </ol>
-<pre><code>// Client-side of long polling
+<pre><code class="language-javascript">// Client-side of long polling
 async function longPoll() {
   while (true) {
     try {
@@ -239,7 +239,7 @@ async function longPoll() {
 <li>Client receives updates in real-time</li>
 </ol>
 <p>Modern browsers have built-in support for SSE through the <code>EventSource</code> object, making the client-side implementation straightforward.</p>
-<pre><code>// Client-side
+<pre><code class="language-javascript">// Client-side
 const eventSource = new EventSource(&#39;/api/updates&#39;);
 
 eventSource.onmessage = (event) =&gt; {
@@ -308,7 +308,7 @@ app.get(&#39;/api/updates&#39;, (req, res) =&gt; {
 <li>Connection stays open until explicitly closed</li>
 </ol>
 <p>For our chat app, we&#39;d connect to a WebSocket endpoint over HTTP, sharing our authentication token via cookies. The connection would get upgraded to a WebSocket connection and then we&#39;d be able to receive messages back to the client over the connection as they happen. Bonus: we&#39;d also be able to send messages to other users in the chat room!</p>
-<pre><code>// Client-side
+<pre><code class="language-javascript">// Client-side
 const ws = new WebSocket(&#39;ws://api.example.com/socket&#39;);
 
 ws.onmessage = (event) =&gt; {
@@ -386,7 +386,7 @@ wss.on(&#39;connection&#39;, (ws) =&gt; {
 <li>Stream audio/video or send data directly</li>
 </ol>
 <p>Pretty simple, apart from the acronyms and NAT traversal.</p>
-<pre><code>// Simplified WebRTC setup
+<pre><code class="language-javascript">// Simplified WebRTC setup
 async function startCall() {
   const pc = new RTCPeerConnection();
   

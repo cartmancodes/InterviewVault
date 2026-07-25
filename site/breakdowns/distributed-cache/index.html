@@ -25,7 +25,7 @@
 <div class="art-head">
 <div class="art-kicker">Problem Breakdowns</div>
 <h1>Distributed Cache</h1>
-<div class="art-meta"><span>6,877 words</span><span>2 diagrams</span><span>10 figures</span></div>
+<div class="art-meta"><span>6,885 words</span><span>2 diagrams</span><span>10 figures</span></div>
 </div>
 <div class="prose"><p>Practice with guided hints and real-time feedback</p>
 <blockquote>
@@ -104,17 +104,18 @@
 <p>Let&#39;s start with the absolute basics. No fancy distributed systems yet - just a working cache that handles <code>gets</code>, <code>sets</code>, and <code>deletes</code>.</p>
 <p>At its core, a cache is just a hash table. Every programming language has one: Python&#39;s dict, Java&#39;s HashMap, Go&#39;s map. They&#39;re perfect for this because they give us <code>O(1)</code> lookups and inserts.</p>
 <p>Your interviewer may ask you to sketch out some pseudocode. Here is what that might look like:</p>
-<pre><code>class Cache:
-    data = {}  # Simple hash table
+<pre><code class="language-python">class Cache:
+    def __init__(self):
+        self.data = {}  # Simple hash table
 
-    get(key):
+    def get(self, key):
         return self.data[key]
 
-    set(key, value):
+    def set(self, key, value):
         self.data[key] = value
 
-    delete(key):
-        delete self.data[key]
+    def delete(self, key):
+        del self.data[key]
 </code></pre>
 <blockquote>
 <p>When asked to write pseudocode in a design interview, don&#39;t worry about the syntax. Just focus on the logic. You&#39;ll note that I don&#39;t handle corner cases like key not found or key already exists. No worries, that&#39;s not the point here. That said, as always, it&#39;s worth confirming this with your interviewer. &quot;I&#39;m going to write some pseudocode, is it ok that it&#39;s not syntactically correct or missing some details?&quot;</p>

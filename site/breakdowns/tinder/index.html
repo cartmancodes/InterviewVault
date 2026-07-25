@@ -272,7 +272,7 @@ Value: {
     &quot;456_swipe&quot;: &quot;left&quot;   // or yes/no
 }
 </code></pre>
-<pre><code>def get_key(user_a, user_b):
+<pre><code class="language-python">def get_key(user_a, user_b):
     # Sort IDs so (A-&gt;B) and (B-&gt;A) map to same key
     sorted_ids = sorted([user_a, user_b])
     return f&quot;swipes:{sorted_ids[0]}:{sorted_ids[1]}&quot;

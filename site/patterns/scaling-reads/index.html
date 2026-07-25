@@ -201,7 +201,7 @@ EXPLAIN SELECT * FROM users WHERE email = &#39;user@example.com&#39;;
 <p>A celebrity posts on your platform and suddenly millions of users try to read it simultaneously. Your cache servers that normally handle 50,000 requests per second are now getting 500,000 requests per second for that single key. The cache starts timing out, requests fail, and your site goes down even though it&#39;s just from read traffic.</p>
 <p>The problem is that traditional caching assumes load distributes across many keys. When everyone wants the same key, that assumption breaks. Your cache server has finite CPU and network capacity. Even though the data is in memory, serializing it and sending it over the network 500,000 times per second overwhelms any single server.</p>
 <p>The first solution is request coalescing - basically combining multiple requests for the same key into a single request. This helps when your backend can&#39;t handle the load of everyone asking for the same thing at once.</p>
-<pre><code># Request coalescing pattern
+<pre><code class="language-python"># Request coalescing pattern
 class CoalescingCache:
     def __init__(self):
         self.inflight = {}  # key -&gt; Future

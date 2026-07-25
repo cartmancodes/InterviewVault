@@ -86,7 +86,7 @@ In Flink, the nodes are called **operators** and the edges are called **streams*
 
 If sources, sinks, and operators are the nodes, **Streams** are the edges in your dataflow graph. A stream is an unbounded sequence of data elements flowing through the system. Think of it like an infinite array of events:
 
-```
+```json
 // Example event in a stream
 {
   "user_id": "123",
@@ -116,12 +116,13 @@ An **operator** is a (potentially) _stateful_ transformation that processes one 
 
 Here's a simple example of operators in action:
 
-```
-DataStream<ClickEvent> clicks = // input stream
-clicks
-  .keyBy(event -> event.getAdId())
-  .window(TumblingEventTimeWindows.of(Time.minutes(5)))
-  .reduce((a, b) -> new ClickEvent(a.getAdId(), a.getCount() + b.getCount()))
+```python
+clicks = ...  # DataStream[ClickEvent]
+
+(clicks
+    .key_by(lambda event: event.ad_id)
+    .window(TumblingEventTimeWindows.of(Time.minutes(5)))
+    .reduce(lambda a, b: ClickEvent(a.ad_id, a.count + b.count)))
 ```
 
 What this code does is:
@@ -148,29 +149,23 @@ Flink provides several types of state:
 
 Here's a simple example of using state to count clicks:
 
-```
-public class ClickCounter extends KeyedProcessFunction<String, ClickEvent, ClickCount> {
-    private ValueState<Long> countState;
-    
-    @Override
-    public void open(Configuration config) {
-        ValueStateDescriptor<Long> descriptor = 
-            new ValueStateDescriptor<>("count", Long.class);
-        countState = getRuntimeContext().getState(descriptor);
-    }
-    
-    @Override
-    public void processElement(ClickEvent event, Context ctx, Collector<ClickCount> out) 
-        throws Exception {
-        Long count = countState.value();
-        if (count == null) {
-            count = 0L;
-        }
-        count++;
-        countState.update(count);
-        out.collect(new ClickCount(event.getUserId(), count));
-    }
-}
+```python
+from pyflink.common.typeinfo import Types
+from pyflink.datastream import KeyedProcessFunction, RuntimeContext
+from pyflink.datastream.state import ValueStateDescriptor
+
+
+class ClickCounter(KeyedProcessFunction):
+    def open(self, runtime_context: RuntimeContext):
+        descriptor = ValueStateDescriptor("count", Types.LONG())
+        self.count_state = runtime_context.get_state(descriptor)
+
+    def process_element(self, event, ctx):
+        # State is scoped to the key, so this counter is per-user
+        count = self.count_state.value() or 0
+        count += 1
+        self.count_state.update(count)
+        yield ClickCount(event.user_id, count)
 ```
 
 What this code does is:
@@ -235,25 +230,25 @@ Ok so we got all the basic pieces in place. Let's walk through setting up a simp
 
 A Flink job starts with a `StreamExecutionEnvironment` and typically involves defining your source, your transformations, and your sink:
 
-```
-StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+```python
+from pyflink.datastream import StreamExecutionEnvironment
 
-// Define source (e.g., Kafka)
-DataStream<ClickEvent> clicks = env
-    .addSource(new FlinkKafkaConsumer<>("clicks", new ClickEventSchema(), properties));
+env = StreamExecutionEnvironment.get_execution_environment()
 
-// Define transformations
-DataStream<WindowedClicks> windowedClicks = clicks
-    .keyBy(event -> event.getUserId())
+# Define source (e.g., Kafka)
+clicks = env.add_source(FlinkKafkaConsumer("clicks", ClickEventSchema(), properties))
+
+# Define transformations
+windowed_clicks = (clicks
+    .key_by(lambda event: event.user_id)
     .window(TumblingEventTimeWindows.of(Time.minutes(5)))
-    .aggregate(new ClickAggregator());
+    .aggregate(ClickAggregator()))
 
-// Define sink (e.g., Elasticsearch)
-windowedClicks
-    .addSink(new ElasticsearchSink.Builder<>(elasticsearchConfig).build());
+# Define sink (e.g., Elasticsearch)
+windowed_clicks.add_sink(elasticsearch_sink)
 
-// Execute
-env.execute("Click Processing Job");
+# Execute
+env.execute("Click Processing Job")
 ```
 
 The code here should be very readable with the aforementioned concepts in mind. We're defining a source, a series of transformations (operators), and a sink. The source is a Kafka topic that we're reading from. The transformations are a series of operators that we're applying to the data. The sink is a Elasticsearch cluster that we're writing the results to.
@@ -291,18 +286,19 @@ The nice thing about Flink is that simple to extremely sophisticated flows can b
 
 Here's a simple example of a dashboard that uses Redis to store the state of the counts.
 
-```
-DataStream<ClickEvent> clickstream = env
-    .addSource(new FlinkKafkaConsumer<>("clicks", new JSONDeserializationSchema<>(ClickEvent.class), kafkaProps));
-    
-// Calculate metrics with 1-minute windows
-DataStream<PageViewCount> pageViews = clickstream
-    .keyBy(click -> click.getPageId())
+```python
+clickstream = env.add_source(
+    FlinkKafkaConsumer("clicks", ClickEventSchema(), kafka_props)
+)
+
+# Calculate metrics with 1-minute windows
+page_views = (clickstream
+    .key_by(lambda click: click.page_id)
     .window(TumblingProcessingTimeWindows.of(Time.minutes(1)))
-    .aggregate(new CountAggregator());
-    
-// Write to Redis for dashboard consumption
-pageViews.addSink(new RedisSink<>(redisConfig, new PageViewCountMapper()));
+    .aggregate(CountAggregator()))
+
+# Write to Redis for dashboard consumption
+page_views.add_sink(RedisSink(redis_config, PageViewCountMapper()))
 ```
 
 Here we're using the same primitives we discussed earlier, but we're storing the results into Redis for dashboard consumption. This is showing off one of Flink's strengths: flexible sources and sinks allow us to use Flink as part of a larger system.
@@ -311,47 +307,46 @@ Here we're using the same primitives we discussed earlier, but we're storing the
 
 Here's a slightly more sophisticated example of a fraud detection system that uses Flink to detect fraudulent transactions. Don't let the extra lines fool you, this should still be very readable.
 
-```sql
-DataStream<Transaction> transactions = env
-    .addSource(new FlinkKafkaConsumer<>("transactions", 
-                new KafkaAvroDeserializationSchema<>(Transaction.class), kafkaProps))
-    .assignTimestampsAndWatermarks(
-        WatermarkStrategy.<Transaction>forBoundedOutOfOrderness(Duration.ofSeconds(10))
-            .withTimestampAssigner((event, timestamp) -> event.getTimestamp())
-    );
-    
-// Enrich transactions with account information
-DataStream<EnrichedTransaction> enrichedTransactions = 
-    transactions.keyBy(t -> t.getAccountId())
-                .connect(accountInfoStream.keyBy(a -> a.getAccountId()))
-                .process(new AccountEnrichmentFunction());
+```python
+transactions = (env
+    .add_source(FlinkKafkaConsumer("transactions", TransactionSchema(), kafka_props))
+    .assign_timestamps_and_watermarks(
+        WatermarkStrategy
+        .for_bounded_out_of_orderness(Duration.of_seconds(10))
+        .with_timestamp_assigner(lambda event, timestamp: event.timestamp)
+    ))
 
-// Calculate velocity metrics (multiple transactions in short time)
-DataStream<VelocityAlert> velocityAlerts = enrichedTransactions
-    .keyBy(t -> t.getAccountId())
+# Enrich transactions with account information
+enriched_transactions = (transactions
+    .key_by(lambda t: t.account_id)
+    .connect(account_info_stream.key_by(lambda a: a.account_id))
+    .process(AccountEnrichmentFunction()))
+
+# Calculate velocity metrics (multiple transactions in short time)
+velocity_alerts = (enriched_transactions
+    .key_by(lambda t: t.account_id)
     .window(SlidingEventTimeWindows.of(Time.minutes(30), Time.minutes(5)))
-    .process(new VelocityDetector(3, 1000.0)); // Alert on 3+ transactions over $1000 in 30 min
-    
-// Pattern detection with CEP for suspicious sequences
-Pattern<EnrichedTransaction, ?> fraudPattern = Pattern.<EnrichedTransaction>begin("small-tx")
-    .where(tx -> tx.getAmount() < 10.0)
-    .next("large-tx")
-    .where(tx -> tx.getAmount() > 1000.0)
-    .within(Time.minutes(5));
-    
-DataStream<PatternAlert> patternAlerts = CEP.pattern(
-    enrichedTransactions.keyBy(t -> t.getCardId()), fraudPattern)
-    .select(new PatternAlertSelector());
-    
-// Union all alerts and deduplicate
-DataStream<Alert> allAlerts = velocityAlerts.union(patternAlerts)
-    .keyBy(Alert::getAlertId)
+    .process(VelocityDetector(3, 1000.0)))  # 3+ transactions over $1000 in 30 min
+
+# Pattern detection with CEP for suspicious sequences
+fraud_pattern = (Pattern
+    .begin("small-tx").where(lambda tx: tx.amount < 10.0)
+    .next("large-tx").where(lambda tx: tx.amount > 1000.0)
+    .within(Time.minutes(5)))
+
+pattern_alerts = CEP.pattern(
+    enriched_transactions.key_by(lambda t: t.card_id), fraud_pattern
+).select(PatternAlertSelector())
+
+# Union all alerts and deduplicate
+all_alerts = (velocity_alerts.union(pattern_alerts)
+    .key_by(lambda alert: alert.alert_id)
     .window(TumblingEventTimeWindows.of(Time.minutes(5)))
-    .aggregate(new AlertDeduplicator());
-    
-// Output to Kafka and Elasticsearch
-allAlerts.addSink(new FlinkKafkaProducer<>("alerts", new AlertSerializer(), kafkaProps));
-allAlerts.addSink(ElasticsearchSink.builder(elasticsearchConfig).build());
+    .aggregate(AlertDeduplicator()))
+
+# Output to Kafka and Elasticsearch
+all_alerts.add_sink(FlinkKafkaProducer("alerts", AlertSerializer(), kafka_props))
+all_alerts.add_sink(elasticsearch_sink)
 ```
 
 In this case we're looking for specific patterns that are correlated with fraud: velocity of transactions and specific sequences that are indicative of fraud. We create a stream of alerts and push it to two sinks: one to Kafka for consumption by other systems (maybe an automated system to deactivate an account) and one to Elasticsearch for querying. The net result is a whole system design in one Flink job!
