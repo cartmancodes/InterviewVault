@@ -1,5 +1,8 @@
 # ⚙️ Multi-step Processes
 
+> 📑 **Quick Reference:** [condensed cheat-sheet](QuickReference/Multi-StepProcesses.md) for last-minute review.
+
+
 Learn about multi-step processes and how to handle them in your system design with distributed transactions, sagas, workflow systems, and durable execution.
 
 > **Overview**: Real production systems must survive failures, retries, and long-running operations spanning hours or days. These often take the form of multi-step processes or sagas that coordinate dozens of (flaky) services and systems, and they are a continual source of operational and design challenges for engineers. Workflow systems, event-driven sagas, and durable execution are the solutions to this problem, and they show up constantly in system design interviews.

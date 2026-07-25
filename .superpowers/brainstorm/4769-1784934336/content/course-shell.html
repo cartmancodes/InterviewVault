@@ -1,0 +1,81 @@
+<h2>Choose the course shell</h2>
+<p class="subtitle">All options support mobile, search, lesson progress, and flash cards. The choice is what learners see and prioritize.</p>
+
+<div class="cards">
+  <div class="card" data-choice="guided-course" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:14px;background:#eef4ff;min-height:255px">
+      <div style="display:flex;justify-content:space-between;align-items:center;background:#10234b;color:white;padding:10px 12px;border-radius:8px;font-size:11px">
+        <strong>INTERVIEW VAULT</strong><span>Search &nbsp; Review 12</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-top:10px">
+        <div style="background:white;border-radius:8px;padding:10px;font-size:9px;line-height:1.9">
+          <strong>Your path</strong><br>01 Foundations ✓<br>02 Core Concepts<br>03 Common Patterns<br>04 Design Problems
+        </div>
+        <div>
+          <div style="background:#2563eb;color:white;border-radius:8px;padding:14px;font-size:10px">
+            <strong style="font-size:14px">Continue learning</strong><br><br>Consistent Hashing<br><span style="opacity:.8">Lesson 4 of 12 · 68% complete</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+            <div style="background:white;border-radius:8px;padding:10px;font-size:9px"><strong>Due today</strong><br><span style="font-size:18px">12 cards</span></div>
+            <div style="background:white;border-radius:8px;padding:10px;font-size:9px"><strong>Course progress</strong><br><span style="font-size:18px">34%</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. Guided Course</h3>
+      <p>Dashboard-led learning path with clear continuation, modules, and daily review. Best for turning documents into a course.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="reference-library" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:14px;background:#f7f7f4;min-height:255px">
+      <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #ddd;padding:8px 4px;font-size:11px">
+        <strong>InterviewVault</strong><span>⌕ Search &nbsp; Cards</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 2.2fr .8fr;gap:8px;margin-top:10px">
+        <div style="border-right:1px solid #ddd;padding:6px;font-size:8px;line-height:2">
+          INTRODUCTION<br>DELIVERY FRAMEWORK<br><strong>CORE CONCEPTS</strong><br>API Design<br>Caching<br>Sharding<br>Networking<br><br>PATTERNS<br>Scaling Reads<br>Scaling Writes
+        </div>
+        <div style="padding:8px;font-size:8px;line-height:1.5">
+          <span style="color:#2563eb">CORE CONCEPTS</span>
+          <h3 style="font-size:18px;margin:5px 0">Consistent Hashing</h3>
+          <p>A technique that minimizes key movement when nodes join or leave a distributed system.</p>
+          <div style="height:75px;background:#dce8ff;border-radius:6px;margin-top:10px;display:flex;align-items:center;justify-content:center;color:#345">Architecture diagram</div>
+          <h4 style="margin-top:10px">Why it matters</h4>
+        </div>
+        <div style="border-left:1px solid #ddd;padding:6px;font-size:8px;line-height:1.8">ON THIS PAGE<br>Overview<br>Hash ring<br>Virtual nodes<br>Trade-offs<br>Key takeaways</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. Reference Library</h3>
+      <p>Dense documentation shell with three-column navigation. Fastest for experienced users, but less course-like.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="practice-first" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:14px;background:#fff6e7;min-height:255px">
+      <div style="display:flex;justify-content:space-between;align-items:center;color:#402b16;padding:8px 4px;font-size:11px">
+        <strong>INTERVIEW VAULT</strong><span>Learn &nbsp; Stats</span>
+      </div>
+      <div style="text-align:center;margin:8px auto;max-width:280px">
+        <div style="font-size:9px;color:#795b35;margin-bottom:8px">REVIEW SESSION · 3 OF 12</div>
+        <div style="background:white;border:1px solid #ead8bd;border-radius:14px;padding:24px 18px;box-shadow:0 8px 20px #9b6b2520;min-height:145px;display:flex;flex-direction:column;justify-content:center">
+          <strong style="font-size:15px">Why are virtual nodes used in consistent hashing?</strong>
+          <span style="font-size:9px;color:#806b50;margin-top:18px">Tap to reveal answer</span>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:10px">
+          <span style="flex:1;background:#f2c9c2;border-radius:6px;padding:7px;font-size:8px">Again</span>
+          <span style="flex:1;background:#f2dfaa;border-radius:6px;padding:7px;font-size:8px">Hard</span>
+          <span style="flex:1;background:#cce4bc;border-radius:6px;padding:7px;font-size:8px">Good</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. Practice First</h3>
+      <p>Flash cards dominate the experience, with lessons supporting review. Strong for repetition, weaker for first-time learning.</p>
+    </div>
+  </div>
+</div>
+
+<p style="margin-top:18px"><strong>Recommendation:</strong> A, Guided Course. It preserves the reference app’s active-learning emphasis while giving the 98 documents a coherent learning path.</p>

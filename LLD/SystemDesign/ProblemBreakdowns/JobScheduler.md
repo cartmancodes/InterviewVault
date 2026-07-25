@@ -216,7 +216,7 @@ erDiagram
     }
     EXECUTIONS {
         int time_bucket PK "Unix ts rounded to hour"
-        string execution_time SK "exact time + job_id"
+        string execution_time "SK - exact time + job_id"
         string job_id
         string user_id "GSI partition key"
         string status "PENDING RETRYING COMPLETED FAILED"

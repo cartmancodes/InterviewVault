@@ -1,5 +1,8 @@
 # 📁 Handling Large Blobs
 
+> 📑 **Quick Reference:** [condensed cheat-sheet](QuickReference/HandlingLargeBlobs.md) for last-minute review.
+
+
 > **Overview**: Large files like videos, images, and documents need special handling in distributed systems. Instead of shoving gigabytes through your servers, this pattern uses presigned URLs to let clients upload directly to blob storage and download from CDNs. You also get resumable uploads, parallel transfers, and progress tracking — the stuff that separates real systems from toy projects.
 
 ## 📋 Table of Contents

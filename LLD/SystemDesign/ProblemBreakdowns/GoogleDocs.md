@@ -1,8 +1,20 @@
-# Google Docs
+# 📝 Google Docs
 
-Practice with guided hints and real-time feedback
+> **Overview**: A browser-based collaborative document editor where many users edit the same rich-text document concurrently and see each other's changes — and cursors — in real time. The heart of the design is keeping every editor's view eventually consistent under a stream of concurrent edits, which we solve with **Operational Transformation (OT)** on a central server, then scale websocket fan-out across servers with a consistent-hash ring.
 
-## Understanding the Problem
+## 📋 Table of Contents
+
+- [Understanding the Problem](#understanding-the-problem)
+- [Layman's Explanation](#laymans-explanation)
+- [Set Up](#set-up)
+- [High-Level Design](#high-level-design)
+- [Potential Deep Dives](#potential-deep-dives)
+- [What is Expected at Each Level?](#what-is-expected-at-each-level)
+- [Key Takeaways](#key-takeaways)
+- [Related Concepts](#related-concepts)
+- [References](#references)
+
+## 🎯 Understanding the Problem
 
 > 📄 What is Google Docs ? Google Docs is a browser-based collaborative document editor. Users can create rich text documents and collaborate with others in real-time.
 
@@ -39,7 +51,13 @@ Here's how it might look on your whiteboard:
 
 ![Requirements](assets/QCW_pWHqVZpW.2hcjslgitv6wq.svg)
 
-## Set Up
+## 🧒 Layman's Explanation
+
+Imagine a single whiteboard that a hundred people are scribbling on at once, except each person is looking at their own photocopy of it. If everyone just mailed in their whole photocopy whenever they changed something, the last envelope to arrive would wipe out everyone else's work. So instead each person mails in only the *change* they made — "insert a comma after character 5", "delete character 6" — like edit instructions rather than the whole page.
+
+The catch: "delete character 6" only makes sense against the page as it looked when you wrote it. If someone else's insert already shifted things, blindly applying your instruction deletes the wrong letter. Google Docs fixes this with a referee sitting at one desk (a central server) who **rewrites each incoming instruction** so it still means the right thing after the edits that came before it — that's Operational Transformation. Everyone eventually ends up looking at an identical page. The little colored cursors showing where your collaborators are typing are pure "who's-where-right-now" gossip — never saved, thrown away the moment you disconnect.
+
+## 🧰 Set Up
 
 ### Planning the Approach
 
@@ -49,7 +67,7 @@ For this problem, we'll start by designing a system which simply supports our fu
 
 To do this we'll start by enumerating the "nouns" of our system, build out an API, and then start drawing our boxes.
 
-### [Defining the Core Entities](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#core-entities-2-minutes)
+### 🔑 [Defining the Core Entities](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#core-entities-2-minutes)
 
 First we'll define some core entities. These help to define terms between you and the interviewer, understand the data central to your design, and gives us a clue as to our APIs and how the system will fit together. The easiest way to do this is to look over your functional requirements and think about what nouns are involved in satisfying them. Asking yourself deeper questions about the behavior of the system ("what happens when...") will help you uncover the entities that are important to your design.
 
@@ -64,7 +82,7 @@ We'll explain these to our interviewer as we go through the problem.
 - **Edit**: A change made to the document by an editor.
 - **Cursor**: The position of the editor's cursor in the document (and the presence of that user in a document).
 
-### Defining the API
+### 🔌 Defining the API
 
 Next, we can move to the APIs we need to satisfy which will very closely track our functional requirements. For this problem, we probably want some REST APIs to manage the document itself. We also know we're going to need lots of bi-directional communication between each editor and the document they're collectively editing. In this case it makes sense to assume we'll need some sort of websocket-based approach for the editor experience, so we'll define a few of the messages that we'll send over the wire.
 
@@ -102,7 +120,7 @@ WS /docs/{docId}
 
 > When your API involves websockets, you'll be talking about messages you send over the websocket vs endpoints you hit with HTTP. The notation is completely up to you, but having some way to describe the protocol or message schema is helpful to convey what is going over the wire.
 
-## [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
+## 🏗️ [High-Level Design](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#high-level-design-10-15-minutes)
 
 With a sketch of an API we'll move to our high-level design. Tactically, it can be helpful to tell your interviewer that you're sure there are more details of the API to work through but you'll come back to those later as you flesh out the problem.
 
@@ -243,6 +261,27 @@ With that in mind, we can update our design to solve the collaborative edit prob
 
 ![Document Service with Operational Transformation](assets/gqV4wjfT_IXO.17r6_ciufm2fe.svg)
 
+The transform is what saves us from the `Hello world!` corruption above — when User A's `INSERT(5, ", world")` lands first, the server rewrites User B's `DELETE(6)` to `DELETE(13)` so it still deletes the exclamation mark:
+
+```mermaid
+sequenceDiagram
+    participant A as User A
+    participant B as User B
+    participant DS as Document Service (OT)
+    participant DB as Document Operations DB (Cassandra)
+
+    Note over A,B: both start from "Hello!"
+    A->>DS: INSERT(5, ", world")
+    B->>DS: DELETE(6)   (meant the "!")
+    Note over DS: A arrives first, applied as-is
+    DS->>DB: append INSERT(5, ", world")
+    Note over DS: transform B against A:<br/>DELETE(6) -> DELETE(13)
+    DS->>DB: append DELETE(13)
+    DS-->>A: broadcast transformed ops
+    DS-->>B: broadcast transformed ops
+    Note over A,B: both converge on "Hello, world"
+```
+
 For our new `Document Operations DB`, we want to use something that we can write very quickly in an append-only fashion (for now). Cassandra should do the trick. We'll partition by `documentId` and order by timestamp (which will be set by our document service). Once the edit has been successfully recorded in the database, we can acknowledge/confirm it to the user. We satisfied our durability requirement!
 
 ### 3) Users should be able to view each other's changes in real-time.
@@ -288,7 +327,7 @@ These properties help us to decide that we don't need to keep cursor position or
 
 And with that, we have a functional collaborative editor which scales to a few thousand users!
 
-## [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
+## 🔬 [Potential Deep Dives](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#deep-dives-10-minutes)
 
 With the core functional requirements met, it's time to cover non-functional requirements and issues we introduced.
 
@@ -391,7 +430,7 @@ Google Docs is a beast with hundreds to thousands of engineers working on it, so
 3. **Memory**: The memory usage of our `Document Service` can be a bottleneck. How can we further optimize it?
 4. **Offline Mode**: How might we expand our design if we want to allow our clients to operate in an offline mode? What additional considerations do we need to bring into our design?
 
-## [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
+## 🎓 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)
 
 ### Mid-level
 
@@ -405,7 +444,24 @@ For senior candidates, I would expect them to immediately start to grok some of 
 
 For staff engineers, I'm expecting a degree of mastery over the problem. I'd expect them to be loosely familiar with CRDTs (if they're not, they'll make it up somewhere else) but intimately familiar with scaling socket services, consistency tradeoffs, serialization problems, transactions, and more. I'd expect to get through the deep dives and probably tack on an extra one if we're not too deep in optimizations.
 
-## References
+## 🎓 Key Takeaways
+
+- **Send edits, not documents.** Transmitting the whole document per keystroke is both wasteful (100s of KB/keystroke) and lossy (last-write-wins clobbers concurrent edits). Transmit operations like `INSERT(pos, text)` / `DELETE(pos)` instead.
+- **Concurrent edits need conflict resolution.** Raw operations are contextual — they assume a document state. **OT** transforms each op against the ops that preceded it (server-side *and* client-side); **CRDTs** make ops commutative with never-changing position IDs + tombstones. Google Docs uses OT for its low memory and central-server ordering; CRDTs suit P2P/offline but grow unbounded.
+- **A central server orders operations**, appends them to an append-only store (Cassandra, partitioned by `documentId`, ordered by timestamp), acknowledges durability, then fans out to connected editors.
+- **Scale websockets with a consistent-hash ring** (coordinated via ZooKeeper) so all editors of a document land on the same server; clients get redirected to the owning server. This is the real-time-updates pattern.
+- **Presence/cursors are ephemeral** — kept in memory, broadcast over the same socket, and dropped on disconnect; never persisted with the document.
+- **Control storage with snapshot/compaction.** Collapse many ops into a snapshot under a new `documentVersionId` (flipped atomically via the metadata DB), either in a dedicated Compaction Service or opportunistically when a document goes idle.
+
+## 📚 Related Concepts
+
+- [Real-Time Updates](../Patterns/Real-TimeUpdates.md) — the websocket fan-out pattern this design instantiates.
+- [Consistent Hashing](../CoreConcepts/ConsistentHashing.md) — how connections are distributed across Document Service servers with minimal reshuffling.
+- [ZooKeeper](../DeepDives/Zookeeper.md) — maintains the hash-ring configuration and coordinates servers.
+- [Cassandra](../DeepDives/Cassandra.md) — the append-only operations store behind the Document Operations DB.
+- [Design Whatsapp](Whatsapp.md) — the same "route users to the right stateful socket server" problem.
+
+## 📚 References
 
 - [Real-Time Mouse Pointers](https://www.canva.dev/blog/engineering/realtime-mouse-pointers/): How Canva enables collaborative editing using WebRTC.
 

@@ -1,5 +1,8 @@
 # 🏃 Managing Long Running Tasks
 
+> 📑 **Quick Reference:** [condensed cheat-sheet](QuickReference/ManagingLongRunningTasks.md) for last-minute review.
+
+
 Learn about the long running tasks pattern and how to use it in your system design
 
 > **Overview**: The Managing Long-Running Tasks pattern splits API requests into two phases: immediate acknowledgment and background processing. When users submit heavy tasks (like video encoding), the web server instantly validates the request, pushes a job to a queue (Redis/RabbitMQ), and returns a job ID, all within milliseconds. Meanwhile, separate worker processes continuously poll the queue, grab pending jobs, execute the actual time-consuming work, and update the job status in a database.

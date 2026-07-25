@@ -1,5 +1,8 @@
 # 🔒 Dealing with Contention
 
+> 📑 **Quick Reference:** [condensed cheat-sheet](QuickReference/DealingWithContention.md) for last-minute review.
+
+
 Learn about how to deal with high contention in your system design interview.
 
 > **Overview**: Contention occurs when multiple processes compete for the same resource at the same time, like booking the last concert ticket or bidding on an auction item. Without proper handling, you get race conditions, double-bookings, and inconsistent state. The fix is a ladder of coordination tools — conditional writes, pessimistic locks, optimistic concurrency, serializable isolation, and distributed locks — each closing the gap between reading a value and acting on it, escalating only as far as the problem demands.

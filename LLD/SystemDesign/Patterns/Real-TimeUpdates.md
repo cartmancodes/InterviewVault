@@ -1,5 +1,8 @@
 # ⚡ Real-time Updates
 
+> 📑 **Quick Reference:** [condensed cheat-sheet](QuickReference/Real-TimeUpdates.md) for last-minute review.
+
+
 Learn about methods for triggering real-time updates in your system design
 
 > **Overview**: Real-time Updates addresses the challenge of delivering immediate notifications and data changes from servers to clients as events occur. From chat applications where messages need instant delivery to live dashboards showing real-time metrics, users expect to be notified the moment something happens. This pattern covers the architectural approaches to enable low-latency, bidirectional communication.

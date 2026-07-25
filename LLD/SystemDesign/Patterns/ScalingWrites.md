@@ -1,5 +1,8 @@
 # 📈 Scaling Writes
 
+> 📑 **Quick Reference:** [condensed cheat-sheet](QuickReference/ScalingWrites.md) for last-minute review.
+
+
 Learn about how to scale writes in your system design interview.
 
 > **Overview**: Scaling Writes addresses the challenge of handling high-volume write operations when a single database or single server becomes the bottleneck. As your application grows from hundreds to millions of writes per second, individual components hit hard limits on disk I/O, CPU, and network bandwidth — and interviewers love to probe these bottlenecks. This pattern walks through four combinable strategies: vertical scaling and database choices, sharding and partitioning, queues and load shedding, and batching and hierarchical aggregation.

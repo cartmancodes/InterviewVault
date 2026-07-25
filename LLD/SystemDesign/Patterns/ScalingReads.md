@@ -1,5 +1,8 @@
 # 📖 Scaling Reads
 
+> 📑 **Quick Reference:** [condensed cheat-sheet](QuickReference/ScalingReads.md) for last-minute review.
+
+
 > **Overview**: Scaling Reads addresses the challenge of serving high-volume read requests when your application grows from hundreds to millions of users. While writes create data, reads consume it — and read traffic often grows faster than write traffic. This pattern covers the architectural strategies to handle massive read loads without crushing your primary database.
 
 ## 📋 Table of Contents
