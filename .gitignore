@@ -7,3 +7,8 @@ node_modules/
 
 # local preview
 .wrangler/
+
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
