@@ -75,8 +75,8 @@
         "Kafka Source",
         "Timestamps and Watermarks",
         "keyBy",
-        "Stateful Window",
-        "Checkpointed State",
+        "Checkpointed Stateful Window",
+        "Window Result",
         "Idempotent Sink",
         "Processing Clock",
         "Local Variable",
@@ -86,11 +86,11 @@
         { "accept": "Kafka Source" },
         { "accept": "Timestamps and Watermarks" },
         { "accept": "keyBy" },
-        { "accept": "Stateful Window" },
-        { "accept": "Checkpointed State" },
+        { "accept": "Checkpointed Stateful Window" },
+        { "accept": "Window Result" },
         { "accept": "Idempotent Sink" }
       ],
-      "explain": "The Kafka source records checkpointed offsets so recovery can rewind and replay retained records. Extracted timestamps and watermarks drive occurrence-time windows, keyBy routes each key to one logical state partition, and the stateful window keeps aggregation data in Flink-managed checkpointed state rather than a local variable. After restore, records since the checkpoint can run again, so the external sink must make repeated writes harmless or coordinate them transactionally. A processing clock mis-buckets delayed events, a local variable is not restored or rescaled, and a fire-and-forget API can duplicate effects after replay."
+      "explain": "Records flow from the Kafka source through timestamp and watermark assignment, keyBy partitioning, the checkpointed stateful window, and its window result before reaching the sink. Separately, checkpoint barriers snapshot managed window state and Kafka source positions so recovery can restore state, rewind the source, and replay retained records. Because records after the restored checkpoint can run again, the sink must make repeated writes harmless or coordinate them transactionally. A processing clock mis-buckets delayed events, a local variable is not restored or rescaled, and a fire-and-forget API can duplicate effects after replay."
     },
     {
       "id": "bottleneck",
@@ -98,19 +98,19 @@
       "tier": "staff",
       "title": "Spot the bottleneck",
       "xp": 90,
-      "prompt": "Records are still flowing, but event-time windows have stopped closing. Which signal identifies the cause?",
+      "prompt": "Windows stop closing after traffic on one Kafka partition drops to zero, while that partition's broker lag remains zero. Which signal identifies the cause?",
       "cards": [
-        { "name": "Idle Source Partition", "metric": "watermark 18m behind", "delta": "-18m", "state": "hot" },
-        { "name": "Active Partitions", "metric": "watermarks current", "delta": "steady", "state": "ok" },
-        { "name": "Task Slots", "metric": "CPU 52%", "delta": "steady", "state": "ok" },
-        { "name": "Sink", "metric": "p99 24ms", "delta": "+4ms", "state": "warn" }
+        { "name": "Watermark Progress", "metric": "minimum 18m behind", "delta": "-18m", "state": "hot" },
+        { "name": "Kafka Partition 3", "metric": "0 records/s, lag 0", "delta": "-120/s", "state": "ok" },
+        { "name": "Source Configuration", "metric": "idleness disabled", "delta": "unchanged", "state": "warn" },
+        { "name": "Sink", "metric": "p99 24ms", "delta": "+2ms", "state": "ok" }
       ],
-      "answer": "Idle Source Partition",
-      "explain": "Downstream event-time progress is the minimum watermark across upstream inputs. A quiet partition that emits no records and is not marked idle leaves its watermark 18 minutes behind, holding every downstream window open even while active partitions continue delivering records. Configure source idleness detection so Flink temporarily excludes truly idle partitions from watermark alignment, while monitoring for partitions that are stalled rather than legitimately quiet.",
+      "answer": "Source Configuration",
+      "explain": "An operator advances event time using the minimum watermark across its active inputs. Kafka Partition 3 has zero records per second and zero broker lag, which identifies a legitimately idle input rather than a processing backlog. With source idleness detection disabled, that quiet input remains in the minimum-watermark calculation and holds windows open. Configure idleness detection so Flink excludes the idle input from that minimum until records resume.",
       "wrong": {
-        "Active Partitions": "Their watermarks are current and records are flowing, but downstream progress cannot advance past the minimum watermark from the idle partition.",
-        "Task Slots": "CPU at 52% is steady and leaves headroom. Resource saturation would slow processing, but the explicit 18-minute watermark gap explains why event-time triggers do not fire.",
-        "Sink": "A 24ms p99 deserves observation, but it is not enough to explain an 18-minute event-time stall while records continue to flow. Window closure is waiting on upstream watermark progress."
+        "Watermark Progress": "The minimum watermark being 18 minutes behind is the symptom that explains why windows remain open, but it does not explain why progress stopped. Disabled source idleness detection is the root configuration error.",
+        "Kafka Partition 3": "Zero records per second with zero broker lag proves this partition is legitimately idle, not backlogged or unable to process available records. The source must recognize that state rather than treating the partition itself as faulty.",
+        "Sink": "The sink is healthy at 24ms p99 and cannot prevent upstream event-time windows from firing. Window closure is blocked before a result reaches the sink."
       }
     }
   ]
