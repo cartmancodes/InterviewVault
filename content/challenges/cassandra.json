@@ -1,0 +1,117 @@
+{
+  "slug": "cassandra",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "A chat channel can reach billions of messages. Which Cassandra primary-key design keeps recent-message reads efficient?",
+      "options": [
+        {
+          "id": "channel-only",
+          "label": "Partition by channel_id",
+          "sub": "Cluster by message_id DESC",
+          "correct": false,
+          "verdict": "Recent messages are ordered well, but every message for a busy channel lands in one perpetually growing partition. That unbounded hot partition eventually makes reads, repairs, and compaction expensive."
+        },
+        {
+          "id": "channel-bucket",
+          "label": "Partition by channel_id + time bucket",
+          "sub": "Cluster by message_id DESC",
+          "correct": true,
+          "verdict": "Time buckets bound each partition while descending message IDs preserve the recent-first access pattern. Most reads hit the current bucket, and the application crosses a bucket boundary only when pagination requires it."
+        }
+      ],
+      "defend": {
+        "prompt": "Defend the bucketed design. Which implementation details are real?",
+        "options": [
+          { "label": "Choose bucket width from the worst-case partition size", "correct": true },
+          { "label": "Boundary pagination can require reads from two buckets", "correct": true },
+          { "label": "Use sortable unique message IDs for ordering without collisions", "correct": true },
+          { "label": "Cassandra joins adjacent buckets automatically", "correct": false }
+        ],
+        "explain": "Cassandra modeling is query-driven and does not provide cross-partition joins. The application computes the bucket, reads the current partition first, and explicitly reads and merges an adjacent bucket at a pagination boundary. Bucket width must keep the busiest channel's partition bounded, while sortable unique IDs provide deterministic descending order."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Consistency ladder",
+      "xp": 70,
+      "prompt": "Replication factor is 3. Tune Cassandra's response requirements without confusing acknowledgment with replication.",
+      "rungs": [
+        {
+          "q": "How many replica responses does QUORUM require?",
+          "choices": ["1", "2", "3"],
+          "answer": 1,
+          "note": "For RF=3, quorum is floor(3 / 2) + 1 = 2 replicas."
+        },
+        {
+          "q": "Which pairing guarantees the read and write replica sets overlap?",
+          "choices": ["Write ONE + read ONE", "Write QUORUM + read ONE", "Write QUORUM + read QUORUM"],
+          "answer": 2,
+          "note": "Two write acknowledgments plus two read responses among three replicas must share at least one replica."
+        },
+        {
+          "q": "What is the tradeoff when the read consistency level drops to ONE?",
+          "choices": ["Lower latency, but the read can be stale", "Higher latency with strict consistency", "Only one replica receives each write"],
+          "answer": 0,
+          "note": "ONE waits for fewer read responses, improving latency and availability while allowing a stale replica to answer."
+        }
+      ],
+      "explain": "A consistency level controls how many replica responses the coordinator waits for before reporting success, not how many replicas Cassandra sends the operation to. QUORUM writes plus QUORUM reads guarantee overlap at RF=3, while read ONE waits less and can return stale data. The choice trades latency and availability against stronger read-after-write visibility."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the acknowledged Cassandra write path in order.",
+      "palette": [
+        "Client Write",
+        "Coordinator",
+        "Replica Set",
+        "Commit Log",
+        "Memtable",
+        "Quorum Ack",
+        "SSTable Flush",
+        "Global Join",
+        "Single Leader"
+      ],
+      "slots": [
+        { "accept": "Client Write" },
+        { "accept": "Coordinator" },
+        { "accept": "Replica Set" },
+        { "accept": "Commit Log" },
+        { "accept": "Memtable" },
+        { "accept": "Quorum Ack" }
+      ],
+      "explain": "The client can contact any node, which becomes the coordinator and routes the write to the replica set. Each replica appends to its local commit log for durability and updates its local Memtable. The coordinator acknowledges after the selected consistency level is satisfied. Memtables flush to immutable SSTables later, asynchronously and outside this acknowledgment path; Cassandra has neither a global join nor a single leader here."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "A TTL-heavy workload has a sudden read p99 spike. Which signal identifies the direct read-path bottleneck?",
+      "cards": [
+        { "name": "Tombstone Scan", "metric": "180k/read", "delta": "+175k", "state": "hot" },
+        { "name": "Compaction Queue", "metric": "42 pending", "delta": "+36", "state": "warn" },
+        { "name": "Coordinator CPU", "metric": "48%", "delta": "steady", "state": "ok" },
+        { "name": "Gossip", "metric": "12/12 live", "delta": "steady", "state": "ok" }
+      ],
+      "answer": "Tombstone Scan",
+      "explain": "Expired and deleted values remain as tombstones until Cassandra can safely purge them. Reads that scan 180k dead cells do work without returning useful rows, directly driving tail latency. Compaction debt prolongs tombstone retention, but the direct read-path bottleneck is the scan. Fix the data model and TTL pattern to limit dead cells per query, and provision or tune compaction capacity so safe purging keeps pace.",
+      "wrong": {
+        "Compaction Queue": "The queue is a contributing symptom: compaction debt keeps tombstones around longer, but the measured read-path work causing this p99 spike is the 180k tombstones scanned per read.",
+        "Coordinator CPU": "CPU is only 48% and steady, so coordinator saturation does not explain the latency jump.",
+        "Gossip": "All 12 nodes are live and gossip is steady; membership health does not explain excessive dead-cell work on reads."
+      }
+    }
+  ]
+}
