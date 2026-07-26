@@ -56,7 +56,15 @@ for (const file of pages) {
   }
 }
 
-console.log(`pages ${pages.length} · links ${links} · assets ${assets} · anchors ${anchors}`);
+// client scripts must at least parse — a broken one silently kills the sidecar
+let scripts = 0;
+for (const js of readdirSync(path.join(SITE, 'assets')).filter((f) => f.endsWith('.js'))) {
+  scripts++;
+  const src = readFileSync(path.join(SITE, 'assets', js), 'utf8');
+  try { new Function(src); } catch (err) { problems.push(`assets/${js}: does not parse — ${err.message}`); }
+}
+
+console.log(`pages ${pages.length} · links ${links} · assets ${assets} · anchors ${anchors} · scripts ${scripts}`);
 if (problems.length) {
   console.error(`\n${problems.length} problem(s):`);
   for (const p of problems.slice(0, 40)) console.error('  ' + p);

@@ -1,0 +1,4 @@
+{"type":"server-started","port":54777,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:54777","screen_dir":"/Users/shubhojeetchakraborty/PersonalProjects/InterviewVault/.superpowers/brainstorm/13693-1785024725/content","state_dir":"/Users/shubhojeetchakraborty/PersonalProjects/InterviewVault/.superpowers/brainstorm/13693-1785024725/state"}
+{"type":"screen-added","file":"/Users/shubhojeetchakraborty/PersonalProjects/InterviewVault/.superpowers/brainstorm/13693-1785024725/content/waiting.html"}
+{"type":"screen-added","file":"/Users/shubhojeetchakraborty/PersonalProjects/InterviewVault/.superpowers/brainstorm/13693-1785024725/content/learning-shell-approaches.html"}
+{"type":"server-stopped","reason":"owner process exited"}

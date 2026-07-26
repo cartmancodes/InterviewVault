@@ -5,6 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { marked } from 'marked';
 import { hashOf, extractMermaid } from './render-diagrams.mjs';
+import { buildChallenges } from './gen-challenges.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, '..');
@@ -218,9 +219,24 @@ function buildDocPage(doc, siblings, idx) {
   const { html, headings } = renderDoc(doc);
   const prev = siblings[idx - 1], next = siblings[idx + 1];
   const toc = headings.length
-    ? `<aside class="toc"><h4>On this page</h4><ol>${headings
-        .map((h) => `<li><a class="${h.lvl === 3 ? 'h3' : ''}" href="#${h.id}">${esc(h.text)}</a></li>`).join('')}</ol></aside>`
-    : '<aside class="toc"></aside>';
+    ? `<nav class="toc"><h4>On this page</h4><ol>${headings
+        .map((h) => `<li><a class="${h.lvl === 3 ? 'h3' : ''}" href="#${h.id}">${esc(h.text)}</a></li>`).join('')}</ol></nav>`
+    : '';
+
+  // The interview-answer docs carry the structure the practice sidecar needs:
+  // scoped requirements, deep dives and an explicit Mid/Senior/Staff+ rubric.
+  let sidecar = '', sheetBtn = '', vaultScript = '';
+  if (doc.col.key === 'answers') {
+    const ch = buildChallenges(path.join(REPO, doc.rel), doc.slug);
+    if (ch.checkpoints.length) {
+      sidecar =
+        `<section id="iv-sidecar" class="sidecar" aria-label="Practice"></section>` +
+        `<script type="application/json" id="iv-challenges">${JSON.stringify(ch).replace(/</g, '\\u003c')}</script>`;
+      sheetBtn = `<button id="iv-sheet-open" class="sheet-open-btn" type="button" aria-expanded="false" hidden>Practice</button>`;
+      vaultScript = `<script src="/assets/vault.js" defer></script>`;
+    }
+  }
+  const rail = sidecar || toc ? `<aside class="rail">${sidecar}${toc}</aside>` : '<aside></aside>';
   const side = `<nav class="side"><h4>${esc(doc.col.label)}</h4><ol>${siblings
     .map((s) => `<li><a href="${s.url}"${s.slug === doc.slug ? ' aria-current="page"' : ''}>${esc(s.title)}</a></li>`).join('')}</ol></nav>`;
 
@@ -246,9 +262,10 @@ ${prev ? `<a href="${prev.url}"><span>Previous</span><b>${esc(prev.title)}</b></
 ${next ? `<a class="nx" href="${next.url}"><span>Next</span><b>${esc(next.title)}</b></a>` : '<span></span>'}
 </nav>
 </main>
-${toc}
+${rail}
 </div>
-<script src="/assets/doc.js" defer></script>`;
+${sheetBtn}
+<script src="/assets/doc.js" defer></script>${vaultScript}`;
 
   mkdirSync(path.dirname(doc.out), { recursive: true });
   writeFileSync(doc.out, page({
@@ -366,9 +383,62 @@ ${chips}
   }));
 }
 
+/* ── vault map (1h) ────────────────────────────────────── */
+function buildProgressPage() {
+  const answers = docs.filter((d) => d.col.key === 'answers');
+  const cards = answers.map((d) => {
+    const ch = buildChallenges(path.join(REPO, d.rel), d.slug);
+    return { slug: d.slug, title: d.title, url: d.url, total: ch.checkpoints.length };
+  }).filter((c) => c.total);
+
+  const body = `<section class="hero blueprint"><div class="hero-in">
+<div class="eyebrow">Progress · stored on this device</div>
+<h1>The vault map</h1>
+<p class="hero-sub">Every question doc you have practised, and how far each one got. Nothing leaves this browser — see <a href="#storage">where that stops working</a>.</p>
+<div class="stats" id="vm-stats"></div>
+</div></section>
+
+<section class="lib">
+<div class="sec-h">Coverage · ${cards.length} question docs with checkpoints</div>
+<div class="vault-grid" id="vm-grid">${cards.map((c) =>
+  `<a class="vault-card" href="${c.url}" data-slug="${c.slug}" data-total="${c.total}">
+<span class="vc-t">${esc(c.title)}</span>
+<span class="vc-bar"><i></i></span>
+<span class="vc-n">0 / ${c.total}</span>
+</a>`).join('')}</div>
+
+<div class="sec-h" style="margin-top:34px">Streak</div>
+<div class="streak" id="vm-streak"></div>
+
+<div class="sec-h" id="storage" style="margin-top:34px">Where device-local storage stops working</div>
+<div class="tiers">
+<div class="tier"><b>Device-local</b><span class="tier-tag now">in use</span>
+<p>One JSON blob in <code>localStorage</code>, keyed by doc slug. Survives reloads, costs nothing, needs no account. It is gone if you clear site data, and it does not follow you to your phone.</p></div>
+<div class="tier"><b>Portable code</b><span class="tier-tag">not built</span>
+<p>Export the same blob as a base64 string you paste into the other browser. Still no server, still no account — but it is a manual sync you have to remember to do.</p></div>
+<div class="tier"><b>Account sync</b><span class="tier-tag">not built</span>
+<p>The first point that needs a backend, and the first point this stops being a static site. Worth it only if you want history across devices; not worth it for a personal vault.</p></div>
+</div>
+
+<div class="vm-danger">
+<button id="vm-reset" class="chip" type="button">Reset all progress</button>
+<span class="row-m">Clears the blob for every doc. Cannot be undone.</span>
+</div>
+</section>
+<script src="/assets/progress.js" defer></script>`;
+
+  const out = path.join(SITE, 'progress', 'index.html');
+  mkdirSync(path.dirname(out), { recursive: true });
+  writeFileSync(out, page({
+    title: 'Vault map — InterviewVault',
+    desc: 'Your practice coverage across the interview-answer docs, stored on this device.',
+    body,
+  }));
+}
+
 /* ── build ─────────────────────────────────────────────── */
 function build() {
-  for (const d of ['answers', 'notes', 'concepts', 'patterns', 'deep-dives', 'breakdowns', 'in-the-wild', 'in-a-hurry', 'dsa']) {
+  for (const d of ['answers', 'notes', 'concepts', 'patterns', 'deep-dives', 'breakdowns', 'in-the-wild', 'in-a-hurry', 'dsa', 'progress']) {
     rmSync(path.join(SITE, d), { recursive: true, force: true });
   }
   mkdirSync(path.join(SITE, 'assets'), { recursive: true });
@@ -378,10 +448,13 @@ function build() {
     sibs.forEach((d, i) => buildDocPage(d, sibs, i));
   }
   buildIndex();
+  buildProgressPage();
 
   copyFileSync(path.join(TPL, 'site.css'), path.join(SITE, 'assets', 'site.css'));
   copyFileSync(path.join(TPL, 'home.js'), path.join(SITE, 'assets', 'home.js'));
   copyFileSync(path.join(TPL, 'doc.js'), path.join(SITE, 'assets', 'doc.js'));
+  copyFileSync(path.join(TPL, 'vault.js'), path.join(SITE, 'assets', 'vault.js'));
+  copyFileSync(path.join(TPL, 'progress.js'), path.join(SITE, 'assets', 'progress.js'));
   copyFileSync(path.join(TPL, 'favicon.svg'), path.join(SITE, 'assets', 'favicon.svg'));
   for (const f of ['_headers', '_redirects', 'robots.txt']) {
     if (existsSync(path.join(TPL, f))) copyFileSync(path.join(TPL, f), path.join(SITE, f));

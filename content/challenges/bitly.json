@@ -1,0 +1,109 @@
+{
+  "slug": "bitly",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "1B URLs, and short codes must never collide. Which generator?",
+      "options": [
+        {
+          "id": "hash",
+          "label": "Hash + base62",
+          "sub": "SHA-256, first 8 chars",
+          "correct": false,
+          "verdict": "Deterministic, so the same long URL always yields the same code and you get dedup for free. But truncating a hash reintroduces birthday collisions, so every write still has to check the table before it can commit."
+        },
+        {
+          "id": "counter",
+          "label": "Counter + base62",
+          "sub": "Redis INCR, 6-7 chars",
+          "correct": true,
+          "verdict": "Unique by construction — no collision check on the write path at all. Sequential codes are guessable, which you fix by XOR-ing the counter with a 64-bit secret before encoding: still unique, no longer enumerable."
+        }
+      ],
+      "defend": {
+        "prompt": "Defend it. What does the counter actually cost you?",
+        "options": [
+          { "label": "Codes are enumerable unless you obfuscate them", "correct": true },
+          { "label": "It cannot dedup two submissions of the same URL", "correct": true },
+          { "label": "The counter is a coordination point that must not be lost", "correct": true },
+          { "label": "Codes grow past 8 characters within the first billion", "correct": false }
+        ],
+        "explain": "62^7 already covers 3.5 trillion codes, so length is not the worry. The real costs are enumeration, loss of dedup, and turning the counter into a piece of state you must never roll backwards."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "100M DAU, 5 redirects each. What does the read path have to survive?",
+      "rungs": [
+        {
+          "q": "Redirects per day",
+          "choices": ["5M", "50M", "500M", "5B"],
+          "answer": 2,
+          "note": "100M users x 5 redirects."
+        },
+        {
+          "q": "Average redirects per second",
+          "choices": ["58", "580", "5.8k", "58k"],
+          "answer": 2,
+          "note": "500M / 86,400s. Round the day to 100k seconds and it falls out as 5k."
+        },
+        {
+          "q": "Peak, at 100x average",
+          "choices": ["58k", "600k", "6M"],
+          "answer": 1,
+          "note": "~600k RPS. This is the number the read path is actually designed against, not the average."
+        }
+      ],
+      "explain": "Writes are ~1/sec against ~600k/sec of reads: a 1000:1 ratio. Every later decision — cache, CDN, replicas — is a consequence of that one number."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the redirect path so a hot short code never touches disk.",
+      "palette": [
+        "Browser", "CDN edge", "Load balancer", "Read service", "Write service",
+        "Redis cache", "Redis counter", "Elasticsearch", "Postgres"
+      ],
+      "slots": [
+        { "accept": "Browser" },
+        { "accept": "CDN edge" },
+        { "accept": "Load balancer" },
+        { "accept": "Read service" },
+        { "accept": "Redis cache" }
+      ],
+      "explain": "A 302 from the CDN edge serves the hottest codes without ever reaching your origin. Behind it, the read service checks Redis first; Postgres is the miss path only. Write service and Redis counter belong to the create path, and Elasticsearch is not in this story at all."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "p99 redirect latency just went from 40ms to 900ms.",
+      "cards": [
+        { "name": "CDN edge", "metric": "hit rate 94%", "delta": "-1pt", "state": "ok" },
+        { "name": "Read service", "metric": "p99 18ms", "delta": "+12ms", "state": "ok" },
+        { "name": "Redis cache", "metric": "hit rate 61%", "delta": "-34pt", "state": "warn" },
+        { "name": "Postgres primary", "metric": "p99 840ms", "delta": "+800ms", "state": "hot" }
+      ],
+      "answer": "Redis cache",
+      "explain": "Postgres is the loudest number, but it is the symptom. The cache hit rate fell 34 points, so roughly a third of reads that used to be served from memory are now queued behind disk. Fix Postgres and you have treated the burn; fix the eviction or key churn that collapsed the hit rate and the 900ms disappears.",
+      "wrong": {
+        "Postgres primary": "That is where the latency shows up, but ask why it is suddenly receiving traffic it never used to see.",
+        "Read service": "+12ms is it waiting on something downstream, not the cause.",
+        "CDN edge": "A single point of hit rate does not explain a 22x latency change."
+      }
+    }
+  ]
+}

@@ -281,3 +281,348 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
   .hero-in { padding: 38px 20px 30px; }
   .lib-bar { position: static; }
 }
+
+/* ══ practice sidecar (1a) ═══════════════════════════════ */
+.rail { position: sticky; top: 66px; max-height: calc(100vh - 86px); overflow-y: auto; padding: 22px 0; }
+.rail > * + * { margin-top: 22px; }
+
+.sidecar {
+  border: 1px solid var(--rule); border-radius: 10px; background: var(--paper);
+  padding: 13px 14px 12px;
+}
+.sc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sc-eyebrow {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--mut);
+}
+.sc-timed { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--mut); cursor: pointer; }
+.sc-timed input { accent-color: var(--blue); }
+
+.sc-level { display: flex; align-items: center; gap: 10px; margin-top: 11px; }
+.sc-lv {
+  width: 34px; height: 34px; flex: none; border-radius: 8px; background: var(--blue-wash);
+  color: var(--blue-deep); font-family: var(--mono); font-weight: 600; font-size: 13px;
+  display: grid; place-items: center;
+}
+.sc-meta { flex: 1; min-width: 0; }
+.sc-bar { height: 5px; background: var(--soft); border-radius: 3px; overflow: hidden; }
+.sc-bar i { display: block; height: 100%; background: var(--blue); transition: width .4s ease; }
+.sc-xp { font-family: var(--mono); font-size: 11px; color: var(--mut); display: block; margin-top: 4px; }
+
+.sc-tabs { display: flex; gap: 3px; margin-top: 13px; background: var(--soft); padding: 3px; border-radius: 7px; }
+.sc-tab {
+  flex: 1; border: 0; background: none; border-radius: 5px; padding: 5px 4px; cursor: pointer;
+  font: 500 12px var(--sans); color: var(--mut);
+}
+.sc-tab.on { background: var(--paper); color: var(--ink); box-shadow: 0 1px 2px rgba(14,26,43,.1); }
+
+.sc-track { font-family: var(--mono); font-size: 11px; color: var(--mut); margin-top: 11px; }
+
+.sc-list { margin-top: 8px; display: flex; flex-direction: column; gap: 5px; }
+.sc-cp { border: 1px solid var(--rule); border-radius: 7px; overflow: hidden; }
+.sc-cp.done { border-color: color-mix(in srgb, var(--good) 45%, var(--rule)); }
+.sc-cp-head {
+  width: 100%; display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  background: none; border: 0; cursor: pointer; text-align: left;
+}
+.sc-cp-head:hover { background: var(--blue-wash); }
+.sc-dot { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--bd, #C6D3EC); flex: none; }
+.sc-cp.done .sc-dot { background: var(--good); border-color: var(--good); }
+.sc-cp-t { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.sc-cp-t b { font-size: 12.5px; font-weight: 500; }
+.sc-cp-sub { font-family: var(--mono); font-size: 10.5px; color: var(--mut); }
+.sc-go {
+  margin-left: auto; flex: none; font-family: var(--mono); font-size: 10px;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--blue-deep);
+  background: var(--blue-wash); padding: 3px 7px; border-radius: 100px;
+}
+.sc-cp.done .sc-go { color: var(--mut); background: var(--soft); }
+
+.sc-levels { margin-top: 12px; font-size: 12px; color: var(--ink-2); }
+.sc-levels summary { font-family: var(--mono); font-size: 11px; color: var(--mut); cursor: pointer; }
+.sc-levels ol { margin: 7px 0 0 16px; display: flex; flex-direction: column; gap: 3px; }
+
+.sc-foot {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--rule);
+  font-family: var(--mono); font-size: 11px; color: var(--mut);
+}
+
+/* ── shared mechanic chrome ─────────────────────────────── */
+.mech { padding-top: 10px; }
+.mech > * + * { margin-top: 9px; }
+.mech-prompt { font-size: 12.5px; font-weight: 500; color: var(--ink); line-height: 1.45; }
+.mech-note { font-size: 11.5px; color: var(--mut); line-height: 1.5; }
+.mech-verdict {
+  font-size: 11.5px; line-height: 1.55; color: var(--ink-2);
+  background: var(--blue-wash); border-left: 2px solid var(--blue);
+  padding: 8px 10px; border-radius: 0 5px 5px 0;
+}
+.mech-go {
+  width: 100%; padding: 7px; border-radius: 6px; border: 1px solid var(--blue);
+  background: var(--blue); color: #fff; font: 500 12px var(--sans); cursor: pointer;
+}
+.mech-go:disabled { background: var(--soft); border-color: var(--rule); color: var(--mut); cursor: default; }
+.mech-timer { height: 3px; background: var(--soft); border-radius: 2px; overflow: hidden; }
+.mech-timer i { display: block; height: 100%; width: 100%; background: var(--amber); transition: width 1s linear; }
+
+/* ── 1c requirements triage ─────────────────────────────── */
+.triage { display: flex; flex-direction: column; gap: 3px; }
+.triage-row {
+  display: flex; align-items: center; gap: 8px; padding: 5px 7px;
+  border-radius: 5px; border: 1px solid transparent; background: var(--soft);
+}
+.triage-t { flex: 1; font-size: 11.5px; line-height: 1.4; }
+.triage-btns { display: flex; gap: 3px; flex: none; }
+.tg {
+  font: 500 10px var(--mono); padding: 3px 6px; border-radius: 4px;
+  border: 1px solid var(--rule); background: var(--paper); color: var(--mut); cursor: pointer;
+}
+.tg.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+.tg.truth { box-shadow: inset 0 0 0 1.5px var(--good); }
+.tg:disabled { cursor: default; }
+.triage-row.ok { background: color-mix(in srgb, var(--good) 12%, transparent); }
+.triage-row.no { background: color-mix(in srgb, #EF4444 10%, transparent); }
+.triage-row.miss { opacity: .6; }
+
+/* ── win conditions / defend checklists ─────────────────── */
+.recall { display: flex; flex-direction: column; gap: 2px; }
+.recall-row {
+  display: flex; gap: 7px; align-items: flex-start; padding: 5px 7px;
+  border-radius: 5px; font-size: 11.5px; line-height: 1.45; cursor: pointer;
+}
+.recall-row:hover { background: var(--soft); }
+.recall-row input { margin-top: 2px; accent-color: var(--blue); flex: none; }
+.recall-row.on { color: var(--ink); }
+.recall-row.ok { background: color-mix(in srgb, var(--good) 12%, transparent); }
+.recall-row.no { background: color-mix(in srgb, #EF4444 10%, transparent); }
+
+/* ── 1b tradeoff duel ───────────────────────────────────── */
+.duel { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.duel-opt {
+  display: flex; flex-direction: column; gap: 2px; padding: 9px 8px; cursor: pointer;
+  border: 1px solid var(--rule); border-radius: 7px; background: var(--paper); text-align: left;
+}
+.duel-opt:hover { border-color: var(--blue); }
+.duel-opt b { font-size: 12px; font-weight: 600; }
+.duel-sub { font-family: var(--mono); font-size: 10px; color: var(--mut); }
+.duel-opt.right { border-color: var(--good); background: color-mix(in srgb, var(--good) 10%, transparent); }
+.duel-opt.wrong { opacity: .55; }
+.duel-opt.picked { box-shadow: 0 0 0 2px var(--blue) inset; }
+.defend { margin-top: 10px; padding-top: 9px; border-top: 1px dashed var(--rule); }
+.defend > * + * { margin-top: 6px; }
+
+/* ── 1d capacity ladder ─────────────────────────────────── */
+.ladder { display: flex; flex-direction: column; gap: 8px; }
+.rung { border: 1px solid var(--rule); border-radius: 7px; padding: 8px; }
+.rung-q { font-size: 11.5px; font-weight: 500; margin-bottom: 6px; }
+.rung-choices { display: flex; flex-wrap: wrap; gap: 4px; }
+.rung-c {
+  font: 500 11px var(--mono); padding: 4px 9px; border-radius: 5px;
+  border: 1px solid var(--rule); background: var(--paper); cursor: pointer;
+}
+.rung-c:hover:not(:disabled) { border-color: var(--blue); }
+.rung-c.right { border-color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
+.rung-c.wrong { border-color: #EF4444; opacity: .6; }
+.rung-c.picked { box-shadow: 0 0 0 1.5px var(--blue) inset; }
+.rung-note { font-size: 11px; color: var(--mut); margin-top: 6px; line-height: 1.45; }
+
+/* ── 1e architecture builder ────────────────────────────── */
+.build-track { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
+.slot {
+  flex: 1 1 68px; min-height: 34px; border-radius: 6px; cursor: pointer;
+  border: 1.5px dashed var(--rule); background: var(--soft);
+  font: 500 10.5px var(--sans); color: var(--ink); padding: 4px;
+}
+.slot.filled { border-style: solid; border-color: var(--blue); background: var(--blue-wash); }
+.slot.ok { border-color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
+.slot.no { border-color: #EF4444; background: color-mix(in srgb, #EF4444 10%, transparent); }
+.build-arrow { color: var(--mut); font-size: 11px; flex: none; }
+.palette { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip {
+  font: 500 10.5px var(--sans); padding: 4px 8px; border-radius: 100px; cursor: pointer;
+  border: 1px solid var(--rule); background: var(--paper); color: var(--ink-2);
+}
+.chip:hover:not(:disabled) { border-color: var(--blue); }
+.chip.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+.chip.used { opacity: .4; }
+
+/* ── 1f spot the bottleneck ─────────────────────────────── */
+.dash { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.dash-card {
+  text-align: left; padding: 8px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--rule); background: var(--paper);
+}
+.dash-card:hover:not(:disabled) { border-color: var(--blue); }
+.dash-name { font-size: 11px; font-weight: 600; }
+.dash-metric { font-family: var(--mono); font-size: 10.5px; color: var(--mut); margin-top: 2px; }
+.dash-delta { font-family: var(--mono); font-size: 10px; margin-top: 2px; color: var(--mut); }
+.dash-card.state-warn { border-color: color-mix(in srgb, var(--amber) 55%, var(--rule)); }
+.dash-card.state-hot { border-color: color-mix(in srgb, #EF4444 55%, var(--rule)); }
+.dash-card.state-warn .dash-delta { color: var(--midDk, #8a6100); }
+.dash-card.state-hot .dash-delta { color: #b91c1c; }
+.dash-card.truth { box-shadow: 0 0 0 2px var(--good) inset; }
+.dash-card.picked-no { opacity: .6; }
+
+/* ── 1g mobile: the sidecar becomes a bottom sheet ──────── */
+.sheet-open-btn {
+  display: none; position: fixed; right: 14px; bottom: 14px; z-index: 60;
+  border: 0; border-radius: 100px; padding: 11px 17px; cursor: pointer;
+  background: var(--blue); color: #fff; font: 500 13px var(--sans);
+  box-shadow: 0 6px 20px rgba(37,99,235,.35);
+}
+
+@media (max-width: 1080px) {
+  .rail { display: none; }
+  .sheet-open-btn { display: block; }
+  body.sheet-open .rail {
+    display: block; position: fixed; inset: auto 0 0 0; z-index: 70;
+    max-height: 82vh; overflow-y: auto; background: var(--paper);
+    border-top: 1px solid var(--rule); border-radius: 14px 14px 0 0;
+    padding: 16px 14px 26px; box-shadow: 0 -10px 40px rgba(14,26,43,.22);
+  }
+  body.sheet-open .rail .toc { display: none; }
+  body.sheet-open .sidecar { border: 0; padding: 0; }
+  body.sheet-open::after {
+    content: ''; position: fixed; inset: 0; background: rgba(14,26,43,.35); z-index: 65;
+  }
+}
+@media (max-width: 800px) {
+  .duel, .dash { grid-template-columns: 1fr; }
+}
+
+/* ══ vault map (1h) ══════════════════════════════════════ */
+.vault-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(212px, 1fr)); gap: 8px; margin-top: 12px; }
+.vault-card {
+  display: flex; flex-direction: column; gap: 7px; padding: 12px 13px;
+  border: 1px solid var(--rule); border-radius: 8px; background: var(--paper);
+  text-decoration: none; color: inherit;
+}
+.vault-card:hover { border-color: var(--blue); }
+.vc-t { font-size: 13.5px; font-weight: 500; letter-spacing: -.01em; }
+.vc-bar { height: 4px; background: var(--soft); border-radius: 2px; overflow: hidden; }
+.vc-bar i { display: block; height: 100%; width: 0; background: var(--blue); transition: width .5s ease; }
+.vc-n { font-family: var(--mono); font-size: 11px; color: var(--mut); }
+.vault-card.has .vc-bar i { background: var(--blue); }
+.vault-card.full { border-color: color-mix(in srgb, var(--good) 55%, var(--rule)); }
+.vault-card.full .vc-bar i { background: var(--good); }
+
+.streak { margin-top: 12px; }
+.streak-head { font-family: var(--mono); font-size: 12px; color: var(--mut); margin-bottom: 8px; }
+.streak-row { display: flex; flex-wrap: wrap; gap: 3px; }
+.streak-cell { width: 11px; height: 11px; border-radius: 2px; background: var(--soft); border: 1px solid var(--rule); }
+.streak-cell.on { background: var(--blue); border-color: var(--blue); }
+
+.tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-top: 12px; }
+.tier { border: 1px solid var(--rule); border-radius: 8px; padding: 13px; background: var(--paper); }
+.tier b { font-size: 13.5px; }
+.tier p { font-size: 12.5px; color: var(--ink-2); line-height: 1.55; margin-top: 7px; }
+.tier code { font-family: var(--mono); font-size: 11.5px; background: var(--soft); padding: 1px 4px; border-radius: 3px; }
+.tier-tag {
+  font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .08em;
+  padding: 2px 6px; border-radius: 100px; margin-left: 7px;
+  background: var(--soft); color: var(--mut);
+}
+.tier-tag.now { background: color-mix(in srgb, var(--good) 18%, transparent); color: #056e51; }
+
+.vm-danger { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 34px; padding-top: 16px; border-top: 1px solid var(--rule); }
+
+/* ══ focused mechanic overlay ════════════════════════════ */
+/* A pipeline builder or a dashboard grid cannot be read in a 210px rail, so the
+   sidecar launches them into a room sized to the mechanic. */
+body.mech-open { overflow: hidden; }
+
+.mech-overlay {
+  position: fixed; inset: 0; z-index: 90; display: grid; place-items: center;
+  padding: 24px; background: rgba(14,26,43,.45);
+  backdrop-filter: blur(2px);
+  animation: mo-in .16s ease;
+}
+@keyframes mo-in { from { opacity: 0; } }
+
+.mech-panel {
+  width: min(620px, 100%); max-height: min(86vh, 780px);
+  display: flex; flex-direction: column;
+  background: var(--paper); border-radius: 12px;
+  border: 1px solid var(--rule);
+  box-shadow: 0 24px 70px rgba(14,26,43,.28);
+  animation: mp-in .18s cubic-bezier(.2,.7,.3,1);
+}
+.mech-panel.wide { width: min(880px, 100%); }
+@keyframes mp-in { from { transform: translateY(8px) scale(.99); opacity: 0; } }
+
+.mp-head {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 16px 18px 12px; border-bottom: 1px solid var(--rule);
+}
+.mp-titles { flex: 1; min-width: 0; }
+.mp-eyebrow {
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--mut);
+}
+.mp-head h3 { font-size: 17px; font-weight: 600; letter-spacing: -.015em; margin-top: 3px; }
+.mp-close {
+  flex: none; width: 30px; height: 30px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--rule); background: var(--paper);
+  font-size: 18px; line-height: 1; color: var(--mut);
+}
+.mp-close:hover { background: var(--soft); color: var(--ink); }
+
+.mp-body { padding: 4px 18px 16px; overflow-y: auto; }
+.mp-body .mech { padding-top: 12px; }
+.mp-body .mech > * + * { margin-top: 12px; }
+.mp-body .mech-prompt { font-size: 15px; line-height: 1.45; }
+.mp-body .triage-t, .mp-body .recall-row { font-size: 13.5px; }
+.mp-body .triage-row { padding: 8px 10px; }
+.mp-body .tg { font-size: 11px; padding: 4px 9px; }
+.mp-body .mech-note, .mp-body .mech-verdict { font-size: 13px; }
+.mp-body .duel-opt b { font-size: 14px; }
+.mp-body .duel-sub { font-size: 11.5px; }
+.mp-body .rung-q { font-size: 13.5px; }
+.mp-body .rung-c { font-size: 12.5px; padding: 6px 12px; }
+.mp-body .mech-go { width: auto; padding: 8px 18px; font-size: 13px; }
+
+/* the two space-hungry mechanics, now with room to breathe */
+.mech-panel.wide .build-track { flex-wrap: nowrap; gap: 6px; }
+.mech-panel.wide .slot { flex: 1 1 0; min-height: 58px; font-size: 12.5px; padding: 8px; }
+.mech-panel.wide .build-arrow { font-size: 14px; }
+.mech-panel.wide .palette { gap: 6px; margin-top: 4px; }
+.mech-panel.wide .chip { font-size: 12.5px; padding: 6px 12px; }
+.mech-panel.wide .dash { grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.mech-panel.wide .dash-card { padding: 12px; }
+.mech-panel.wide .dash-name { font-size: 13px; }
+.mech-panel.wide .dash-metric { font-size: 12px; }
+.mech-panel.wide .dash-delta { font-size: 11.5px; }
+
+.mp-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 18px; border-top: 1px solid var(--rule); background: var(--soft);
+  border-radius: 0 0 12px 12px;
+}
+.mp-hint { font-family: var(--mono); font-size: 11.5px; color: var(--mut); }
+.mp-done {
+  border: 1px solid var(--blue); background: var(--blue); color: #fff;
+  font: 500 13px var(--sans); padding: 7px 18px; border-radius: 7px; cursor: pointer;
+}
+.mp-done:hover { background: var(--blue-deep); }
+
+@media (max-width: 720px) {
+  .mech-overlay { padding: 0; place-items: end stretch; }
+  .mech-panel, .mech-panel.wide {
+    width: 100%; max-height: 92vh; border-radius: 14px 14px 0 0; border-bottom: 0;
+  }
+  .mech-panel.wide .build-track { flex-wrap: wrap; }
+  .mech-panel.wide .slot { flex: 1 1 44%; }
+  .mech-panel.wide .dash { grid-template-columns: 1fr 1fr; }
+  .mp-foot { border-radius: 0; }
+}
+
+/* builder affordance: empty slots read as numbered positions */
+.mech-hint { font-size: 12px; color: var(--mut); line-height: 1.5; }
+.slot:not(.filled) { color: transparent; position: relative; }
+.slot:not(.filled)::after {
+  content: attr(data-n); position: absolute; inset: 0;
+  display: grid; place-items: center;
+  font-family: var(--mono); font-size: 13px; color: #A9BAD8;
+}
+.slot:not(.filled):hover::after { color: var(--blue); }

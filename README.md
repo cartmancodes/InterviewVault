@@ -61,13 +61,33 @@ node tools/check-site.mjs        # no broken links, missing assets or dead ancho
 A failure in any of them fails the build, so a broken diagram or a dangling cross-link
 cannot reach the published site.
 
+### Practice sidecar
+
+The 28 interview-answer docs carry a client-side practice layer: a sidecar beside the
+article with tier-scoped checkpoints (Mid / Senior / Staff+), six mechanics, XP and a
+streak. Progress is one JSON blob in `localStorage` — no account, no backend, nothing
+leaves the browser. The [vault map](site/progress/) shows coverage across every doc.
+
+Challenge content comes from two places:
+
+| Source | Mechanics | Coverage |
+|---|---|---|
+| Extracted from the markdown at build time | requirements triage, win conditions | 28 docs |
+| Hand-authored in [`content/challenges/`](content/challenges/) | tradeoff duel, capacity ladder, architecture builder, spot the bottleneck | Bitly |
+
+Triage comes straight from each doc's own `In scope` / `Out of scope` lists, and win
+conditions from its Insider Tips. To add authored challenges for another doc, drop a
+`content/challenges/<slug>.json` alongside `bitly.json` and rebuild — authored
+checkpoints override extracted ones with the same id.
+
 ### How the build works
 
 | File | Job |
 |---|---|
 | [tools/render-diagrams.mjs](tools/render-diagrams.mjs) | Extracts every mermaid block, renders it through headless Chrome, writes `site/assets/diagrams/<hash>.svg`. Re-runs only for new diagrams. |
 | [tools/build-site.mjs](tools/build-site.mjs) | Walks the collections, converts markdown to HTML, rewrites internal links and image paths, injects the rendered diagrams, and emits the pages, index and sitemap. |
-| [tools/template/](tools/template/) | The design system: `site.css`, the home-page filter, the TOC highlighter, favicon, and Cloudflare `_headers` / `_redirects`. |
+| [tools/gen-challenges.mjs](tools/gen-challenges.mjs) | Extracts requirements triage and win conditions from each answer doc, merges the hand-authored JSON, and emits the checkpoint set the sidecar runs. |
+| [tools/template/](tools/template/) | The design system and client code: `site.css`, `vault.js` (sidecar + mechanics), `progress.js` (vault map), the home-page filter, the TOC highlighter, favicon, and Cloudflare `_headers` / `_redirects`. |
 
 Adding a document is just adding a markdown file to one of the collection folders and
 rebuilding — it appears in the library, the section nav, and the sitemap automatically.
