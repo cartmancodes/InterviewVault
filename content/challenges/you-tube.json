@@ -1,0 +1,169 @@
+{
+  "slug": "you-tube",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "A 20 GB upload over hotel Wi-Fi. How does it reach storage?",
+      "options": [
+        {
+          "id": "single",
+          "label": "Single POST through the API",
+          "sub": "stream to the app server",
+          "correct": false,
+          "verdict": "One dropped connection at 19 GB and the user starts over. You have also put tens of gigabytes through your application tier, which now needs bandwidth and memory it otherwise would not."
+        },
+        {
+          "id": "multipart",
+          "label": "Presigned multipart direct to blob storage",
+          "sub": "client uploads chunks, resumable",
+          "correct": true,
+          "verdict": "The client talks straight to object storage, so bytes never traverse your servers. A failed chunk is retried alone, which is the only design that survives a flaky connection at this size."
+        }
+      ],
+      "defend": {
+        "prompt": "What does going direct to storage force you to handle?",
+        "options": [
+          {
+            "label": "The upload completes without your server knowing",
+            "correct": true
+          },
+          {
+            "label": "You need storage events or reconciliation to learn about it",
+            "correct": true
+          },
+          {
+            "label": "Presigned URLs need tight expiry and size limits",
+            "correct": true
+          },
+          {
+            "label": "You lose the ability to transcode",
+            "correct": false
+          }
+        ],
+        "explain": "Transcoding happens after the object lands, triggered by a storage event. The real cost is that your metadata and the actual bytes can disagree, which is why you write a pending row first and reconcile."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "Roughly 1M uploads/day and 100M watch sessions/day.",
+      "rungs": [
+        {
+          "q": "Read-to-write ratio",
+          "choices": [
+            "10:1",
+            "100:1",
+            "1000:1"
+          ],
+          "answer": 1,
+          "note": "100M watches against 1M uploads."
+        },
+        {
+          "q": "Catalogue growth per year",
+          "choices": [
+            "36M videos",
+            "365M videos",
+            "3.6B videos"
+          ],
+          "answer": 1,
+          "note": "1M/day x 365."
+        },
+        {
+          "q": "What dominates cost",
+          "choices": [
+            "Storage of source files",
+            "Transcoding and egress"
+          ],
+          "answer": 1,
+          "note": "Every upload is transcoded into many renditions, and every watch is egress."
+        }
+      ],
+      "explain": "Upload is rare and expensive; watch is constant and must be cheap. That asymmetry is why renditions are precomputed and pushed to the edge."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the watch path for a popular video.",
+      "palette": [
+        "Client",
+        "CDN",
+        "API Gateway",
+        "Video Service",
+        "Metadata DB",
+        "Blob Storage",
+        "Transcoder",
+        "Kafka",
+        "Recommendation Service"
+      ],
+      "slots": [
+        {
+          "accept": "Client"
+        },
+        {
+          "accept": "CDN"
+        },
+        {
+          "accept": "API Gateway"
+        },
+        {
+          "accept": "Video Service"
+        },
+        {
+          "accept": "Metadata DB"
+        }
+      ],
+      "explain": "Segments come from the CDN and never touch your origin — that is the whole game at 100M sessions/day. The API path only resolves metadata and a manifest. Transcoder and Kafka belong to the upload path; they must not appear on a watch."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Playback start time doubled. Only for videos uploaded in the last hour.",
+      "cards": [
+        {
+          "name": "CDN",
+          "metric": "hit rate 62%",
+          "delta": "-33pt",
+          "state": "warn"
+        },
+        {
+          "name": "Video Service",
+          "metric": "p99 40ms",
+          "delta": "+4ms",
+          "state": "ok"
+        },
+        {
+          "name": "Transcoder",
+          "metric": "queue depth 90k",
+          "delta": "+90k",
+          "state": "hot"
+        },
+        {
+          "name": "Blob Storage",
+          "metric": "p99 25ms",
+          "delta": "+2ms",
+          "state": "ok"
+        }
+      ],
+      "answer": "Transcoder",
+      "explain": "Only new videos are slow, which rules out anything shared with the back catalogue. The transcode queue is 90k deep, so recent uploads have no low-bitrate renditions ready — players fall back to the source file, which is huge, uncached and slow to start. The CDN miss rate is a consequence of serving objects that were never meant to be served directly.",
+      "wrong": {
+        "CDN": "The miss rate is real but downstream — new videos are missing because their renditions do not exist yet.",
+        "Blob Storage": "Storage is fast; the objects being requested are simply the wrong ones.",
+        "Video Service": "Metadata resolution is healthy and unrelated to rendition availability."
+      }
+    }
+  ]
+}

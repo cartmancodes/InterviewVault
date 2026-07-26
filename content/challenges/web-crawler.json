@@ -1,0 +1,174 @@
+{
+  "slug": "web-crawler",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "10B pages in 5 days. What governs the fetch order?",
+      "options": [
+        {
+          "id": "naive",
+          "label": "One global URL queue",
+          "sub": "FIFO across all hosts",
+          "correct": false,
+          "verdict": "Simple, and it will get you blocked within the hour. A breadth-first frontier naturally clusters many URLs from the same host together, so you hammer one origin while the rest of the internet idles."
+        },
+        {
+          "id": "perhost",
+          "label": "Per-host queues with politeness",
+          "sub": "one worker per host, backoff on 429",
+          "correct": true,
+          "verdict": "Politeness is a per-host property, so the queue has to be per-host too. Throughput comes from crawling many hosts concurrently, not from crawling one host quickly."
+        }
+      ],
+      "defend": {
+        "prompt": "What does per-host queueing force you to handle?",
+        "options": [
+          {
+            "label": "Rebalancing when one host has millions of URLs",
+            "correct": true
+          },
+          {
+            "label": "Honouring robots.txt and Crawl-delay per host",
+            "correct": true
+          },
+          {
+            "label": "Jittered exponential backoff after a 429 or 503",
+            "correct": true
+          },
+          {
+            "label": "Giving up breadth-first discovery entirely",
+            "correct": false
+          }
+        ],
+        "explain": "Discovery order is unchanged — you still find URLs breadth-first, you just fetch them politely. The new work is per-host scheduling, robots caching, and backoff with jitter so retries do not resynchronise into a thundering herd."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "10B pages in 5 days, roughly 2 MB of HTML each.",
+      "rungs": [
+        {
+          "q": "Required steady throughput",
+          "choices": [
+            "230 pages/s",
+            "2.3k pages/s",
+            "23k pages/s",
+            "230k pages/s"
+          ],
+          "answer": 2,
+          "note": "10B / (5 x 86,400). Peak has to exceed this, since no crawl runs flat."
+        },
+        {
+          "q": "Raw HTML volume",
+          "choices": [
+            "200 TB",
+            "2 PB",
+            "20 PB",
+            "200 PB"
+          ],
+          "answer": 2,
+          "note": "10B x 2 MB. Text extract is far smaller, but the raw fetch still crosses the wire."
+        },
+        {
+          "q": "What that implies for storage",
+          "choices": [
+            "Keep raw HTML forever",
+            "Extract text, discard most raw HTML"
+          ],
+          "answer": 1,
+          "note": "At 20 PB you keep the extract and a sample, not every byte you fetched."
+        }
+      ],
+      "explain": "23k pages/sec is a concurrency problem, not a bandwidth problem — it is thousands of hosts in flight at once, each politely slow."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the crawl loop from frontier to stored text.",
+      "palette": [
+        "URL Frontier",
+        "Politeness Scheduler",
+        "Fetcher",
+        "Parser",
+        "Content Store",
+        "Dedup Filter",
+        "robots.txt Cache",
+        "DNS Cache",
+        "Kafka"
+      ],
+      "slots": [
+        {
+          "accept": "URL Frontier"
+        },
+        {
+          "accept": "Politeness Scheduler"
+        },
+        {
+          "accept": "Fetcher"
+        },
+        {
+          "accept": "Parser"
+        },
+        {
+          "accept": "Dedup Filter"
+        },
+        {
+          "accept": "Content Store"
+        }
+      ],
+      "explain": "The scheduler sits between the frontier and the fetchers because politeness is what decides when a URL may be fetched, not what is next in line. Dedup runs before storage so near-identical pages never reach it. The robots and DNS caches serve the fetcher; they are not stages of the pipeline."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Crawl rate collapsed from 23k to 4k pages/sec. Error rate is climbing.",
+      "cards": [
+        {
+          "name": "URL Frontier",
+          "metric": "depth 900M",
+          "delta": "+40M",
+          "state": "ok"
+        },
+        {
+          "name": "DNS Cache",
+          "metric": "hit rate 41%",
+          "delta": "-52pt",
+          "state": "hot"
+        },
+        {
+          "name": "Fetcher pool",
+          "metric": "utilisation 22%",
+          "delta": "-60pt",
+          "state": "warn"
+        },
+        {
+          "name": "Content Store",
+          "metric": "write p99 30ms",
+          "delta": "+4ms",
+          "state": "ok"
+        }
+      ],
+      "answer": "DNS Cache",
+      "explain": "Fetcher utilisation fell, which means workers are idle — they are blocked, not busy. The DNS cache hit rate collapsed, so most fetches now wait on a fresh resolution before a single byte moves. A crawler is one of the few systems where DNS is on the hot path for every request, which is why the resolver cache is infrastructure and not an optimisation.",
+      "wrong": {
+        "Fetcher pool": "Low utilisation is the symptom of blocked workers. Ask what they are waiting on.",
+        "URL Frontier": "There is plenty of work queued — that is the opposite of a bottleneck.",
+        "Content Store": "Writes are fast, and there are fewer of them than before."
+      }
+    }
+  ]
+}

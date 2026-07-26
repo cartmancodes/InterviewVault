@@ -1,0 +1,172 @@
+{
+  "slug": "ad-click-aggregator",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "10k clicks/sec, and advertisers must not be billed twice.",
+      "options": [
+        {
+          "id": "atleast",
+          "label": "At-least-once with no dedup",
+          "sub": "retry on failure",
+          "correct": false,
+          "verdict": "You will never lose a click, and you will bill for some of them twice. In an ads pipeline that is a financial error, not a metrics rounding issue — retries are guaranteed, so duplicates are guaranteed."
+        },
+        {
+          "id": "idem",
+          "label": "Idempotency key per click",
+          "sub": "dedup on click_id in the aggregation window",
+          "correct": true,
+          "verdict": "Give every click a unique id at the edge and deduplicate before aggregation. Retries stay safe, and the count converges to the truth regardless of how many times a message is delivered."
+        }
+      ],
+      "defend": {
+        "prompt": "What does per-click idempotency require?",
+        "options": [
+          {
+            "label": "A unique id generated at the point of click",
+            "correct": true
+          },
+          {
+            "label": "Dedup state bounded by a time window",
+            "correct": true
+          },
+          {
+            "label": "Accepting that dedup state cannot be kept forever",
+            "correct": true
+          },
+          {
+            "label": "Exactly-once delivery from the message broker",
+            "correct": false
+          }
+        ],
+        "explain": "You do not need exactly-once delivery — that is the point. Idempotent processing over at-least-once delivery is what makes the guarantee cheap, and the only real cost is bounding how long you remember ids."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "Roughly 100M clicks/day, peaking around 10k/sec.",
+      "rungs": [
+        {
+          "q": "Average clicks per second",
+          "choices": [
+            "115",
+            "1.15k",
+            "11.5k"
+          ],
+          "answer": 0,
+          "note": "100M / 86,400 ~ 1.2k/sec average against a 10k peak."
+        },
+        {
+          "q": "Peak-to-average ratio",
+          "choices": [
+            "~1x",
+            "~10x",
+            "~100x"
+          ],
+          "answer": 1,
+          "note": "Which is why the ingest path queues rather than writes straight through."
+        },
+        {
+          "q": "What advertisers need most",
+          "choices": [
+            "Sub-second freshness",
+            "Correct totals"
+          ],
+          "answer": 1,
+          "note": "Near-real-time is welcome; being billed correctly is mandatory."
+        }
+      ],
+      "explain": "A ~10x peak is absorbed by a queue. Correctness over freshness is what makes that queue acceptable — a minute of lag is fine, a double charge is not."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the ingest path from click to queryable aggregate.",
+      "palette": [
+        "Ad Click",
+        "Click Service",
+        "Kafka",
+        "Stream Processor",
+        "OLAP Store",
+        "Dashboard",
+        "Redis dedup",
+        "Blob Archive",
+        "Batch Reconciler"
+      ],
+      "slots": [
+        {
+          "accept": "Ad Click"
+        },
+        {
+          "accept": "Click Service"
+        },
+        {
+          "accept": "Kafka"
+        },
+        {
+          "accept": "Stream Processor"
+        },
+        {
+          "accept": "OLAP Store"
+        },
+        {
+          "accept": "Dashboard"
+        }
+      ],
+      "explain": "Kafka decouples the click from the aggregation so a 10x spike queues instead of dropping. The stream processor windows and dedups; the OLAP store answers advertiser queries. The batch reconciler recomputes from the archive to correct drift — offline, never in the serving path."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Advertiser dashboards show numbers 15% higher than the nightly reconciliation.",
+      "cards": [
+        {
+          "name": "Click Service",
+          "metric": "p99 11ms",
+          "delta": "+1ms",
+          "state": "ok"
+        },
+        {
+          "name": "Kafka",
+          "metric": "lag 200k",
+          "delta": "+50k",
+          "state": "warn"
+        },
+        {
+          "name": "Redis dedup",
+          "metric": "hit rate 71%",
+          "delta": "-24pt",
+          "state": "hot"
+        },
+        {
+          "name": "OLAP Store",
+          "metric": "query p99 300ms",
+          "delta": "+20ms",
+          "state": "ok"
+        }
+      ],
+      "answer": "Redis dedup",
+      "explain": "Over-counting, not under-counting, points at deduplication rather than loss. The dedup hit rate fell 24 points — click ids are expiring from the window before their retries arrive, so redelivered clicks are being counted as new. Either the TTL is shorter than the retry horizon, or eviction under memory pressure is dropping ids early.",
+      "wrong": {
+        "Kafka": "Lag would make dashboards lag behind, not overshoot.",
+        "OLAP Store": "It is faithfully aggregating what it was given — including the duplicates.",
+        "Click Service": "Ingest is healthy; the problem is what happens to retries downstream."
+      }
+    }
+  ]
+}

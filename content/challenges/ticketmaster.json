@@ -1,0 +1,170 @@
+{
+  "slug": "ticketmaster",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "A hot on-sale opens. Two users click the same seat in the same millisecond.",
+      "options": [
+        {
+          "id": "forupdate",
+          "label": "SELECT ... FOR UPDATE",
+          "sub": "row lock held through checkout",
+          "correct": false,
+          "verdict": "Correct, and it is what most candidates reach for. The problem is duration: the lock is held while the user types their card details, so a row is pinned for minutes and the connection pool drains under a 10M-user spike."
+        },
+        {
+          "id": "redis",
+          "label": "Redis lock with TTL",
+          "sub": "SET NX PX on seat id",
+          "correct": true,
+          "verdict": "The reservation becomes a short-lived key that expires on its own. A crashed service or an abandoned checkout releases the seat without a human, and Postgres only sees a write at confirmation."
+        }
+      ],
+      "defend": {
+        "prompt": "What does the TTL approach still owe you?",
+        "options": [
+          {
+            "label": "Postgres must still enforce uniqueness at confirm time",
+            "correct": true
+          },
+          {
+            "label": "A slow user can lose the seat mid-checkout",
+            "correct": true
+          },
+          {
+            "label": "Redis becomes a correctness dependency, not just a cache",
+            "correct": true
+          },
+          {
+            "label": "It removes the need for a seat status column",
+            "correct": false
+          }
+        ],
+        "explain": "Redis is the fast path, never the record. The final INSERT still has to be conditional, or a Redis failover hands the same seat to two people."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "A 10M-concurrent on-sale, read-to-write roughly 100:1.",
+      "rungs": [
+        {
+          "q": "Which side dominates the load",
+          "choices": [
+            "Bookings",
+            "Browsing and search",
+            "Payments"
+          ],
+          "answer": 1,
+          "note": "100:1 means almost everything is reads — and reads are cacheable in a way bookings are not."
+        },
+        {
+          "q": "Search latency budget, p95",
+          "choices": [
+            "50ms",
+            "500ms",
+            "5s"
+          ],
+          "answer": 1,
+          "note": "~500ms p95 for search; seat reservation is tighter at ~200ms."
+        },
+        {
+          "q": "What must stay strongly consistent",
+          "choices": [
+            "Event pages",
+            "Seat availability at booking",
+            "Search results"
+          ],
+          "answer": 1,
+          "note": "Only the booking write. Everything else can be stale for seconds without anyone noticing."
+        }
+      ],
+      "explain": "The 100:1 ratio is permission to cache aggressively everywhere except the one write that must never double-sell."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the browse path so an on-sale surge never touches the booking database.",
+      "palette": [
+        "Browser",
+        "CDN",
+        "API Gateway",
+        "Search Service",
+        "Elasticsearch",
+        "Booking Service",
+        "Redis holds",
+        "Postgres",
+        "Kafka"
+      ],
+      "slots": [
+        {
+          "accept": "Browser"
+        },
+        {
+          "accept": "CDN"
+        },
+        {
+          "accept": "API Gateway"
+        },
+        {
+          "accept": "Search Service"
+        },
+        {
+          "accept": "Elasticsearch"
+        }
+      ],
+      "explain": "Event pages and search are served from the CDN and Elasticsearch, so the millions of browsers never reach Postgres. Booking Service, Redis holds and Postgres are the write path — deliberately a separate, much narrower pipe."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Seat maps are stale by minutes during an on-sale. Bookings are fine.",
+      "cards": [
+        {
+          "name": "CDN",
+          "metric": "hit rate 97%",
+          "delta": "+9pt",
+          "state": "warn"
+        },
+        {
+          "name": "Elasticsearch",
+          "metric": "p99 120ms",
+          "delta": "+15ms",
+          "state": "ok"
+        },
+        {
+          "name": "Booking Service",
+          "metric": "p99 180ms",
+          "delta": "+20ms",
+          "state": "ok"
+        },
+        {
+          "name": "Postgres primary",
+          "metric": "p99 30ms",
+          "delta": "+6ms",
+          "state": "ok"
+        }
+      ],
+      "answer": "CDN",
+      "explain": "The hit rate went up, which looks like a win and is actually the bug. Seat availability got cached with the same long TTL as static event metadata, so the CDN is now confidently serving sold seats. Availability needs a very short TTL or no caching at all; the event page around it can stay cached for hours.",
+      "wrong": {
+        "Booking Service": "Bookings are succeeding — the write path is healthy. The lie is on the read path.",
+        "Elasticsearch": "Search is serving the documents it was given; nobody has told it seats changed.",
+        "Postgres primary": "Postgres holds the truth. The question is who is not asking it."
+      }
+    }
+  ]
+}

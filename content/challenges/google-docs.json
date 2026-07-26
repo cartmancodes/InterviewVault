@@ -1,0 +1,169 @@
+{
+  "slug": "google-docs",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "Two people type in the same paragraph at the same moment.",
+      "options": [
+        {
+          "id": "crdt",
+          "label": "CRDTs",
+          "sub": "position ids, tombstones, commutative ops",
+          "correct": false,
+          "verdict": "Genuinely elegant and it removes the need for a central server — which is why it wins for peer-to-peer and offline. The costs here are memory that only grows (tombstones are never removed) and conflict resolution that can read as untidy in plain text."
+        },
+        {
+          "id": "ot",
+          "label": "Operational Transformation",
+          "sub": "central server rewrites concurrent ops",
+          "correct": true,
+          "verdict": "Each edit is transformed against the ops that preceded it, so both clients converge. It needs one server to order operations, which you already have, and it is low-memory and well suited to text."
+        }
+      ],
+      "defend": {
+        "prompt": "What does OT commit you to?",
+        "options": [
+          {
+            "label": "A central server that orders all operations",
+            "correct": true
+          },
+          {
+            "label": "Transform logic on the client as well as the server",
+            "correct": true
+          },
+          {
+            "label": "A bounded number of concurrent editors per document",
+            "correct": true
+          },
+          {
+            "label": "Losing the ability to show live cursors",
+            "correct": false
+          }
+        ],
+        "explain": "Cursors are ephemeral presence data and unaffected. OT buys low memory and good text behaviour at the cost of a central ordering point — which is exactly why the requirement caps concurrent editors."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "Collaborative editing with a deliberate cap on concurrent editors.",
+      "rungs": [
+        {
+          "q": "Concurrent editors per document",
+          "choices": [
+            "10",
+            "100",
+            "10,000"
+          ],
+          "answer": 1,
+          "note": "Capping it is what makes central-server OT viable at all."
+        },
+        {
+          "q": "Update latency budget",
+          "choices": [
+            "100ms",
+            "500ms",
+            "2s"
+          ],
+          "answer": 0,
+          "note": "Under ~100ms, or typing feels laggy to collaborators."
+        },
+        {
+          "q": "Where cursor position is stored",
+          "choices": [
+            "The document",
+            "In memory, per connection"
+          ],
+          "answer": 1,
+          "note": "Presence is ephemeral — it dies with the connection and is never persisted."
+        }
+      ],
+      "explain": "The editor cap is the constraint that lets one server own ordering for a document. Remove it and you are forced toward CRDTs."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the edit path for a keystroke.",
+      "palette": [
+        "Browser",
+        "Load Balancer",
+        "Document Service",
+        "OT Engine",
+        "Operations DB",
+        "Redis presence",
+        "Compaction Service",
+        "ZooKeeper",
+        "Blob Storage"
+      ],
+      "slots": [
+        {
+          "accept": "Browser"
+        },
+        {
+          "accept": "Load Balancer"
+        },
+        {
+          "accept": "Document Service"
+        },
+        {
+          "accept": "OT Engine"
+        },
+        {
+          "accept": "Operations DB"
+        }
+      ],
+      "explain": "All editors of a document must reach the same server, so the load balancer routes by document id — that consistent-hash decision is what makes central OT possible. Operations are appended durably before broadcast. Presence and compaction sit beside this path, not in it."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Documents open slowly. Editing them, once open, is instant.",
+      "cards": [
+        {
+          "name": "Load Balancer",
+          "metric": "p99 8ms",
+          "delta": "+1ms",
+          "state": "ok"
+        },
+        {
+          "name": "OT Engine",
+          "metric": "transform p99 3ms",
+          "delta": "0",
+          "state": "ok"
+        },
+        {
+          "name": "Operations DB",
+          "metric": "rows/doc 2.1M",
+          "delta": "+2M",
+          "state": "hot"
+        },
+        {
+          "name": "Redis presence",
+          "metric": "p99 0.6ms",
+          "delta": "0",
+          "state": "ok"
+        }
+      ],
+      "answer": "Operations DB",
+      "explain": "Opening a document replays its entire operation log; editing only applies the newest op. A document with 2.1M un-compacted operations therefore takes seconds to open and microseconds to edit. Compaction — collapsing the log into a snapshot and flipping the version pointer — has stopped running.",
+      "wrong": {
+        "OT Engine": "3ms per transform. It is fast; it is just being asked to do it two million times.",
+        "Redis presence": "Presence is unrelated to document load time.",
+        "Load Balancer": "Routing is healthy — the request reaches the right server quickly."
+      }
+    }
+  ]
+}

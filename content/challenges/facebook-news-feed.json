@@ -1,0 +1,169 @@
+{
+  "slug": "facebook-news-feed",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "A user follows 5,000 accounts. How is their feed assembled?",
+      "options": [
+        {
+          "id": "pull",
+          "label": "Fan-out on read",
+          "sub": "query all followees at request time",
+          "correct": false,
+          "verdict": "No write amplification and always fresh — but a feed load becomes thousands of queries plus a merge sort, on the read path, for a system with a 50:1 read bias. You have optimised the rare operation."
+        },
+        {
+          "id": "push",
+          "label": "Fan-out on write",
+          "sub": "precompute into per-user timelines",
+          "correct": true,
+          "verdict": "Reads become a single sequential fetch of an already-built list. You pay at write time, which is 50x rarer, and that is exactly the trade the read:write ratio is telling you to make."
+        }
+      ],
+      "defend": {
+        "prompt": "Where does pure fan-out on write break?",
+        "options": [
+          {
+            "label": "An account with 100M followers makes one post 100M writes",
+            "correct": true
+          },
+          {
+            "label": "Inactive users get timelines built that nobody reads",
+            "correct": true
+          },
+          {
+            "label": "Celebrity posts must be merged at read time instead",
+            "correct": true
+          },
+          {
+            "label": "Feed reads get slower as following count grows",
+            "correct": false
+          }
+        ],
+        "explain": "Read cost is now flat regardless of following count — that is the win. The break is the celebrity tail, which is why real systems run a hybrid: push for the ordinary case, pull for the handful of accounts where fan-out is absurd."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "Twitter's published shape: 300K read QPS against 6K write QPS.",
+      "rungs": [
+        {
+          "q": "Read-to-write ratio",
+          "choices": [
+            "5:1",
+            "50:1",
+            "500:1"
+          ],
+          "answer": 1,
+          "note": "300K / 6K. This single number drives the whole design."
+        },
+        {
+          "q": "Which operation should be expensive",
+          "choices": [
+            "The read",
+            "The write"
+          ],
+          "answer": 1,
+          "note": "Make the 50x rarer operation do the work."
+        },
+        {
+          "q": "Feed retrieval latency budget",
+          "choices": [
+            "50ms",
+            "500ms",
+            "5s"
+          ],
+          "answer": 1,
+          "note": "Under 500ms, with a tweet reaching timelines within seconds."
+        }
+      ],
+      "explain": "A 50:1 ratio is permission to do real work on write. Invert the ratio and fan-out on write becomes the wrong answer."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the read path for a user opening their feed.",
+      "palette": [
+        "Client",
+        "CDN",
+        "API Gateway",
+        "Feed Service",
+        "Redis timeline",
+        "Fanout Workers",
+        "Cassandra",
+        "Kafka",
+        "Graph Service"
+      ],
+      "slots": [
+        {
+          "accept": "Client"
+        },
+        {
+          "accept": "API Gateway"
+        },
+        {
+          "accept": "Feed Service"
+        },
+        {
+          "accept": "Redis timeline"
+        },
+        {
+          "accept": "Cassandra"
+        }
+      ],
+      "explain": "The timeline is already materialised in Redis, so a feed load is one fetch plus hydration of post bodies from Cassandra. Fanout Workers and Kafka build that timeline asynchronously on the write path — they must never appear on a read."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Feeds load fast, but a celebrity's post takes 40 minutes to appear for everyone.",
+      "cards": [
+        {
+          "name": "Feed Service",
+          "metric": "p99 60ms",
+          "delta": "+5ms",
+          "state": "ok"
+        },
+        {
+          "name": "Redis timeline",
+          "metric": "hit rate 96%",
+          "delta": "-1pt",
+          "state": "ok"
+        },
+        {
+          "name": "Fanout Workers",
+          "metric": "queue depth 80M",
+          "delta": "+80M",
+          "state": "hot"
+        },
+        {
+          "name": "Cassandra",
+          "metric": "read p99 9ms",
+          "delta": "+1ms",
+          "state": "ok"
+        }
+      ],
+      "answer": "Fanout Workers",
+      "explain": "One post to 100M followers is 100M timeline writes, and the fanout queue is now 80M deep — every ordinary user's post is stuck behind it. This is precisely the case the hybrid exists for: accounts above a follower threshold should not fan out at all, and instead be merged into the timeline at read time.",
+      "wrong": {
+        "Redis timeline": "96% hit rate — reads are healthy, which is why feeds still feel fast.",
+        "Feed Service": "60ms p99. It is serving timelines correctly; they are just missing a post.",
+        "Cassandra": "Post bodies are being fetched fine. The problem is which post ids made it into the timeline."
+      }
+    }
+  ]
+}

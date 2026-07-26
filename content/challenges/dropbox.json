@@ -1,0 +1,168 @@
+{
+  "slug": "dropbox",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "Someone edits one paragraph of a 5 GB video project. What syncs?",
+      "options": [
+        {
+          "id": "whole",
+          "label": "Re-upload the file",
+          "sub": "replace the object",
+          "correct": false,
+          "verdict": "Simple and correct, and it moves 5 GB to reflect a change of a few kilobytes. On a laptop tether that is the difference between a sync that finishes and one that never does."
+        },
+        {
+          "id": "chunk",
+          "label": "Content-defined chunking",
+          "sub": "hash chunks, upload only changed ones",
+          "correct": true,
+          "verdict": "Split the file into content-addressed chunks and send only the hashes that are new. Identical chunks across users deduplicate for free, which is where most of the storage saving comes from too."
+        }
+      ],
+      "defend": {
+        "prompt": "What does chunking buy beyond bandwidth?",
+        "options": [
+          {
+            "label": "Cross-user deduplication of identical chunks",
+            "correct": true
+          },
+          {
+            "label": "Resumable uploads at chunk granularity",
+            "correct": true
+          },
+          {
+            "label": "Cheap integrity checks per chunk",
+            "correct": true
+          },
+          {
+            "label": "Simpler metadata",
+            "correct": false
+          }
+        ],
+        "explain": "Metadata gets considerably harder — every file becomes an ordered chunk list, and you now maintain a reference-counted chunk store. That complexity is the price for moving kilobytes instead of gigabytes."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "Files up to 50 GB, synced across devices.",
+      "rungs": [
+        {
+          "q": "Largest single file",
+          "choices": [
+            "500 MB",
+            "5 GB",
+            "50 GB"
+          ],
+          "answer": 2,
+          "note": "Which rules out anything that buffers the file in memory."
+        },
+        {
+          "q": "What a one-line edit should transfer",
+          "choices": [
+            "The whole file",
+            "Only changed chunks"
+          ],
+          "answer": 1,
+          "note": "The entire point of content-defined chunking."
+        },
+        {
+          "q": "Where the bytes should flow",
+          "choices": [
+            "Through the app servers",
+            "Client direct to blob storage"
+          ],
+          "answer": 1,
+          "note": "Presigned URLs keep 50 GB off your application tier."
+        }
+      ],
+      "explain": "At 50 GB every design that touches the whole file — in memory, through your servers, on every edit — fails. Chunking makes each of those a bounded operation."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the upload path for a changed chunk.",
+      "palette": [
+        "Client",
+        "Chunker",
+        "API Gateway",
+        "Metadata Service",
+        "Blob Storage",
+        "Notification Service",
+        "Postgres",
+        "Kafka",
+        "CDN"
+      ],
+      "slots": [
+        {
+          "accept": "Client"
+        },
+        {
+          "accept": "Chunker"
+        },
+        {
+          "accept": "API Gateway"
+        },
+        {
+          "accept": "Metadata Service"
+        },
+        {
+          "accept": "Blob Storage"
+        }
+      ],
+      "explain": "The client chunks and hashes locally, asks the metadata service which hashes are missing, then uploads only those directly to blob storage. Notification and Kafka propagate the change to the user's other devices afterwards — deliberately after the bytes are durable."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Sync works, but two devices editing the same file produce a conflict copy every time.",
+      "cards": [
+        {
+          "name": "Chunker",
+          "metric": "throughput 40 MB/s",
+          "delta": "-2",
+          "state": "ok"
+        },
+        {
+          "name": "Metadata Service",
+          "metric": "p99 30ms",
+          "delta": "+3ms",
+          "state": "ok"
+        },
+        {
+          "name": "Version vector",
+          "metric": "conflict rate 100%",
+          "delta": "+100pt",
+          "state": "hot"
+        },
+        {
+          "name": "Blob Storage",
+          "metric": "p99 20ms",
+          "delta": "+1ms",
+          "state": "ok"
+        }
+      ],
+      "answer": "Version vector",
+      "explain": "Every concurrent edit is being flagged as a conflict, which means the system cannot tell 'B saw A's change' from 'B and A diverged'. That is a causality-tracking failure: a plain last-modified timestamp or a single version counter cannot express that one device's state descended from the other's. Version vectors per device are what make the common case a fast-forward instead of a conflict.",
+      "wrong": {
+        "Metadata Service": "It is applying the rule it was given, quickly. The rule is wrong.",
+        "Chunker": "Chunking is fine — the same chunks are being produced correctly.",
+        "Blob Storage": "Both versions stored successfully. Deciding which supersedes which is not storage's job."
+      }
+    }
+  ]
+}

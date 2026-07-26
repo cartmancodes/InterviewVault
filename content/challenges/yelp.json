@@ -1,0 +1,168 @@
+{
+  "slug": "yelp",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "10M businesses, and a user wants everything within 5km, ranked.",
+      "options": [
+        {
+          "id": "box",
+          "label": "Bounding-box query in Postgres",
+          "sub": "WHERE lat BETWEEN ... AND lng BETWEEN ...",
+          "correct": false,
+          "verdict": "Two independent range predicates, so the index can only really use one — the database scans a stripe of the planet and filters. It also gives you a rectangle when you asked for a radius, and it cannot rank."
+        },
+        {
+          "id": "geo",
+          "label": "Geo-aware search index",
+          "sub": "Elasticsearch geo_distance with scoring",
+          "correct": true,
+          "verdict": "One index that filters by true distance and ranks by relevance, rating and distance together. Proximity search and ranking are the same query here, and splitting them across two systems means merging two sorted lists in the application."
+        }
+      ],
+      "defend": {
+        "prompt": "What comes with putting search in Elasticsearch?",
+        "options": [
+          {
+            "label": "It is a derived store that must be kept in sync",
+            "correct": true
+          },
+          {
+            "label": "Ratings and review counts must be denormalised into the document",
+            "correct": true
+          },
+          {
+            "label": "It is eventually consistent with Postgres",
+            "correct": true
+          },
+          {
+            "label": "Postgres is no longer needed as the record",
+            "correct": false
+          }
+        ],
+        "explain": "Postgres stays the system of record — Elasticsearch is a projection of it. The costs are an indexing pipeline, denormalised aggregates, and accepting that a new review takes seconds to affect ranking."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "100M daily active users against roughly 10M businesses.",
+      "rungs": [
+        {
+          "q": "Search latency budget, p99",
+          "choices": [
+            "50ms",
+            "500ms",
+            "5s"
+          ],
+          "answer": 1,
+          "note": "Under 500ms p99 — search is the product."
+        },
+        {
+          "q": "Where avg_rating comes from",
+          "choices": [
+            "Computed per query",
+            "Denormalised on the business"
+          ],
+          "answer": 1,
+          "note": "Averaging hundreds of millions of reviews per query is not viable at 10M businesses."
+        },
+        {
+          "q": "Read-to-write shape",
+          "choices": [
+            "Write-heavy",
+            "Overwhelmingly read-heavy"
+          ],
+          "answer": 1,
+          "note": "People search constantly and review rarely, which is what makes the derived index affordable."
+        }
+      ],
+      "explain": "Denormalising the aggregate is what makes a 500ms budget reachable; keeping it correct is the price."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the search read path.",
+      "palette": [
+        "Browser",
+        "CDN",
+        "API Gateway",
+        "Search Service",
+        "Elasticsearch",
+        "Redis cache",
+        "Postgres",
+        "Kafka",
+        "Review Service"
+      ],
+      "slots": [
+        {
+          "accept": "Browser"
+        },
+        {
+          "accept": "API Gateway"
+        },
+        {
+          "accept": "Search Service"
+        },
+        {
+          "accept": "Redis cache"
+        },
+        {
+          "accept": "Elasticsearch"
+        }
+      ],
+      "explain": "Popular queries are answered from Redis before Elasticsearch is touched. Postgres holds the truth and Kafka carries review events into the index — both are off the search path, which is why a slow indexing pipeline degrades freshness rather than latency."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Search latency is fine. Ratings on result pages are days out of date.",
+      "cards": [
+        {
+          "name": "Redis cache",
+          "metric": "hit rate 88%",
+          "delta": "+1pt",
+          "state": "ok"
+        },
+        {
+          "name": "Elasticsearch",
+          "metric": "p99 90ms",
+          "delta": "+6ms",
+          "state": "ok"
+        },
+        {
+          "name": "Kafka",
+          "metric": "consumer lag 4M",
+          "delta": "+4M",
+          "state": "hot"
+        },
+        {
+          "name": "Postgres",
+          "metric": "p99 14ms",
+          "delta": "+2ms",
+          "state": "ok"
+        }
+      ],
+      "answer": "Kafka",
+      "explain": "Reviews are being written to Postgres correctly and search is serving quickly — the two have simply stopped talking. The indexing consumer that folds new reviews into the denormalised avg_rating is 4M events behind, so Elasticsearch is serving a correct answer to a stale document. Scale the indexer, or batch rating recomputation on a schedule rather than per review.",
+      "wrong": {
+        "Elasticsearch": "90ms and healthy. It is indexing whatever it is handed.",
+        "Redis cache": "An 88% hit rate on fast, wrong data is not the cause.",
+        "Postgres": "The reviews are all there — nothing has propagated them."
+      }
+    }
+  ]
+}

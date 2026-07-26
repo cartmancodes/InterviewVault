@@ -1,0 +1,175 @@
+{
+  "slug": "you-tube-top-k",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "700k view events/sec, and you need the top 100 videos this hour.",
+      "options": [
+        {
+          "id": "exact",
+          "label": "Exact counts per video",
+          "sub": "increment a counter for every video",
+          "correct": false,
+          "verdict": "Perfectly accurate and it does not fit. You are tracking billions of videos to answer a question about a hundred of them, and the counter table becomes the bottleneck for a result nobody needs to be exact."
+        },
+        {
+          "id": "sketch",
+          "label": "Space-Saving with a bounded slot set",
+          "sub": "~10k candidate heavy hitters",
+          "correct": true,
+          "verdict": "Top-K only needs the head of the distribution. A fixed ~10k-slot structure keeps plausible heavy hitters and evicts the rest, giving bounded memory and an error bound instead of an exact count of things that will never rank."
+        }
+      ],
+      "defend": {
+        "prompt": "What did the sketch cost you?",
+        "options": [
+          {
+            "label": "Counts are approximate, with a bounded error",
+            "correct": true
+          },
+          {
+            "label": "A video just outside the slot set can be missed",
+            "correct": true
+          },
+          {
+            "label": "You cannot answer 'exact views for video X' from it",
+            "correct": true
+          },
+          {
+            "label": "It stops working above a certain event rate",
+            "correct": false
+          }
+        ],
+        "explain": "Throughput is exactly what it is good at. You gave up exactness and tail visibility — which is why the sketch answers leaderboards while a separate durable counter answers 'how many views does my video have'."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "Roughly 70B Shorts views per day.",
+      "rungs": [
+        {
+          "q": "Average events per second",
+          "choices": [
+            "7k",
+            "70k",
+            "700k",
+            "7M"
+          ],
+          "answer": 2,
+          "note": "70B / 86,400. Peak is several times this."
+        },
+        {
+          "q": "Windows the system must answer",
+          "choices": [
+            "1h only",
+            "1h, 1d, 1m, all-time",
+            "arbitrary ranges"
+          ],
+          "answer": 1,
+          "note": "A fixed set of tumbling windows, which is what makes pre-aggregation possible."
+        },
+        {
+          "q": "Slots kept for candidate heavy hitters",
+          "choices": [
+            "100",
+            "10k",
+            "1M",
+            "1B"
+          ],
+          "answer": 1,
+          "note": "Bounded memory is the whole point — the structure must not grow with the catalogue."
+        }
+      ],
+      "explain": "Fixed windows plus a fixed slot budget turn an unbounded counting problem into a constant-memory one."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the path from a view event to a served leaderboard.",
+      "palette": [
+        "Client",
+        "Event Gateway",
+        "Kafka",
+        "Stream Aggregator",
+        "Space-Saving Sketch",
+        "Redis Sorted Set",
+        "API Service",
+        "Cassandra",
+        "Batch Reconciler"
+      ],
+      "slots": [
+        {
+          "accept": "Client"
+        },
+        {
+          "accept": "Event Gateway"
+        },
+        {
+          "accept": "Kafka"
+        },
+        {
+          "accept": "Stream Aggregator"
+        },
+        {
+          "accept": "Space-Saving Sketch"
+        },
+        {
+          "accept": "Redis Sorted Set"
+        }
+      ],
+      "explain": "Kafka absorbs the firehose, the aggregator maintains the sketch per window, and the materialised top-K lands in a Redis sorted set that the API reads in O(log n). The batch reconciler corrects drift offline — it must never sit between the event and the leaderboard."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "The 1-hour leaderboard is correct. The all-time leaderboard has stopped moving.",
+      "cards": [
+        {
+          "name": "Event Gateway",
+          "metric": "p99 8ms",
+          "delta": "+1ms",
+          "state": "ok"
+        },
+        {
+          "name": "Kafka",
+          "metric": "lag 90k",
+          "delta": "+10k",
+          "state": "ok"
+        },
+        {
+          "name": "Stream Aggregator",
+          "metric": "heap 94%",
+          "delta": "+38pt",
+          "state": "hot"
+        },
+        {
+          "name": "Redis Sorted Set",
+          "metric": "p99 0.8ms",
+          "delta": "+0.1ms",
+          "state": "ok"
+        }
+      ],
+      "answer": "Stream Aggregator",
+      "explain": "Short windows tumble and free their state; the all-time window never does. Its sketch grows until the aggregator is at 94% heap and can no longer update that window, while the hourly window — which resets — keeps working. All-time needs a bounded structure with periodic compaction, not an ever-growing accumulator.",
+      "wrong": {
+        "Kafka": "Lag is normal, and it would delay every window equally rather than just one.",
+        "Redis Sorted Set": "Redis is serving whatever it was last given, quickly.",
+        "Event Gateway": "Events are arriving fine — the hourly board proves it."
+      }
+    }
+  ]
+}

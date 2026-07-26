@@ -1,0 +1,171 @@
+{
+  "slug": "robinhood",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "An exchange trade must reach millions of client UIs in ~200ms.",
+      "options": [
+        {
+          "id": "poll",
+          "label": "Clients poll for quotes",
+          "sub": "GET /price every second",
+          "correct": false,
+          "verdict": "A million clients polling once a second is a million requests per second for data that mostly has not changed, and it still lags by up to a second. You pay full price for staleness."
+        },
+        {
+          "id": "push",
+          "label": "Push over persistent connections",
+          "sub": "fan out through a pub/sub tier",
+          "correct": true,
+          "verdict": "The exchange feed arrives once and is fanned out to subscribers. Cost tracks actual price changes rather than client count, and the latency budget becomes achievable."
+        }
+      ],
+      "defend": {
+        "prompt": "What does the push tier have to solve?",
+        "options": [
+          {
+            "label": "Fan-out to millions of concurrent sockets",
+            "correct": true
+          },
+          {
+            "label": "Coalescing updates for fast-moving symbols",
+            "correct": true
+          },
+          {
+            "label": "Resync after a client reconnects",
+            "correct": true
+          },
+          {
+            "label": "Guaranteeing every tick reaches every client",
+            "correct": false
+          }
+        ],
+        "explain": "Delivering every tick is neither possible nor wanted — a symbol can move faster than a screen refreshes. You send the latest value, coalescing intermediate ticks, and resync on reconnect."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "Market open, with price fanout under ~200ms p95.",
+      "rungs": [
+        {
+          "q": "Fanout latency budget, p95",
+          "choices": [
+            "200ms",
+            "2s",
+            "10s"
+          ],
+          "answer": 0,
+          "note": "Exchange event to client UI."
+        },
+        {
+          "q": "What market open looks like",
+          "choices": [
+            "Steady load",
+            "A burst several times normal"
+          ],
+          "answer": 1,
+          "note": "Which is why load shedding is designed in rather than improvised."
+        },
+        {
+          "q": "What must stay strongly consistent",
+          "choices": [
+            "Displayed prices",
+            "Balances and positions"
+          ],
+          "answer": 1,
+          "note": "A price a moment stale is tolerable; a wrong balance is not."
+        }
+      ],
+      "explain": "Two subsystems with opposite requirements sharing one product: a soft-real-time broadcast path and a strictly consistent transactional one."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the price fanout path.",
+      "palette": [
+        "Exchange Feed",
+        "Feed Handler",
+        "Kafka",
+        "Fanout Service",
+        "WebSocket Gateway",
+        "Client",
+        "Order Service",
+        "Ledger DB",
+        "Redis"
+      ],
+      "slots": [
+        {
+          "accept": "Exchange Feed"
+        },
+        {
+          "accept": "Feed Handler"
+        },
+        {
+          "accept": "Kafka"
+        },
+        {
+          "accept": "Fanout Service"
+        },
+        {
+          "accept": "WebSocket Gateway"
+        },
+        {
+          "accept": "Client"
+        }
+      ],
+      "explain": "The feed is normalised once, distributed through Kafka, and fanned out to socket gateways holding client connections. Order Service and the ledger are the transactional path — deliberately separate, because they must not be slowed by broadcast load or vice versa."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "At market open, prices freeze for 30 seconds. Orders still execute correctly.",
+      "cards": [
+        {
+          "name": "Feed Handler",
+          "metric": "p99 4ms",
+          "delta": "0",
+          "state": "ok"
+        },
+        {
+          "name": "Kafka",
+          "metric": "lag 8M",
+          "delta": "+8M",
+          "state": "hot"
+        },
+        {
+          "name": "WebSocket Gateway",
+          "metric": "connections 4.2M",
+          "delta": "+1.8M",
+          "state": "warn"
+        },
+        {
+          "name": "Order Service",
+          "metric": "p99 70ms",
+          "delta": "+6ms",
+          "state": "ok"
+        }
+      ],
+      "answer": "Kafka",
+      "explain": "Orders are unaffected, which confirms the transactional path is healthy and the fault is confined to broadcast. The fanout topic is 8M messages behind: at market open every symbol ticks at once, and the consumers cannot drain it. The fix is coalescing — collapse per-symbol updates so you publish the latest price rather than every intermediate tick.",
+      "wrong": {
+        "WebSocket Gateway": "More connections than usual, but it is delivering what it receives.",
+        "Feed Handler": "4ms — it is ingesting the exchange feed without difficulty.",
+        "Order Service": "Untouched, and that is the clue: the two paths are properly isolated."
+      }
+    }
+  ]
+}

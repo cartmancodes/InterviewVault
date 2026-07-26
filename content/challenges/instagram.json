@@ -1,0 +1,168 @@
+{
+  "slug": "instagram",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "500M DAU, ~100M posts/day, and a feed must load fast.",
+      "options": [
+        {
+          "id": "read",
+          "label": "Assemble the feed on read",
+          "sub": "query followees at request time",
+          "correct": false,
+          "verdict": "Fresh, and it puts a fan-in query on the most frequent operation in the product. For a read-heavy social graph that is the wrong side of the trade."
+        },
+        {
+          "id": "write",
+          "label": "Precompute timelines on write",
+          "sub": "push post ids to follower feeds",
+          "correct": true,
+          "verdict": "Reads become a single list fetch. You pay once per post rather than once per feed view, which at 500M DAU against 100M posts is overwhelmingly the cheaper side."
+        }
+      ],
+      "defend": {
+        "prompt": "What does precomputing timelines force on you?",
+        "options": [
+          {
+            "label": "Celebrity accounts need a pull-based exception",
+            "correct": true
+          },
+          {
+            "label": "Timelines are built for users who never open the app",
+            "correct": true
+          },
+          {
+            "label": "Feed storage grows with followers, not posts",
+            "correct": true
+          },
+          {
+            "label": "Posts take longer to create from the user's perspective",
+            "correct": false
+          }
+        ],
+        "explain": "The post is acknowledged immediately and fanned out asynchronously — the author never waits. The real costs are the celebrity tail, wasted work on dormant users, and storage that scales with the follow graph."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "~500M daily active users and ~100M posts per day.",
+      "rungs": [
+        {
+          "q": "Posts per second, average",
+          "choices": [
+            "115",
+            "1.2k",
+            "12k"
+          ],
+          "answer": 1,
+          "note": "100M / 86,400."
+        },
+        {
+          "q": "Which operation is far more frequent",
+          "choices": [
+            "Posting",
+            "Viewing a feed"
+          ],
+          "answer": 1,
+          "note": "Hundreds of millions of sessions against 100M posts — reads dominate heavily."
+        },
+        {
+          "q": "Where media should be served from",
+          "choices": [
+            "Application servers",
+            "CDN edge"
+          ],
+          "answer": 1,
+          "note": "Images and video are static and hot; they belong at the edge."
+        }
+      ],
+      "explain": "Posting is a modest write rate. The scale problem is the fan-out multiplier and the media egress, not the post itself."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the feed read path.",
+      "palette": [
+        "Client",
+        "CDN",
+        "API Gateway",
+        "Feed Service",
+        "Redis timeline",
+        "Post Store",
+        "Fanout Workers",
+        "Kafka",
+        "Blob Storage"
+      ],
+      "slots": [
+        {
+          "accept": "Client"
+        },
+        {
+          "accept": "API Gateway"
+        },
+        {
+          "accept": "Feed Service"
+        },
+        {
+          "accept": "Redis timeline"
+        },
+        {
+          "accept": "Post Store"
+        }
+      ],
+      "explain": "The timeline is a precomputed list of post ids in Redis; the post store hydrates them. Media comes from the CDN in a separate request the client makes directly. Fanout Workers and Kafka build timelines on the write path and never appear on a read."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Feeds load instantly but images take seconds to appear.",
+      "cards": [
+        {
+          "name": "Feed Service",
+          "metric": "p99 45ms",
+          "delta": "+4ms",
+          "state": "ok"
+        },
+        {
+          "name": "Redis timeline",
+          "metric": "hit rate 97%",
+          "delta": "0",
+          "state": "ok"
+        },
+        {
+          "name": "CDN",
+          "metric": "hit rate 34%",
+          "delta": "-58pt",
+          "state": "hot"
+        },
+        {
+          "name": "Blob Storage",
+          "metric": "egress 8 Gb/s",
+          "delta": "+6",
+          "state": "warn"
+        }
+      ],
+      "answer": "CDN",
+      "explain": "The metadata path is healthy — ids arrive instantly. The CDN hit rate collapsed, so nearly every image is now a round trip to origin, and blob egress has risen to match. Usually this is a cache-key change: a new signed-URL parameter or resize token that varies per request makes every URL unique and therefore uncacheable.",
+      "wrong": {
+        "Blob Storage": "Elevated egress is the consequence of the misses, not the cause.",
+        "Redis timeline": "97% and unchanged — the feed itself is fine.",
+        "Feed Service": "45ms. It returned the post ids; fetching the media is a separate path."
+      }
+    }
+  ]
+}

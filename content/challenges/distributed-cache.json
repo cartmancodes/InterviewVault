@@ -1,0 +1,172 @@
+{
+  "slug": "distributed-cache",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "You add a node to a 10-node cache. What happens to the keys?",
+      "options": [
+        {
+          "id": "mod",
+          "label": "Hash modulo node count",
+          "sub": "key % N",
+          "correct": false,
+          "verdict": "One extra node changes N, so nearly every key maps somewhere new and roughly 90% of the cache is invalidated at once. The resulting stampede onto the origin is how cache expansions take down databases."
+        },
+        {
+          "id": "ring",
+          "label": "Consistent hashing with virtual nodes",
+          "sub": "key -> ring position",
+          "correct": true,
+          "verdict": "Only the keys between the new node and its predecessor move — about 1/N of them. Virtual nodes keep the split even so one physical node does not inherit a disproportionate arc."
+        }
+      ],
+      "defend": {
+        "prompt": "Why virtual nodes rather than one point per server?",
+        "options": [
+          {
+            "label": "A few random points distribute unevenly",
+            "correct": true
+          },
+          {
+            "label": "They let heterogeneous servers own different shares",
+            "correct": true
+          },
+          {
+            "label": "Removing a node spreads its load across many peers",
+            "correct": true
+          },
+          {
+            "label": "They reduce the number of keys that move on a change",
+            "correct": false
+          }
+        ],
+        "explain": "The fraction that moves is ~1/N either way. Virtual nodes fix distribution, not volume: even balance, weighted capacity, and a failure that spreads across the ring instead of landing entirely on one neighbour."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "Growing a cache tier from MVP to serious load.",
+      "rungs": [
+        {
+          "q": "Where a single Redis node stops being enough",
+          "choices": [
+            "~1k RPS",
+            "~100k RPS",
+            "~10M RPS"
+          ],
+          "answer": 1,
+          "note": "One node handles six figures comfortably; past that you shard."
+        },
+        {
+          "q": "Keys displaced when adding one node to N",
+          "choices": [
+            "~1/N",
+            "~half",
+            "~all"
+          ],
+          "answer": 0,
+          "note": "The entire reason consistent hashing exists."
+        },
+        {
+          "q": "What a cache miss storm threatens",
+          "choices": [
+            "The cache",
+            "The origin database"
+          ],
+          "answer": 1,
+          "note": "The cache is fine — it is the thing behind it that falls over."
+        }
+      ],
+      "explain": "Cache design is mostly about protecting what sits behind the cache. Every choice here is judged by what happens on a miss."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the read path with a miss.",
+      "palette": [
+        "Client",
+        "Cache Client",
+        "Consistent Hash Ring",
+        "Cache Node",
+        "Origin Database",
+        "Request Coalescer",
+        "Replica Node",
+        "Kafka",
+        "Metrics"
+      ],
+      "slots": [
+        {
+          "accept": "Client"
+        },
+        {
+          "accept": "Cache Client"
+        },
+        {
+          "accept": "Consistent Hash Ring"
+        },
+        {
+          "accept": "Cache Node"
+        },
+        {
+          "accept": "Request Coalescer"
+        },
+        {
+          "accept": "Origin Database"
+        }
+      ],
+      "explain": "The ring picks the node; on a miss the coalescer sits between the cache and the origin so a thousand concurrent misses for one key become a single origin read. Without it, a hot key expiring is a thousand simultaneous queries."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "p99 latency tripled after adding three nodes to the ring.",
+      "cards": [
+        {
+          "name": "Cache Node A",
+          "metric": "hit rate 91%",
+          "delta": "-2pt",
+          "state": "ok"
+        },
+        {
+          "name": "Cache Node B",
+          "metric": "hit rate 34%",
+          "delta": "-58pt",
+          "state": "hot"
+        },
+        {
+          "name": "Origin Database",
+          "metric": "p99 500ms",
+          "delta": "+460ms",
+          "state": "warn"
+        },
+        {
+          "name": "Request Coalescer",
+          "metric": "dedup rate 88%",
+          "delta": "+2pt",
+          "state": "ok"
+        }
+      ],
+      "answer": "Cache Node B",
+      "explain": "One node's hit rate collapsed while its peers barely moved — that is not a general cold-cache effect, it is uneven redistribution. Node B inherited a large arc of the ring, probably because it was added with too few virtual nodes, so it holds a disproportionate share of keys it has never seen. The origin latency is that node's misses arriving downstream.",
+      "wrong": {
+        "Origin Database": "It is absorbing the misses. Ask which node is generating them.",
+        "Request Coalescer": "88% dedup means it is working; it can only collapse duplicates, not manufacture hits.",
+        "Cache Node A": "Down 2 points is normal churn after a topology change."
+      }
+    }
+  ]
+}

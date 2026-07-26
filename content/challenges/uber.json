@@ -1,0 +1,176 @@
+{
+  "slug": "uber",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "10M drivers pinging every 4 seconds. Where do their positions live?",
+      "options": [
+        {
+          "id": "postgis",
+          "label": "PostGIS on Postgres",
+          "sub": "GiST index on geography",
+          "correct": false,
+          "verdict": "Lovely SQL ergonomics and real range queries, and it is the right first answer at low scale. It falls over here for one reason: every ping is a row write, so you are asking a disk-backed B-tree to absorb millions of writes per second."
+        },
+        {
+          "id": "redis",
+          "label": "Redis geospatial",
+          "sub": "GEOADD / GEOSEARCH per city",
+          "correct": true,
+          "verdict": "A sorted set keyed by region, updated in memory. Losing a few seconds of state is survivable because every driver re-pings within 4 seconds, which is exactly why the durable store is the wrong tool for this data."
+        }
+      ],
+      "defend": {
+        "prompt": "What did you accept by moving locations out of Postgres?",
+        "options": [
+          {
+            "label": "Location state is now lossy on a Redis failure",
+            "correct": true
+          },
+          {
+            "label": "You need a sharding scheme per city or region",
+            "correct": true
+          },
+          {
+            "label": "Drivers and rides now live in two different stores",
+            "correct": true
+          },
+          {
+            "label": "You can no longer answer 'who is within 3km'",
+            "correct": false
+          }
+        ],
+        "explain": "GEOSEARCH answers proximity fine. The costs are durability, a sharding decision, and split-brain between the hot location store and the system of record."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "10M active drivers, each pinging every 4 seconds.",
+      "rungs": [
+        {
+          "q": "Location writes per second",
+          "choices": [
+            "25k",
+            "250k",
+            "2.5M",
+            "25M"
+          ],
+          "answer": 2,
+          "note": "10M / 4s. This is the number that rules out a row-per-ping design."
+        },
+        {
+          "q": "Match SLO, end to end",
+          "choices": [
+            "1 second",
+            "10 seconds",
+            "1 minute",
+            "5 minutes"
+          ],
+          "answer": 2,
+          "note": "Under a minute, with ~10s per driver accept window inside it."
+        },
+        {
+          "q": "Requests in one cell when a concert empties",
+          "choices": [
+            "1k",
+            "10k",
+            "100k",
+            "1M"
+          ],
+          "answer": 2,
+          "note": "Local density, not global average, is what breaks dispatch."
+        }
+      ],
+      "explain": "2.5M writes/sec is a throughput problem; 100k in one cell is a hot-partition problem. They need different answers — in-memory geo for the first, queueing plus radius expansion for the second."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the dispatch read path from a ride request to an offer.",
+      "palette": [
+        "Rider App",
+        "API Gateway",
+        "Ride Service",
+        "Kafka",
+        "Match Service",
+        "Redis Geo Index",
+        "Notification Service",
+        "Postgres",
+        "Temporal"
+      ],
+      "slots": [
+        {
+          "accept": "Rider App"
+        },
+        {
+          "accept": "API Gateway"
+        },
+        {
+          "accept": "Ride Service"
+        },
+        {
+          "accept": "Kafka"
+        },
+        {
+          "accept": "Match Service"
+        },
+        {
+          "accept": "Redis Geo Index"
+        }
+      ],
+      "explain": "The request is persisted by Ride Service, then handed to Kafka so a demand spike queues instead of dropping. Match Service consumes, runs GEOSEARCH against Redis, and only then reaches Notification Service. Temporal owns the offer-timeout loop, and Postgres is the system of record — neither sits on this hot path."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Match latency went from 8 seconds to 90 seconds, in one city only.",
+      "cards": [
+        {
+          "name": "API Gateway",
+          "metric": "p99 40ms",
+          "delta": "+2ms",
+          "state": "ok"
+        },
+        {
+          "name": "Redis Geo Index",
+          "metric": "p99 1.2ms",
+          "delta": "+0.1ms",
+          "state": "ok"
+        },
+        {
+          "name": "Kafka partition",
+          "metric": "consumer lag 400k",
+          "delta": "+400k",
+          "state": "hot"
+        },
+        {
+          "name": "Postgres primary",
+          "metric": "p99 22ms",
+          "delta": "+4ms",
+          "state": "warn"
+        }
+      ],
+      "answer": "Kafka partition",
+      "explain": "One city means one partition. Requests are partitioned by geohash prefix, so a local surge lands entirely on a single partition and a single consumer group — the rest of the fleet sits idle while that one backs up. The fix is more partitions for the hot prefix plus autoscaled consumers, not a bigger Redis.",
+      "wrong": {
+        "Redis Geo Index": "1.2ms is healthy. The geo index is keeping up; something upstream is not handing it work fast enough.",
+        "Postgres primary": "+4ms cannot explain 82 seconds. It is following the queue, not causing it.",
+        "API Gateway": "Requests are arriving fine — they are waiting after they arrive."
+      }
+    }
+  ]
+}

@@ -1,0 +1,171 @@
+{
+  "slug": "whatsapp",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "Billions of users on persistent sockets. How does a message find the recipient's server?",
+      "options": [
+        {
+          "id": "broadcast",
+          "label": "Broadcast to every chat server",
+          "sub": "let the owner respond",
+          "correct": false,
+          "verdict": "Correct and O(servers) per message. At billions of connections you have turned every send into a fan-out across the fleet, so the messaging cost grows with your server count rather than your user count."
+        },
+        {
+          "id": "registry",
+          "label": "Connection registry keyed by user",
+          "sub": "look up the owning server, forward once",
+          "correct": true,
+          "verdict": "One lookup, one forward. The registry is small, hot and cacheable, and it makes send cost independent of fleet size — which is the only way this scales."
+        }
+      ],
+      "defend": {
+        "prompt": "What does the registry oblige you to handle?",
+        "options": [
+          {
+            "label": "Stale entries when a server dies",
+            "correct": true
+          },
+          {
+            "label": "Re-registration on every reconnect",
+            "correct": true
+          },
+          {
+            "label": "A user connected from several devices at once",
+            "correct": true
+          },
+          {
+            "label": "Storing message history in the registry",
+            "correct": false
+          }
+        ],
+        "explain": "History lives in the message store — the registry only answers 'where is this user right now'. Its hard problems are all liveness: crashes, reconnects, and the fact that one user is several connections."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "Sub-500ms delivery to available users, at billions-of-users scale.",
+      "rungs": [
+        {
+          "q": "Delivery latency budget",
+          "choices": [
+            "100ms",
+            "500ms",
+            "5s"
+          ],
+          "answer": 1,
+          "note": "Under 500ms to an online recipient."
+        },
+        {
+          "q": "What a user actually maps to",
+          "choices": [
+            "One connection",
+            "One connection per device"
+          ],
+          "answer": 1,
+          "note": "Multiple clients per user is a first-class case, not an edge case."
+        },
+        {
+          "q": "How long messages are stored centrally",
+          "choices": [
+            "Forever",
+            "Only until delivered"
+          ],
+          "answer": 1,
+          "note": "The requirement is explicit: no longer than necessary."
+        }
+      ],
+      "explain": "Delivering to a user means delivering to every one of their devices, and then forgetting the message. Both shape the storage model more than raw throughput does."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the path for a message to an online recipient.",
+      "palette": [
+        "Sender Client",
+        "Load Balancer",
+        "Chat Server",
+        "Connection Registry",
+        "Recipient Chat Server",
+        "Recipient Client",
+        "Message Store",
+        "Kafka",
+        "Push Service"
+      ],
+      "slots": [
+        {
+          "accept": "Sender Client"
+        },
+        {
+          "accept": "Load Balancer"
+        },
+        {
+          "accept": "Chat Server"
+        },
+        {
+          "accept": "Connection Registry"
+        },
+        {
+          "accept": "Recipient Chat Server"
+        },
+        {
+          "accept": "Recipient Client"
+        }
+      ],
+      "explain": "The sender's server resolves the recipient through the registry and forwards directly to the server holding that socket. The message store persists for undelivered devices and the push service handles offline recipients — both are branches off this path, not steps in it."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Messages to online users are instant. Users who were briefly offline never receive them.",
+      "cards": [
+        {
+          "name": "Chat Server",
+          "metric": "p99 20ms",
+          "delta": "+2ms",
+          "state": "ok"
+        },
+        {
+          "name": "Connection Registry",
+          "metric": "p99 1ms",
+          "delta": "0",
+          "state": "ok"
+        },
+        {
+          "name": "Message Store",
+          "metric": "undelivered 40M",
+          "delta": "+40M",
+          "state": "hot"
+        },
+        {
+          "name": "Push Service",
+          "metric": "p99 60ms",
+          "delta": "+5ms",
+          "state": "ok"
+        }
+      ],
+      "answer": "Message Store",
+      "explain": "Online delivery works, so routing and sockets are fine. Undelivered messages are piling up, which means the redelivery path — draining a device's pending queue on reconnect — is not firing. Typically the ack that should clear a message is being recorded per user rather than per device, so a reconnecting device is never told what it missed.",
+      "wrong": {
+        "Connection Registry": "1ms and healthy — it is resolving live connections correctly.",
+        "Push Service": "Push is for waking the app, not for delivering the backlog once it wakes.",
+        "Chat Server": "It delivers what it is handed; nothing is handing it the pending queue."
+      }
+    }
+  ]
+}

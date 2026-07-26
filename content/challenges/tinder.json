@@ -1,0 +1,173 @@
+{
+  "slug": "tinder",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "2B swipes/day, and a mutual like must become a match exactly once.",
+      "options": [
+        {
+          "id": "scan",
+          "label": "Query for the reciprocal swipe",
+          "sub": "SELECT on every swipe",
+          "correct": false,
+          "verdict": "It works, but two simultaneous swipes both find nothing and both insert, so you get a duplicate match — and you have added a read to the hottest write path in the product."
+        },
+        {
+          "id": "key",
+          "label": "Deterministic pair key with a unique constraint",
+          "sub": "sorted(a,b) as the primary key",
+          "correct": true,
+          "verdict": "Sorting the two user ids means A-likes-B and B-likes-A compute the same key, so the database itself resolves the race. The second insert conflicts and you read back the existing match."
+        }
+      ],
+      "defend": {
+        "prompt": "Why sort the ids rather than store the pair as given?",
+        "options": [
+          {
+            "label": "Both directions must map to one row",
+            "correct": true
+          },
+          {
+            "label": "It lets a unique constraint do the concurrency control",
+            "correct": true
+          },
+          {
+            "label": "It removes the read-before-write from the swipe path",
+            "correct": true
+          },
+          {
+            "label": "It makes swipes cheaper to store",
+            "correct": false
+          }
+        ],
+        "explain": "Storage is unchanged. What you bought is a single key both directions agree on, so correctness is enforced by the index rather than by application logic racing itself."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "20M DAU, roughly 100 swipes per user per day.",
+      "rungs": [
+        {
+          "q": "Swipes per day",
+          "choices": [
+            "20M",
+            "200M",
+            "2B",
+            "20B"
+          ],
+          "answer": 2,
+          "note": "20M x 100."
+        },
+        {
+          "q": "Average swipes per second",
+          "choices": [
+            "2.3k",
+            "23k",
+            "230k"
+          ],
+          "answer": 1,
+          "note": "2B / 86,400, with peaks well above."
+        },
+        {
+          "q": "Which side is the design pressure",
+          "choices": [
+            "Match reads",
+            "Swipe writes"
+          ],
+          "answer": 1,
+          "note": "Nearly every swipe is a write, and the vast majority never become matches."
+        }
+      ],
+      "explain": "This is a write-dominated system where almost all the writes are discarded — the opposite shape to a feed, and why swipes go to a store tuned for volume rather than joins."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the swipe write path.",
+      "palette": [
+        "Mobile App",
+        "API Gateway",
+        "Swipe Service",
+        "Redis dedup",
+        "Match Service",
+        "Cassandra",
+        "Kafka",
+        "Notification Service",
+        "Elasticsearch"
+      ],
+      "slots": [
+        {
+          "accept": "Mobile App"
+        },
+        {
+          "accept": "API Gateway"
+        },
+        {
+          "accept": "Swipe Service"
+        },
+        {
+          "accept": "Cassandra"
+        },
+        {
+          "accept": "Kafka"
+        },
+        {
+          "accept": "Match Service"
+        }
+      ],
+      "explain": "The swipe is written first and acknowledged — the user must never wait on match resolution. Kafka carries it to Match Service, which resolves the pair key and only then notifies. Redis dedup and Elasticsearch belong to the recommendation path, not this one."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Swipes feel instant. Match notifications arrive 20 minutes late.",
+      "cards": [
+        {
+          "name": "API Gateway",
+          "metric": "p99 25ms",
+          "delta": "+2ms",
+          "state": "ok"
+        },
+        {
+          "name": "Cassandra",
+          "metric": "write p99 6ms",
+          "delta": "+1ms",
+          "state": "ok"
+        },
+        {
+          "name": "Kafka",
+          "metric": "consumer lag 30M",
+          "delta": "+30M",
+          "state": "hot"
+        },
+        {
+          "name": "Notification Service",
+          "metric": "send p99 90ms",
+          "delta": "+8ms",
+          "state": "ok"
+        }
+      ],
+      "answer": "Kafka",
+      "explain": "The write path was deliberately decoupled from match resolution, which is why swipes still feel instant while matches do not arrive. Match Service consumers cannot keep up with 23k swipes/sec. Partition by the sorted pair key and scale consumers — the same key that guarantees correctness also gives you a clean partitioning dimension.",
+      "wrong": {
+        "Notification Service": "90ms per send, and it is only sending what it receives.",
+        "Cassandra": "Writes are landing in 6ms — the swipe path is healthy by design.",
+        "API Gateway": "Users are being served quickly; the delay is entirely asynchronous."
+      }
+    }
+  ]
+}

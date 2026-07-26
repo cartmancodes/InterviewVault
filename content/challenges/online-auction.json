@@ -1,0 +1,171 @@
+{
+  "slug": "online-auction",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "Last-second bidding flurry. How is bid order decided?",
+      "options": [
+        {
+          "id": "app",
+          "label": "Compare against the cached max bid",
+          "sub": "read, compare, write",
+          "correct": false,
+          "verdict": "Two bids read the same max, both conclude they are highest, and both write. The read-modify-write is not atomic, so under exactly the burst the product is designed for, you accept a losing bid."
+        },
+        {
+          "id": "atomic",
+          "label": "Atomic conditional write",
+          "sub": "compare-and-set on current price",
+          "correct": true,
+          "verdict": "Make the database or a Lua script do the comparison in the same operation as the write. A losing bid fails atomically and is told so, rather than silently overwriting a higher one."
+        }
+      ],
+      "defend": {
+        "prompt": "What else does the auction close need?",
+        "options": [
+          {
+            "label": "A server-side clock, not the client's",
+            "correct": true
+          },
+          {
+            "label": "The close boundary evaluated atomically with the bid",
+            "correct": true
+          },
+          {
+            "label": "An append-only bid log for dispute resolution",
+            "correct": true
+          },
+          {
+            "label": "Bids rejected once the client's timer hits zero",
+            "correct": false
+          }
+        ],
+        "explain": "Client clocks are unreliable and trivially manipulated. The server decides both the ordering and whether the auction was still open, in the same atomic step that accepts the bid."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "A closing auction with a last-second flurry.",
+      "rungs": [
+        {
+          "q": "Bid write latency budget",
+          "choices": [
+            "200ms",
+            "2s",
+            "10s"
+          ],
+          "answer": 0,
+          "note": "Under ~200ms end to end, or the final seconds feel broken."
+        },
+        {
+          "q": "Whose clock decides whether bidding is open",
+          "choices": [
+            "The client's",
+            "The server's"
+          ],
+          "answer": 1,
+          "note": "Always the server, evaluated inside the same atomic operation."
+        },
+        {
+          "q": "What viewers need during the flurry",
+          "choices": [
+            "Every bid, guaranteed",
+            "The current max, quickly"
+          ],
+          "answer": 1,
+          "note": "Price updates can be coalesced; the accepted bid cannot."
+        }
+      ],
+      "explain": "The write path must be strictly correct; the broadcast path only needs to be fast and roughly current. Separating those two is the whole design."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the bid write path.",
+      "palette": [
+        "Bidder",
+        "API Gateway",
+        "Bid Service",
+        "Redis Lua CAS",
+        "Bid Log",
+        "Pub/Sub",
+        "Viewer Connections",
+        "Postgres",
+        "Analytics"
+      ],
+      "slots": [
+        {
+          "accept": "Bidder"
+        },
+        {
+          "accept": "API Gateway"
+        },
+        {
+          "accept": "Bid Service"
+        },
+        {
+          "accept": "Redis Lua CAS"
+        },
+        {
+          "accept": "Bid Log"
+        },
+        {
+          "accept": "Pub/Sub"
+        }
+      ],
+      "explain": "The Lua script decides acceptance and close-time in one atomic step, the bid log makes it durable and auditable, then pub/sub fans the new price to viewers. Broadcast happens after durability — never before, or you can show a price that was never accepted."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "The winning bid was recorded 3 seconds after the auction closed.",
+      "cards": [
+        {
+          "name": "Bid Service",
+          "metric": "p99 90ms",
+          "delta": "+8ms",
+          "state": "ok"
+        },
+        {
+          "name": "Redis Lua CAS",
+          "metric": "p99 1ms",
+          "delta": "0",
+          "state": "ok"
+        },
+        {
+          "name": "Bid Log",
+          "metric": "write p99 15ms",
+          "delta": "+2ms",
+          "state": "ok"
+        },
+        {
+          "name": "Clock skew",
+          "metric": "drift 3.2s",
+          "delta": "+3.2s",
+          "state": "hot"
+        }
+      ],
+      "answer": "Clock skew",
+      "explain": "Every component is fast, so nothing was queued — the close boundary itself was evaluated against the wrong time. One node's clock drifted 3.2 seconds, so it accepted a bid it should have rejected. Auction close is a time-based correctness boundary, which makes clock discipline part of the design rather than an operational detail.",
+      "wrong": {
+        "Redis Lua CAS": "The compare-and-set worked exactly as written — against a bad timestamp.",
+        "Bid Log": "It durably recorded a bid that should never have been accepted.",
+        "Bid Service": "Healthy latency. The ordering logic ran correctly on incorrect input."
+      }
+    }
+  ]
+}

@@ -1,0 +1,170 @@
+{
+  "slug": "payment-system",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "The network times out after you called Stripe. Did the charge happen?",
+      "options": [
+        {
+          "id": "retry",
+          "label": "Retry the charge",
+          "sub": "assume it failed",
+          "correct": false,
+          "verdict": "A timeout tells you nothing about what the other side did. Retrying blind is how a customer gets charged twice, and in payments that is the failure that ends up in the press rather than the logs."
+        },
+        {
+          "id": "idem",
+          "label": "Idempotency key on every attempt",
+          "sub": "same key, safe to retry",
+          "correct": true,
+          "verdict": "Record the attempt with a key before you call out, and send that key with the request. The PSP returns the original result rather than charging again, so a retry is safe by construction."
+        }
+      ],
+      "defend": {
+        "prompt": "What does end-to-end idempotency require?",
+        "options": [
+          {
+            "label": "Writing an IN_PROGRESS record before the external call",
+            "correct": true
+          },
+          {
+            "label": "The same key surviving process restarts",
+            "correct": true
+          },
+          {
+            "label": "A reconciliation path for attempts that stay uncertain",
+            "correct": true
+          },
+          {
+            "label": "The PSP guaranteeing exactly-once delivery",
+            "correct": false
+          }
+        ],
+        "explain": "No external service can promise that. You persist intent first, carry a stable key, and reconcile anything still ambiguous against the provider's records — that is what makes at-least-once safe."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "Scaling from a handful of payments to hyperscale.",
+      "rungs": [
+        {
+          "q": "What must never be eventually consistent",
+          "choices": [
+            "Analytics",
+            "Account balances"
+          ],
+          "answer": 1,
+          "note": "Money is the canonical strong-consistency requirement."
+        },
+        {
+          "q": "How balances should be stored",
+          "choices": [
+            "A mutable balance column",
+            "An append-only double-entry ledger"
+          ],
+          "answer": 1,
+          "note": "Balances are derived from entries; a mutable column loses the audit trail and invites lost updates."
+        },
+        {
+          "q": "What a timeout to the PSP means",
+          "choices": [
+            "It failed",
+            "Unknown until reconciled"
+          ],
+          "answer": 1,
+          "note": "The only honest answer, and the reason reconciliation is a first-class subsystem."
+        }
+      ],
+      "explain": "Payments trade availability for correctness deliberately. Every design choice here is about being able to prove, later, exactly what happened."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the charge path.",
+      "palette": [
+        "Client",
+        "API Gateway",
+        "Payment Service",
+        "Idempotency Store",
+        "Ledger DB",
+        "PSP (Stripe)",
+        "Reconciliation Job",
+        "Kafka",
+        "Notification Service"
+      ],
+      "slots": [
+        {
+          "accept": "Client"
+        },
+        {
+          "accept": "API Gateway"
+        },
+        {
+          "accept": "Payment Service"
+        },
+        {
+          "accept": "Idempotency Store"
+        },
+        {
+          "accept": "Ledger DB"
+        },
+        {
+          "accept": "PSP (Stripe)"
+        }
+      ],
+      "explain": "The idempotency record and the ledger entry are written before the provider is called, so a crash mid-flight leaves evidence. Reconciliation runs offline against the provider to settle anything uncertain; Kafka and notifications happen after the money moves."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Ledger totals drift from the PSP by a few thousand a day. No errors are logged.",
+      "cards": [
+        {
+          "name": "Payment Service",
+          "metric": "p99 180ms",
+          "delta": "+10ms",
+          "state": "ok"
+        },
+        {
+          "name": "Idempotency Store",
+          "metric": "TTL 24h",
+          "delta": "-6d",
+          "state": "hot"
+        },
+        {
+          "name": "Ledger DB",
+          "metric": "p99 20ms",
+          "delta": "+2ms",
+          "state": "ok"
+        },
+        {
+          "name": "PSP (Stripe)",
+          "metric": "error rate 0.4%",
+          "delta": "+0.1pt",
+          "state": "warn"
+        }
+      ],
+      "answer": "Idempotency Store",
+      "explain": "Silent drift with no errors points at duplicates being accepted as legitimate. The idempotency TTL was cut from seven days to 24 hours, so any retry or delayed webhook arriving after a day no longer matches an existing key and is processed as a fresh charge. Idempotency keys must outlive the longest retry and settlement window, not the request.",
+      "wrong": {
+        "PSP (Stripe)": "A 0.4% error rate is normal and would produce failures, not silent divergence.",
+        "Ledger DB": "The ledger is faithfully recording every entry it is given, including the duplicates.",
+        "Payment Service": "Latency is healthy; correctness is what slipped."
+      }
+    }
+  ]
+}

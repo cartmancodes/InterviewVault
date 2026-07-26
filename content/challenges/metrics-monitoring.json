@@ -1,0 +1,176 @@
+{
+  "slug": "metrics-monitoring",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "5M points/sec of time-series. What stores them?",
+      "options": [
+        {
+          "id": "rel",
+          "label": "Relational table",
+          "sub": "(metric, host, ts, value) with indexes",
+          "correct": false,
+          "verdict": "Every point is a row and every index is rewritten on insert. Worse, the query you actually run — one metric across a time range — scatters across the whole table because rows are laid out by arrival, not by series."
+        },
+        {
+          "id": "tsdb",
+          "label": "Time-series store",
+          "sub": "columnar, series-keyed, time-partitioned",
+          "correct": true,
+          "verdict": "Points for one series land together and compress hard, because adjacent timestamps and near-identical values delta-encode to almost nothing. Retention becomes dropping a partition instead of a mass DELETE."
+        }
+      ],
+      "defend": {
+        "prompt": "What does the time-series engine buy you specifically?",
+        "options": [
+          {
+            "label": "Range scans on one series stay contiguous on disk",
+            "correct": true
+          },
+          {
+            "label": "Retention is a partition drop, not a delete storm",
+            "correct": true
+          },
+          {
+            "label": "Delta and dictionary encoding shrink storage by an order of magnitude",
+            "correct": true
+          },
+          {
+            "label": "Arbitrary joins across metrics get faster",
+            "correct": false
+          }
+        ],
+        "explain": "Joins are exactly what these engines give up. You trade relational flexibility for write throughput, compression and cheap expiry — which is the right trade when the query is always 'this series, this window'."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "500K hosts, 100 metrics each, emitted every 10 seconds.",
+      "rungs": [
+        {
+          "q": "Data points per second",
+          "choices": [
+            "50k",
+            "500k",
+            "5M",
+            "50M"
+          ],
+          "answer": 2,
+          "note": "500K x 100 / 10s."
+        },
+        {
+          "q": "Raw ingest at ~100 bytes/point",
+          "choices": [
+            "5 MB/s",
+            "50 MB/s",
+            "500 MB/s",
+            "5 GB/s"
+          ],
+          "answer": 2,
+          "note": "Before compression — which is why compression is not optional here."
+        },
+        {
+          "q": "Raw storage over 15 days",
+          "choices": [
+            "13 TB",
+            "130 TB",
+            "1.3 PB",
+            "13 PB"
+          ],
+          "answer": 2,
+          "note": "Which is why raw is downsampled into rollups rather than kept."
+        }
+      ],
+      "explain": "5M points/sec is survivable; 1.3 PB of raw is not, at least not at full resolution. Retention policy is a storage design decision, not an afterthought."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the ingest path from an agent to a queryable point.",
+      "palette": [
+        "Agent",
+        "Load Balancer",
+        "Ingest Service",
+        "Kafka",
+        "Stream Processor",
+        "Time-series DB",
+        "Alert Engine",
+        "Blob Storage",
+        "Grafana"
+      ],
+      "slots": [
+        {
+          "accept": "Agent"
+        },
+        {
+          "accept": "Load Balancer"
+        },
+        {
+          "accept": "Ingest Service"
+        },
+        {
+          "accept": "Kafka"
+        },
+        {
+          "accept": "Stream Processor"
+        },
+        {
+          "accept": "Time-series DB"
+        }
+      ],
+      "explain": "Kafka absorbs the burst and decouples agents from storage, so a slow write never backs up into the fleet. The stream processor does downsampling and rollups on the way in. The alert engine and dashboards read from the TSDB — they are consumers, not part of ingest."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Alerts are firing 8 minutes late. Dashboards look fine for older data.",
+      "cards": [
+        {
+          "name": "Ingest Service",
+          "metric": "p99 12ms",
+          "delta": "+1ms",
+          "state": "ok"
+        },
+        {
+          "name": "Kafka",
+          "metric": "consumer lag 40M",
+          "delta": "+40M",
+          "state": "hot"
+        },
+        {
+          "name": "Time-series DB",
+          "metric": "write p99 9ms",
+          "delta": "+1ms",
+          "state": "ok"
+        },
+        {
+          "name": "Alert Engine",
+          "metric": "eval time 400ms",
+          "delta": "+30ms",
+          "state": "warn"
+        }
+      ],
+      "answer": "Kafka",
+      "explain": "Both alerting and storage read from the same stream, and the stream is 40M points behind. Old dashboards look fine because that data already landed; anything recent has not arrived yet. The alert engine is evaluating correctly against data that is simply not there. Scale consumers, or give alerting its own lower-latency path off the ingest topic.",
+      "wrong": {
+        "Alert Engine": "400ms evaluation is not 8 minutes. It is judging stale input, not running slowly.",
+        "Time-series DB": "Writes are fast — there just are not enough of them arriving.",
+        "Ingest Service": "Agents are being accepted fine; the backlog is after ingest."
+      }
+    }
+  ]
+}

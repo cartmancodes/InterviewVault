@@ -1,0 +1,176 @@
+{
+  "slug": "strava",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "10M activities recording at 1 Hz. Where do the in-progress GPS points go?",
+      "options": [
+        {
+          "id": "pg",
+          "label": "Append to Postgres",
+          "sub": "one row per point",
+          "correct": false,
+          "verdict": "10M rows/sec into a B-tree, and almost all of it gets rewritten into a summary the moment the athlete stops. You are paying durable-store prices for data that is scratch until the activity ends."
+        },
+        {
+          "id": "hot",
+          "label": "Hot in-memory buffer per activity",
+          "sub": "Redis list, flushed on completion",
+          "correct": true,
+          "verdict": "The in-progress track is scratch space. Buffer it and write one compact record at the end — 3,600 writes become one, and the durable store only ever sees finished activities."
+        }
+      ],
+      "defend": {
+        "prompt": "What did you accept by buffering?",
+        "options": [
+          {
+            "label": "An athlete can lose the tail of an in-progress activity",
+            "correct": true
+          },
+          {
+            "label": "You need periodic checkpointing to bound that loss",
+            "correct": true
+          },
+          {
+            "label": "Live segment leaderboards now read from the buffer, not the DB",
+            "correct": true
+          },
+          {
+            "label": "Completed activities become less durable",
+            "correct": false
+          }
+        ],
+        "explain": "Finished activities are written through and unaffected. The exposure is only the unflushed window, which is why you checkpoint every few minutes rather than only at stop."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "10M concurrent activities, 1 Hz sampling, ~50 bytes per point.",
+      "rungs": [
+        {
+          "q": "Points per second",
+          "choices": [
+            "10k",
+            "1M",
+            "10M",
+            "100M"
+          ],
+          "answer": 2,
+          "note": "One point per activity per second."
+        },
+        {
+          "q": "Raw ingest bandwidth",
+          "choices": [
+            "500 KB/s",
+            "50 MB/s",
+            "500 MB/s",
+            "5 GB/s"
+          ],
+          "answer": 2,
+          "note": "10M x 50 bytes. Compression on the wire matters at this rate."
+        },
+        {
+          "q": "Raw GPS written per day",
+          "choices": [
+            "18 GB",
+            "180 GB",
+            "1.8 TB",
+            "18 TB"
+          ],
+          "answer": 2,
+          "note": "~180 KB per hour-long activity x 10M/day, before indexes."
+        }
+      ],
+      "explain": "500 MB/s of ingest that compresses to a fraction once an activity is closed. The design pressure is the write rate, not the eventual storage."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the ingest path for a live activity point.",
+      "palette": [
+        "Mobile App",
+        "API Gateway",
+        "Ingest Service",
+        "Redis buffer",
+        "Kafka",
+        "Activity Store",
+        "Segment Matcher",
+        "Postgres",
+        "CDN"
+      ],
+      "slots": [
+        {
+          "accept": "Mobile App"
+        },
+        {
+          "accept": "API Gateway"
+        },
+        {
+          "accept": "Ingest Service"
+        },
+        {
+          "accept": "Redis buffer"
+        },
+        {
+          "accept": "Kafka"
+        },
+        {
+          "accept": "Activity Store"
+        }
+      ],
+      "explain": "Points land in a per-activity Redis buffer so the hot path never touches disk. Kafka carries completed activities onward for durable storage and asynchronous segment matching — deliberately off the ingest path, because a slow leaderboard must never stall a recording."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Activity uploads succeed, but segment leaderboards are hours stale.",
+      "cards": [
+        {
+          "name": "Ingest Service",
+          "metric": "p99 30ms",
+          "delta": "+3ms",
+          "state": "ok"
+        },
+        {
+          "name": "Redis buffer",
+          "metric": "memory 61%",
+          "delta": "+4pt",
+          "state": "ok"
+        },
+        {
+          "name": "Kafka topic",
+          "metric": "consumer lag 12M",
+          "delta": "+12M",
+          "state": "hot"
+        },
+        {
+          "name": "Postgres",
+          "metric": "p99 25ms",
+          "delta": "+2ms",
+          "state": "ok"
+        }
+      ],
+      "answer": "Kafka topic",
+      "explain": "Ingest is healthy, which is why uploads feel fine. Segment matching is a consumer of the same stream and it has fallen 12M messages behind — the CPU-heavy geometry match cannot keep up with 10M concurrent activities. Scale the matcher consumers or pre-filter candidate segments by bounding box before matching.",
+      "wrong": {
+        "Redis buffer": "61% memory is comfortable. The buffer is doing its job.",
+        "Ingest Service": "30ms p99 — the write path is not where the delay is.",
+        "Postgres": "Postgres is keeping up with what reaches it; the backlog is upstream."
+      }
+    }
+  ]
+}

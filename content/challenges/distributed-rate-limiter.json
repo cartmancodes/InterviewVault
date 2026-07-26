@@ -1,0 +1,171 @@
+{
+  "slug": "distributed-rate-limiter",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "Limit 100 requests/minute per user, across many API nodes.",
+      "options": [
+        {
+          "id": "fixed",
+          "label": "Fixed window counter",
+          "sub": "reset the count each minute",
+          "correct": false,
+          "verdict": "Cheap and it lets a user send 200 requests in two seconds — 100 at the end of one window, 100 at the start of the next. The boundary burst is the classic failure of fixed windows."
+        },
+        {
+          "id": "sliding",
+          "label": "Sliding window with Redis + Lua",
+          "sub": "atomic check-and-increment over a rolling period",
+          "correct": true,
+          "verdict": "The window moves with the request, so the boundary burst disappears. Doing the read, compare and write in one Lua script makes it atomic across nodes, which a GET followed by a SET is not."
+        }
+      ],
+      "defend": {
+        "prompt": "Why does the Lua script matter?",
+        "options": [
+          {
+            "label": "Check and increment must be one atomic step",
+            "correct": true
+          },
+          {
+            "label": "Otherwise concurrent nodes both read under the limit and both allow",
+            "correct": true
+          },
+          {
+            "label": "It keeps the decision on one Redis shard",
+            "correct": true
+          },
+          {
+            "label": "It makes the limiter fail closed automatically",
+            "correct": false
+          }
+        ],
+        "explain": "Fail-open versus fail-closed is a separate policy decision you still have to make. Lua buys atomicity — without it, N nodes racing on the same key will each independently conclude there is room."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "A limiter in front of an API growing toward 10M RPS.",
+      "rungs": [
+        {
+          "q": "Extra latency the limiter may add",
+          "choices": [
+            "<10ms",
+            "~100ms",
+            "~1s"
+          ],
+          "answer": 0,
+          "note": "It runs on every request, so single-digit milliseconds or it becomes the bottleneck."
+        },
+        {
+          "q": "What happens if Redis is unreachable",
+          "choices": [
+            "Reject everything",
+            "A deliberate fail-open or fail-closed policy"
+          ],
+          "answer": 1,
+          "note": "The one decision you must make consciously rather than inherit."
+        },
+        {
+          "q": "Where counters live at very high RPS",
+          "choices": [
+            "One central Redis",
+            "Sharded by key, with local pre-aggregation"
+          ],
+          "answer": 1,
+          "note": "A single instance becomes the limit you were trying to enforce."
+        }
+      ],
+      "explain": "A rate limiter is on the hot path of everything. Its own latency and its own failure mode matter more than its precision."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the decision path for one request.",
+      "palette": [
+        "Client",
+        "API Gateway",
+        "Rate Limit Middleware",
+        "Redis + Lua",
+        "Upstream Service",
+        "Local Counter Cache",
+        "Postgres",
+        "Kafka",
+        "Admin API"
+      ],
+      "slots": [
+        {
+          "accept": "Client"
+        },
+        {
+          "accept": "API Gateway"
+        },
+        {
+          "accept": "Rate Limit Middleware"
+        },
+        {
+          "accept": "Local Counter Cache"
+        },
+        {
+          "accept": "Redis + Lua"
+        },
+        {
+          "accept": "Upstream Service"
+        }
+      ],
+      "explain": "The local counter absorbs obvious rejections without a network hop; anything ambiguous goes to Redis for the atomic decision. Only then does the request reach the upstream service. Postgres and Kafka are for configuration and analytics — never in the decision path."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Users report being limited at roughly half their allowance.",
+      "cards": [
+        {
+          "name": "API Gateway",
+          "metric": "p99 15ms",
+          "delta": "+1ms",
+          "state": "ok"
+        },
+        {
+          "name": "Local Counter Cache",
+          "metric": "hit rate 52%",
+          "delta": "+40pt",
+          "state": "hot"
+        },
+        {
+          "name": "Redis + Lua",
+          "metric": "p99 1.2ms",
+          "delta": "0",
+          "state": "ok"
+        },
+        {
+          "name": "Upstream Service",
+          "metric": "p99 60ms",
+          "delta": "-4ms",
+          "state": "ok"
+        }
+      ],
+      "answer": "Local Counter Cache",
+      "explain": "Redis is healthy and fast, so the atomic decision is sound — the wrong answer is being produced before Redis is ever consulted. The local cache is now serving half the decisions, and each node is counting only the requests it personally saw. Split a user's traffic across two nodes and each independently believes the user is at their limit. Local pre-aggregation must only ever short-circuit rejections, never approvals.",
+      "wrong": {
+        "Redis + Lua": "1.2ms and atomic — when it is asked, it answers correctly.",
+        "API Gateway": "Routing is fine; the verdict it receives is wrong.",
+        "Upstream Service": "It is seeing less traffic than it should, which is the symptom."
+      }
+    }
+  ]
+}
