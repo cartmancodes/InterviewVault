@@ -32,11 +32,11 @@ if (!existsSync(SITE)) {
 const pages = htmlFiles(SITE);
 let links = 0, assets = 0, anchors = 0;
 const problems = [];
-const embeddedChallengeSlugs = new Set();
+const challengePayloads = [];
 
 for (const file of pages) {
   const html = readFileSync(file, 'utf8');
-  const rel = path.relative(SITE, file);
+  const rel = path.relative(SITE, file).split(path.sep).join('/');
 
   for (const m of html.matchAll(/(?:src|href)="(\/[^"]*)"/g)) {
     const ref = m[1].split('#')[0];
@@ -57,18 +57,91 @@ for (const file of pages) {
     if (!ids.has(decodeURIComponent(m[1]))) problems.push(`${rel}: dead anchor #${m[1]}`);
   }
 
-  for (const m of html.matchAll(/<script type="application\/json" id="iv-challenges">([^<]*)<\/script>/g)) {
+  for (const m of html.matchAll(/<script\b[^>]*\bid="iv-challenges"[^>]*>([\s\S]*?)<\/script>/g)) {
+    if (!rel.startsWith('answers/') && !rel.startsWith('deep-dives/')) {
+      problems.push(`${rel}: iv-challenges payload is outside answers/ or deep-dives/`);
+    }
+
+    let payload;
     try {
-      embeddedChallengeSlugs.add(JSON.parse(m[1]).slug);
+      payload = JSON.parse(m[1]);
     } catch (err) {
       problems.push(`${rel}: invalid iv-challenges payload — ${err.message}`);
+      continue;
     }
+
+    const shapeProblems = [];
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      shapeProblems.push('payload must be an object');
+    } else {
+      if (typeof payload.slug !== 'string' || !payload.slug.trim()) shapeProblems.push('slug must be a non-empty string');
+      if (!Array.isArray(payload.checkpoints)) shapeProblems.push('checkpoints must be an array');
+      if (!Number.isInteger(payload.authoredCount) || payload.authoredCount < 0) {
+        shapeProblems.push('authoredCount must be a nonnegative integer');
+      }
+    }
+    if (shapeProblems.length) {
+      problems.push(`${rel}: malformed iv-challenges payload — ${shapeProblems.join('; ')}`);
+      continue;
+    }
+
+    challengePayloads.push({
+      rel,
+      slug: payload.slug,
+      authoredCount: payload.authoredCount,
+      checkpointIds: payload.checkpoints
+        .map((checkpoint) => checkpoint?.id)
+        .filter((id) => typeof id === 'string'),
+    });
   }
 }
 
 for (const file of readdirSync(CHALLENGES).filter((f) => f.endsWith('.json'))) {
-  const slug = file.slice(0, -5);
-  if (!embeddedChallengeSlugs.has(slug)) problems.push(`authored challenge slug is unreachable: ${slug}`);
+  let source;
+  try {
+    source = JSON.parse(readFileSync(path.join(CHALLENGES, file), 'utf8'));
+  } catch (err) {
+    problems.push(`${file}: invalid authored challenge JSON — ${err.message}`);
+    continue;
+  }
+
+  if (!source || typeof source !== 'object' || Array.isArray(source)
+      || typeof source.slug !== 'string' || !source.slug.trim()
+      || !Array.isArray(source.checkpoints)) {
+    problems.push(`${file}: malformed authored challenge — expected object with non-empty slug and checkpoints array`);
+    continue;
+  }
+
+  const slug = source.slug;
+  const checkpointIds = source.checkpoints.map((checkpoint) => checkpoint?.id);
+  if (checkpointIds.some((id) => typeof id !== 'string' || !id)) {
+    problems.push(`${file}: malformed authored challenge ${slug} — every checkpoint needs a non-empty string id`);
+    continue;
+  }
+
+  const targets = [
+    `answers/${slug}/index.html`,
+    `deep-dives/${slug}/index.html`,
+  ].filter((target) => existsSync(path.join(SITE, target)));
+  if (!targets.length) {
+    problems.push(`authored challenge ${slug}: no applicable built target page`);
+    continue;
+  }
+
+  for (const target of targets) {
+    const payload = challengePayloads.find((entry) => entry.rel === target && entry.slug === slug);
+    if (!payload) {
+      problems.push(`authored challenge ${slug}: ${target}: matching iv-challenges payload is missing`);
+      continue;
+    }
+    if (payload.authoredCount !== source.checkpoints.length) {
+      problems.push(`authored challenge ${slug}: ${target}: authoredCount ${payload.authoredCount}, expected ${source.checkpoints.length}`);
+    }
+    const missingIds = checkpointIds.filter((id) => !payload.checkpointIds.includes(id));
+    if (missingIds.length) {
+      problems.push(`authored challenge ${slug}: ${target}: missing checkpoint IDs ${missingIds.join(', ')}`);
+    }
+  }
 }
 
 // client scripts must at least parse — a broken one silently kills the sidecar

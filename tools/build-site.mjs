@@ -224,7 +224,9 @@ function buildDocPage(doc, siblings, idx) {
     : '';
 
   const ch = buildChallenges(path.join(REPO, doc.rel), doc.slug);
-  const hasSidecar = doc.col.key === 'answers' ? ch.checkpoints.length : ch.authoredCount > 0;
+  const hasSidecar = doc.col.key === 'answers'
+    ? ch.checkpoints.length
+    : doc.col.key === 'deep-dives' && ch.authoredCount > 0;
   let sidecar = '', sheetBtn = '', vaultScript = '';
   if (hasSidecar) {
     sidecar =
