@@ -223,18 +223,15 @@ function buildDocPage(doc, siblings, idx) {
         .map((h) => `<li><a class="${h.lvl === 3 ? 'h3' : ''}" href="#${h.id}">${esc(h.text)}</a></li>`).join('')}</ol></nav>`
     : '';
 
-  // The interview-answer docs carry the structure the practice sidecar needs:
-  // scoped requirements, deep dives and an explicit Mid/Senior/Staff+ rubric.
+  const ch = buildChallenges(path.join(REPO, doc.rel), doc.slug);
+  const hasSidecar = doc.col.key === 'answers' ? ch.checkpoints.length : ch.authoredCount > 0;
   let sidecar = '', sheetBtn = '', vaultScript = '';
-  if (doc.col.key === 'answers') {
-    const ch = buildChallenges(path.join(REPO, doc.rel), doc.slug);
-    if (ch.checkpoints.length) {
-      sidecar =
-        `<section id="iv-sidecar" class="sidecar" aria-label="Practice"></section>` +
-        `<script type="application/json" id="iv-challenges">${JSON.stringify(ch).replace(/</g, '\\u003c')}</script>`;
-      sheetBtn = `<button id="iv-sheet-open" class="sheet-open-btn" type="button" aria-expanded="false" hidden>Practice</button>`;
-      vaultScript = `<script src="/assets/vault.js" defer></script>`;
-    }
+  if (hasSidecar) {
+    sidecar =
+      `<section id="iv-sidecar" class="sidecar" aria-label="Practice"></section>` +
+      `<script type="application/json" id="iv-challenges">${JSON.stringify(ch).replace(/</g, '\\u003c')}</script>`;
+    sheetBtn = `<button id="iv-sheet-open" class="sheet-open-btn" type="button" aria-expanded="false" hidden>Practice</button>`;
+    vaultScript = `<script src="/assets/vault.js" defer></script>`;
   }
   const rail = sidecar || toc ? `<aside class="rail">${sidecar}${toc}</aside>` : '<aside></aside>';
   const side = `<nav class="side"><h4>${esc(doc.col.label)}</h4><ol>${siblings

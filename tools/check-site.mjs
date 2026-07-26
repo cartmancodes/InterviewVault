@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SITE = path.resolve(__dirname, '..', 'site');
+const CHALLENGES = path.resolve(__dirname, '..', 'content', 'challenges');
 
 function htmlFiles(dir, acc = []) {
   for (const entry of readdirSync(dir)) {
@@ -31,6 +32,7 @@ if (!existsSync(SITE)) {
 const pages = htmlFiles(SITE);
 let links = 0, assets = 0, anchors = 0;
 const problems = [];
+const embeddedChallengeSlugs = new Set();
 
 for (const file of pages) {
   const html = readFileSync(file, 'utf8');
@@ -54,6 +56,19 @@ for (const file of pages) {
     anchors++;
     if (!ids.has(decodeURIComponent(m[1]))) problems.push(`${rel}: dead anchor #${m[1]}`);
   }
+
+  for (const m of html.matchAll(/<script type="application\/json" id="iv-challenges">([^<]*)<\/script>/g)) {
+    try {
+      embeddedChallengeSlugs.add(JSON.parse(m[1]).slug);
+    } catch (err) {
+      problems.push(`${rel}: invalid iv-challenges payload — ${err.message}`);
+    }
+  }
+}
+
+for (const file of readdirSync(CHALLENGES).filter((f) => f.endsWith('.json'))) {
+  const slug = file.slice(0, -5);
+  if (!embeddedChallengeSlugs.has(slug)) problems.push(`authored challenge slug is unreachable: ${slug}`);
 }
 
 // client scripts must at least parse — a broken one silently kills the sidecar
