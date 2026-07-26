@@ -1,0 +1,171 @@
+{
+  "slug": "leet-code",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "You must run untrusted user code. Where?",
+      "options": [
+        {
+          "id": "container",
+          "label": "A plain Docker container",
+          "sub": "namespaces and cgroups",
+          "correct": false,
+          "verdict": "Containers share the host kernel, so a kernel exploit is a host compromise — and you are inviting the entire internet to run arbitrary code. Fine for isolating your own workloads, not for hostile ones."
+        },
+        {
+          "id": "microvm",
+          "label": "gVisor or a Firecracker microVM",
+          "sub": "second kernel boundary, ~125ms cold start",
+          "correct": true,
+          "verdict": "A second boundary between the guest and the host kernel. You pay roughly 125ms of cold start, which is why you keep a warm pool rather than booting per submission."
+        }
+      ],
+      "defend": {
+        "prompt": "What does the sandbox still need around it?",
+        "options": [
+          {
+            "label": "Hard CPU, memory and wall-clock limits",
+            "correct": true
+          },
+          {
+            "label": "No outbound network from the guest",
+            "correct": true
+          },
+          {
+            "label": "A pre-warmed pool to hide cold starts",
+            "correct": true
+          },
+          {
+            "label": "Trusting the submitted code to terminate",
+            "correct": false
+          }
+        ],
+        "explain": "Assuming termination is exactly the mistake — infinite loops are the common case, not the exception. The runner kills on wall-clock regardless of what the code thinks it is doing."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "Judging a submission inside a five-second end-to-end SLA.",
+      "rungs": [
+        {
+          "q": "Cold start for a hardened microVM",
+          "choices": [
+            "~5ms",
+            "~125ms",
+            "~2s"
+          ],
+          "answer": 1,
+          "note": "Which is a large slice of a five-second budget if paid per submission."
+        },
+        {
+          "q": "How to avoid paying it",
+          "choices": [
+            "Boot per submission",
+            "Keep a warm pool"
+          ],
+          "answer": 1,
+          "note": "Pre-warmed runners bring effective start-up under 100ms."
+        },
+        {
+          "q": "What contest submissions arrive as",
+          "choices": [
+            "A steady trickle",
+            "A spike at contest start"
+          ],
+          "answer": 1,
+          "note": "Which is why execution is queued rather than synchronous."
+        }
+      ],
+      "explain": "The SLA is achievable only because the expensive part — a booted, isolated runtime — is prepared before the submission arrives."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the submission path.",
+      "palette": [
+        "Browser",
+        "API Gateway",
+        "Submission Service",
+        "Queue",
+        "Worker Pool",
+        "Sandbox microVM",
+        "Results DB",
+        "Leaderboard Service",
+        "CDN"
+      ],
+      "slots": [
+        {
+          "accept": "Browser"
+        },
+        {
+          "accept": "API Gateway"
+        },
+        {
+          "accept": "Submission Service"
+        },
+        {
+          "accept": "Queue"
+        },
+        {
+          "accept": "Worker Pool"
+        },
+        {
+          "accept": "Sandbox microVM"
+        }
+      ],
+      "explain": "The submission is accepted and queued immediately so a contest spike never blocks the API. Workers pull at their own rate and execute inside the sandbox. Results and leaderboards are written afterwards — the client polls or is pushed, rather than holding a connection open for five seconds."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "During a contest, submissions queue for minutes. CPU across the worker fleet sits at 30%.",
+      "cards": [
+        {
+          "name": "API Gateway",
+          "metric": "p99 30ms",
+          "delta": "+3ms",
+          "state": "ok"
+        },
+        {
+          "name": "Queue",
+          "metric": "depth 120k",
+          "delta": "+120k",
+          "state": "hot"
+        },
+        {
+          "name": "Worker Pool",
+          "metric": "CPU 30%",
+          "delta": "-45pt",
+          "state": "warn"
+        },
+        {
+          "name": "Warm VM Pool",
+          "metric": "available 0",
+          "delta": "-400",
+          "state": "hot"
+        }
+      ],
+      "answer": "Warm VM Pool",
+      "explain": "Workers are idle at 30% CPU while the queue grows, so they are blocked rather than saturated — they are waiting on a sandbox to run code in. The warm pool is exhausted, so every submission now pays a full cold boot serially. Scale the pool ahead of contest start; worker CPU was never the limit.",
+      "wrong": {
+        "Worker Pool": "30% CPU is the symptom of waiting. Ask what they are waiting for.",
+        "Queue": "Depth is the consequence of slow drain, not the cause.",
+        "API Gateway": "Submissions are being accepted quickly — they just are not being executed."
+      }
+    }
+  ]
+}

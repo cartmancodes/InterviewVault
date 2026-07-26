@@ -1,0 +1,170 @@
+{
+  "slug": "news-aggregator",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "Fifty outlets publish the same story. What does the user see?",
+      "options": [
+        {
+          "id": "all",
+          "label": "Show every article",
+          "sub": "rank by recency",
+          "correct": false,
+          "verdict": "The front page becomes fifty variations of one headline. The user's problem is not finding the news, it is that the same news arrives fifty times."
+        },
+        {
+          "id": "cluster",
+          "label": "Cluster near-duplicates",
+          "sub": "embed, group, pick a representative",
+          "correct": true,
+          "verdict": "Group articles covering the same event and surface one, with the rest available underneath. The unit of the product becomes the story rather than the article."
+        }
+      ],
+      "defend": {
+        "prompt": "What does clustering introduce?",
+        "options": [
+          {
+            "label": "Threshold tuning between over- and under-merging",
+            "correct": true
+          },
+          {
+            "label": "Latency between publication and cluster assignment",
+            "correct": true
+          },
+          {
+            "label": "A choice of which article represents the cluster",
+            "correct": true
+          },
+          {
+            "label": "The need to store fewer articles",
+            "correct": false
+          }
+        ],
+        "explain": "You still store everything — clustering is a view over it. The costs are a similarity threshold that is never perfectly right, a delay before a new article joins its cluster, and an editorial choice about which source leads."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "An aggregator that must stay fresh through breaking news.",
+      "rungs": [
+        {
+          "q": "What a breaking story does to ingest",
+          "choices": [
+            "Nothing unusual",
+            "A sharp correlated spike across sources"
+          ],
+          "answer": 1,
+          "note": "Every outlet publishes within minutes of each other."
+        },
+        {
+          "q": "Acceptable delay before a story appears",
+          "choices": [
+            "Seconds to minutes",
+            "Hours"
+          ],
+          "answer": 0,
+          "note": "Freshness is the product; an hour late is worthless."
+        },
+        {
+          "q": "Where clustering should run",
+          "choices": [
+            "Synchronously on read",
+            "Asynchronously on ingest"
+          ],
+          "answer": 1,
+          "note": "Read-time clustering would put embedding and comparison on every page load."
+        }
+      ],
+      "explain": "Breaking news is a correlated spike, not random load — which is precisely when the pipeline must not fall behind."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the ingest path from feed to a clustered story.",
+      "palette": [
+        "RSS/Feed Poller",
+        "Fetcher",
+        "Parser",
+        "Kafka",
+        "Embedding Service",
+        "Clustering Service",
+        "Story Store",
+        "Ranking Service",
+        "CDN"
+      ],
+      "slots": [
+        {
+          "accept": "RSS/Feed Poller"
+        },
+        {
+          "accept": "Fetcher"
+        },
+        {
+          "accept": "Parser"
+        },
+        {
+          "accept": "Kafka"
+        },
+        {
+          "accept": "Embedding Service"
+        },
+        {
+          "accept": "Clustering Service"
+        }
+      ],
+      "explain": "Polling, fetching and parsing produce article text; Kafka decouples that from the expensive embedding and clustering stages so a publication spike queues. Ranking and serving read from the story store — they are downstream of clustering, never inline with it."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Breaking stories appear 40 minutes late. Older stories are clustered correctly.",
+      "cards": [
+        {
+          "name": "Fetcher",
+          "metric": "p99 300ms",
+          "delta": "+20ms",
+          "state": "ok"
+        },
+        {
+          "name": "Kafka",
+          "metric": "lag 900k",
+          "delta": "+900k",
+          "state": "hot"
+        },
+        {
+          "name": "Embedding Service",
+          "metric": "GPU util 99%",
+          "delta": "+61pt",
+          "state": "hot"
+        },
+        {
+          "name": "Story Store",
+          "metric": "p99 18ms",
+          "delta": "+2ms",
+          "state": "ok"
+        }
+      ],
+      "answer": "Embedding Service",
+      "explain": "The queue is deep because its consumer cannot drain it, and the consumer is pinned at 99% GPU. Embedding is the expensive stage and it has become the pipeline's throughput ceiling during a correlated spike. Batch embeddings, scale the GPU pool with queue depth, or run a cheap lexical pre-filter so only plausible near-duplicates need a vector.",
+      "wrong": {
+        "Kafka": "900k lag is the backlog in front of the real constraint.",
+        "Story Store": "Fast, and it is storing everything that reaches it.",
+        "Fetcher": "Articles are being collected fine — they are stuck before clustering."
+      }
+    }
+  ]
+}

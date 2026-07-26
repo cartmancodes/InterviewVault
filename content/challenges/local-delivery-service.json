@@ -1,0 +1,171 @@
+{
+  "slug": "local-delivery-service",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "Availability depends on which nearby DC can actually reach you in time.",
+      "options": [
+        {
+          "id": "static",
+          "label": "Straight-line radius",
+          "sub": "distance < 10km",
+          "correct": false,
+          "verdict": "Euclidean distance ignores rivers, motorways and one-way systems. A DC 8km away across a bridge may be 40 minutes; one 12km down a motorway may be 15. You will promise deliveries you cannot make."
+        },
+        {
+          "id": "travel",
+          "label": "Travel-time isochrones",
+          "sub": "road-network reachability within N minutes",
+          "correct": true,
+          "verdict": "Model reachability by travel time on the road graph, which is what the promise is actually made in. Precompute per DC and refresh with traffic rather than recomputing per request."
+        }
+      ],
+      "defend": {
+        "prompt": "What does travel-time modelling cost you?",
+        "options": [
+          {
+            "label": "Isochrones must be precomputed and refreshed",
+            "correct": true
+          },
+          {
+            "label": "Traffic makes reachability time-dependent",
+            "correct": true
+          },
+          {
+            "label": "A routing engine becomes a dependency",
+            "correct": true
+          },
+          {
+            "label": "You can no longer index locations geospatially",
+            "correct": false
+          }
+        ],
+        "explain": "You still use a geo index to narrow candidates — travel time refines the shortlist. The costs are precomputation, staleness as traffic changes, and a new dependency on routing."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "Availability reads around 20k QPS.",
+      "rungs": [
+        {
+          "q": "Availability read load",
+          "choices": [
+            "2k QPS",
+            "20k QPS",
+            "200k QPS"
+          ],
+          "answer": 1,
+          "note": "Every product page view asks 'can this reach me'."
+        },
+        {
+          "q": "What must never be oversold",
+          "choices": [
+            "Search results",
+            "Inventory at a DC"
+          ],
+          "answer": 1,
+          "note": "Overselling is a customer-facing failure; a stale search rank is not."
+        },
+        {
+          "q": "Where the read load should land",
+          "choices": [
+            "The inventory database",
+            "A cache keyed by DC and item"
+          ],
+          "answer": 1,
+          "note": "20k QPS against the transactional store would put reads in contention with the writes that protect it."
+        }
+      ],
+      "explain": "Reads are enormous and tolerant of a second of staleness; the reservation write is rare and must be exact. Serve them from different places."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the availability read path.",
+      "palette": [
+        "Client",
+        "API Gateway",
+        "Availability Service",
+        "Redis availability cache",
+        "Geo Index",
+        "Inventory DB",
+        "Reservation Service",
+        "Kafka",
+        "Routing Engine"
+      ],
+      "slots": [
+        {
+          "accept": "Client"
+        },
+        {
+          "accept": "API Gateway"
+        },
+        {
+          "accept": "Availability Service"
+        },
+        {
+          "accept": "Geo Index"
+        },
+        {
+          "accept": "Redis availability cache"
+        },
+        {
+          "accept": "Inventory DB"
+        }
+      ],
+      "explain": "The geo index narrows to candidate DCs, the cache answers stock for those DCs, and the inventory database is consulted only on a miss. Reservation is a separate, strongly consistent write path — it is what actually prevents overselling, not the read."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Customers are told items are available, then orders fail at checkout.",
+      "cards": [
+        {
+          "name": "Availability Service",
+          "metric": "p99 40ms",
+          "delta": "+3ms",
+          "state": "ok"
+        },
+        {
+          "name": "Redis availability cache",
+          "metric": "TTL 300s",
+          "delta": "+240s",
+          "state": "hot"
+        },
+        {
+          "name": "Geo Index",
+          "metric": "p99 6ms",
+          "delta": "0",
+          "state": "ok"
+        },
+        {
+          "name": "Inventory DB",
+          "metric": "p99 15ms",
+          "delta": "+1ms",
+          "state": "ok"
+        }
+      ],
+      "answer": "Redis availability cache",
+      "explain": "Checkout is correctly rejecting orders, so the transactional path is sound — the lie is on the read path. The availability TTL was raised from 60s to 300s, so for up to five minutes the site advertises stock that has already been reserved. Fast-moving inventory needs a short TTL or event-driven invalidation on reservation, not a longer one.",
+      "wrong": {
+        "Inventory DB": "It holds the truth and is rejecting correctly at checkout.",
+        "Availability Service": "Fast, and faithfully serving what the cache tells it.",
+        "Geo Index": "Picking the right DCs; the stock figure for those DCs is what is stale."
+      }
+    }
+  ]
+}

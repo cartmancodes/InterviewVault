@@ -1,0 +1,171 @@
+{
+  "slug": "fb-post-search",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "Search billions of posts with p50 under 500ms.",
+      "options": [
+        {
+          "id": "like",
+          "label": "SQL LIKE on the posts table",
+          "sub": "WHERE body LIKE '%term%'",
+          "correct": false,
+          "verdict": "A leading wildcard cannot use an index, so this is a full scan of every post for every query. It is the correct answer only for a table small enough that scanning is free."
+        },
+        {
+          "id": "inverted",
+          "label": "Inverted index",
+          "sub": "term -> posting list of post ids",
+          "correct": true,
+          "verdict": "Flip the mapping: for each term, keep the list of posts containing it. A query becomes intersecting a few posting lists rather than examining every document."
+        }
+      ],
+      "defend": {
+        "prompt": "What does an inverted index oblige you to do?",
+        "options": [
+          {
+            "label": "Cap or bound posting lists for very common terms",
+            "correct": true
+          },
+          {
+            "label": "Maintain it as a derived store, updated asynchronously",
+            "correct": true
+          },
+          {
+            "label": "Decide a sharding dimension — by term or by document",
+            "correct": true
+          },
+          {
+            "label": "Store the full post body inside the index",
+            "correct": false
+          }
+        ],
+        "explain": "The index stores ids and ranking signals; bodies are hydrated from the record store. The real decisions are what to do about terms appearing in a billion posts, and whether to shard by term or by document."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "Search over billions of posts, p50 under 500ms.",
+      "rungs": [
+        {
+          "q": "Search latency budget, p50",
+          "choices": [
+            "50ms",
+            "500ms",
+            "5s"
+          ],
+          "answer": 1,
+          "note": "Half a second at the median."
+        },
+        {
+          "q": "What a very common term produces",
+          "choices": [
+            "A short posting list",
+            "A posting list of millions"
+          ],
+          "answer": 1,
+          "note": "Which is why lists are capped and intersected against the shorter side first."
+        },
+        {
+          "q": "How fresh results must be",
+          "choices": [
+            "Real time",
+            "Seconds to minutes"
+          ],
+          "answer": 1,
+          "note": "New posts should surface quickly, but the index is still a derived, asynchronous store."
+        }
+      ],
+      "explain": "Bounding the work per query — capped lists, top-k windows, intersect-smallest-first — is what makes a sub-second budget survivable at this corpus size."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the query path.",
+      "palette": [
+        "Client",
+        "API Gateway",
+        "Search Service",
+        "Redis posting lists",
+        "Ranking Service",
+        "Post Store",
+        "Indexing Pipeline",
+        "Kafka",
+        "Blob Storage"
+      ],
+      "slots": [
+        {
+          "accept": "Client"
+        },
+        {
+          "accept": "API Gateway"
+        },
+        {
+          "accept": "Search Service"
+        },
+        {
+          "accept": "Redis posting lists"
+        },
+        {
+          "accept": "Ranking Service"
+        },
+        {
+          "accept": "Post Store"
+        }
+      ],
+      "explain": "Posting lists are intersected to produce candidate ids, ranking scores them by recency and engagement, and only then are a handful of post bodies hydrated from the store. Kafka and the indexing pipeline maintain the lists on the write path and never appear in a query."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Search is fast, but posts from the last hour are missing from results.",
+      "cards": [
+        {
+          "name": "Search Service",
+          "metric": "p99 200ms",
+          "delta": "+15ms",
+          "state": "ok"
+        },
+        {
+          "name": "Redis posting lists",
+          "metric": "p99 1ms",
+          "delta": "0",
+          "state": "ok"
+        },
+        {
+          "name": "Kafka",
+          "metric": "indexer lag 20M",
+          "delta": "+20M",
+          "state": "hot"
+        },
+        {
+          "name": "Post Store",
+          "metric": "p99 12ms",
+          "delta": "+1ms",
+          "state": "ok"
+        }
+      ],
+      "answer": "Kafka",
+      "explain": "Everything on the query path is healthy, which means the query is correct over an index that is missing recent documents. The indexing consumer is 20M posts behind, so nothing from the last hour has entered its posting lists. The query path cannot surface what was never indexed — scale the indexer, and consider a small real-time segment searched alongside the main index.",
+      "wrong": {
+        "Redis posting lists": "1ms, serving exactly the lists it holds. They simply lack recent ids.",
+        "Search Service": "Fast and correct given its input.",
+        "Post Store": "The posts are all there — they are just not findable."
+      }
+    }
+  ]
+}

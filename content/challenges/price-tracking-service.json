@@ -1,0 +1,171 @@
+{
+  "slug": "price-tracking-service",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "Scraped prices are noisy. A product briefly shows $3 instead of $300.",
+      "options": [
+        {
+          "id": "trust",
+          "label": "Store every sample",
+          "sub": "record what you scraped",
+          "correct": false,
+          "verdict": "One malformed page fires alerts to every watcher and poisons the price history chart. Scrapers see broken markup, A/B tests and regional currencies — treating every sample as truth guarantees false alarms."
+        },
+        {
+          "id": "quarantine",
+          "label": "Validate against recent history",
+          "sub": "quarantine implausible samples",
+          "correct": true,
+          "verdict": "A sample far below the 30-day minimum is more likely a parse error than a real price. Quarantine it, confirm with a re-scrape, and only then accept it."
+        }
+      ],
+      "defend": {
+        "prompt": "What does quarantining introduce?",
+        "options": [
+          {
+            "label": "A genuine flash sale is delayed by verification",
+            "correct": true
+          },
+          {
+            "label": "A re-scrape path for suspicious samples",
+            "correct": true
+          },
+          {
+            "label": "A threshold that will sometimes be wrong",
+            "correct": true
+          },
+          {
+            "label": "The need to store fewer samples",
+            "correct": false
+          }
+        ],
+        "explain": "You store more, not less — the quarantined ones too, since a repeated 'implausible' price is how you learn the threshold is wrong. The cost is latency on real drops and a heuristic that needs tuning."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "~500M products in the catalogue, ~1M extension users.",
+      "rungs": [
+        {
+          "q": "Products worth scraping",
+          "choices": [
+            "All 500M",
+            "Only watched products plus a popular tail"
+          ],
+          "answer": 1,
+          "note": "You track what someone cares about, not the whole catalogue."
+        },
+        {
+          "q": "Price history read latency, p99",
+          "choices": [
+            "50ms",
+            "500ms",
+            "5s"
+          ],
+          "answer": 1,
+          "note": "Under 500ms for the chart."
+        },
+        {
+          "q": "What decides scrape frequency",
+          "choices": [
+            "A fixed interval for all",
+            "Watcher count and price volatility"
+          ],
+          "answer": 1,
+          "note": "Popular, volatile products earn more frequent scrapes."
+        }
+      ],
+      "explain": "The catalogue is enormous but the working set is not. Prioritised scheduling is what keeps a 500M-product problem tractable."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the path from a scrape to a fired alert.",
+      "palette": [
+        "Scheduler",
+        "Scraper Pool",
+        "Validation / Quarantine",
+        "Price Store",
+        "Kafka",
+        "Alert Matcher",
+        "Notification Service",
+        "Postgres",
+        "CDN"
+      ],
+      "slots": [
+        {
+          "accept": "Scheduler"
+        },
+        {
+          "accept": "Scraper Pool"
+        },
+        {
+          "accept": "Validation / Quarantine"
+        },
+        {
+          "accept": "Price Store"
+        },
+        {
+          "accept": "Kafka"
+        },
+        {
+          "accept": "Alert Matcher"
+        }
+      ],
+      "explain": "Validation sits between scraping and storage so a bad sample never reaches history. Confirmed price changes are published to Kafka, and the alert matcher fans out to watchers. Notifications are the terminal step, deliberately after the price is trusted."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "A flash sale ended an hour ago. Alerts for it are still being delivered.",
+      "cards": [
+        {
+          "name": "Scraper Pool",
+          "metric": "success 97%",
+          "delta": "+1pt",
+          "state": "ok"
+        },
+        {
+          "name": "Validation",
+          "metric": "quarantine rate 4%",
+          "delta": "0",
+          "state": "ok"
+        },
+        {
+          "name": "Kafka",
+          "metric": "consumer lag 6M",
+          "delta": "+6M",
+          "state": "hot"
+        },
+        {
+          "name": "Notification Service",
+          "metric": "p99 80ms",
+          "delta": "+6ms",
+          "state": "ok"
+        }
+      ],
+      "answer": "Kafka",
+      "explain": "The alert matcher is 6M events behind, so it is working through price changes from an hour ago and dutifully notifying people about a sale that has ended. Alerts are inherently time-sensitive: the consumer needs to scale with watcher fan-out, and events should carry an expiry so stale ones are dropped rather than delivered.",
+      "wrong": {
+        "Notification Service": "Delivering promptly — the events it receives are simply old.",
+        "Validation": "A 4% quarantine rate is normal and unrelated to timing.",
+        "Scraper Pool": "Scraping is healthy; the delay is entirely downstream."
+      }
+    }
+  ]
+}

@@ -1,0 +1,170 @@
+{
+  "slug": "job-scheduler",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "Millions of scheduled jobs. How do you find the ones due now?",
+      "options": [
+        {
+          "id": "scan",
+          "label": "Poll the jobs table for due rows",
+          "sub": "SELECT WHERE run_at <= now()",
+          "correct": false,
+          "verdict": "Every tick scans a growing table for a handful of rows, and every scheduler instance runs the same query and races to claim the same jobs. It works at small scale and degrades exactly as the table grows."
+        },
+        {
+          "id": "bucket",
+          "label": "Time-bucketed index",
+          "sub": "partition by execution minute, read the current bucket",
+          "correct": true,
+          "verdict": "Bucketing by execution time turns 'what is due' into reading one small partition. The query cost stops depending on how many jobs exist and starts depending on how many are due."
+        }
+      ],
+      "defend": {
+        "prompt": "What still has to be solved on top of bucketing?",
+        "options": [
+          {
+            "label": "Only one dispatcher may claim a given job",
+            "correct": true
+          },
+          {
+            "label": "A crash after dispatch must not lose the job",
+            "correct": true
+          },
+          {
+            "label": "Retries need backoff and a dead-letter path",
+            "correct": true
+          },
+          {
+            "label": "Jobs must execute exactly once",
+            "correct": false
+          }
+        ],
+        "explain": "Exactly-once execution is not achievable across a network. You get at-least-once delivery plus idempotent handlers, which is why the job carries a key the worker can deduplicate on."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "A scheduler that must fire jobs on time, at scale.",
+      "rungs": [
+        {
+          "q": "What the due-job query should cost",
+          "choices": [
+            "Grows with total jobs",
+            "Grows with jobs due now"
+          ],
+          "answer": 1,
+          "note": "The point of time bucketing."
+        },
+        {
+          "q": "How many dispatchers may claim one job",
+          "choices": [
+            "One",
+            "Any number"
+          ],
+          "answer": 0,
+          "note": "Enforced by leader election or an atomic claim."
+        },
+        {
+          "q": "The realistic delivery guarantee",
+          "choices": [
+            "Exactly once",
+            "At least once, plus idempotency"
+          ],
+          "answer": 1,
+          "note": "The only honest answer once the network is involved."
+        }
+      ],
+      "explain": "Scheduling is a claiming problem more than a timing problem: finding due jobs is easy once bucketed, agreeing who runs them is the hard part."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the dispatch path for a due job.",
+      "palette": [
+        "Clock Tick",
+        "Dispatcher",
+        "Leader Lock",
+        "Time Bucket Index",
+        "Job Queue",
+        "Worker",
+        "Idempotency Store",
+        "Dead Letter Queue",
+        "Metrics"
+      ],
+      "slots": [
+        {
+          "accept": "Clock Tick"
+        },
+        {
+          "accept": "Dispatcher"
+        },
+        {
+          "accept": "Leader Lock"
+        },
+        {
+          "accept": "Time Bucket Index"
+        },
+        {
+          "accept": "Job Queue"
+        },
+        {
+          "accept": "Worker"
+        }
+      ],
+      "explain": "The dispatcher acquires leadership before reading the current bucket, so only one instance enqueues. Workers consume and deduplicate on the job's idempotency key. The dead-letter queue catches exhausted retries — a terminal branch, not a step."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Some jobs run twice. Both runs are seconds apart, on different workers.",
+      "cards": [
+        {
+          "name": "Dispatcher",
+          "metric": "tick drift 40ms",
+          "delta": "+5ms",
+          "state": "ok"
+        },
+        {
+          "name": "Leader Lock",
+          "metric": "TTL 5s",
+          "delta": "-25s",
+          "state": "hot"
+        },
+        {
+          "name": "Job Queue",
+          "metric": "lag 200ms",
+          "delta": "+20ms",
+          "state": "ok"
+        },
+        {
+          "name": "Worker",
+          "metric": "exec p99 8s",
+          "delta": "+1s",
+          "state": "warn"
+        }
+      ],
+      "answer": "Leader Lock",
+      "explain": "Two workers seconds apart means the job was enqueued twice, so the fault is at dispatch. The leader lock TTL was cut to 5 seconds while jobs take around 8 seconds to execute — leadership expires mid-dispatch, a second dispatcher takes over and re-enqueues the same bucket. The lock must outlive the work it protects, or be renewed while held.",
+      "wrong": {
+        "Worker": "Slow execution is what exposes the short TTL, but the duplicate was created upstream.",
+        "Job Queue": "It faithfully delivered two messages because two were published.",
+        "Dispatcher": "Tick timing is accurate; the problem is that two dispatchers both believed they were leader."
+      }
+    }
+  ]
+}

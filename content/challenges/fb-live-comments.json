@@ -1,0 +1,171 @@
+{
+  "slug": "fb-live-comments",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "A stream with 2M viewers. How do comments reach them?",
+      "options": [
+        {
+          "id": "poll",
+          "label": "Clients poll every second",
+          "sub": "GET /comments?since=",
+          "correct": false,
+          "verdict": "2M viewers polling once a second is 2M requests/sec for a stream that may get ten comments in that time. You have converted a broadcast problem into a request-per-viewer problem."
+        },
+        {
+          "id": "sse",
+          "label": "Server-sent events over a fanout tier",
+          "sub": "one persistent stream per viewer",
+          "correct": true,
+          "verdict": "Comments are one-way from server to client, which is exactly what SSE is for — cheaper than WebSockets and it reconnects on its own. Cost then tracks comment volume rather than viewer count."
+        }
+      ],
+      "defend": {
+        "prompt": "What does a mega-stream still force you to do?",
+        "options": [
+          {
+            "label": "Batch comments into periodic frames rather than sending each one",
+            "correct": true
+          },
+          {
+            "label": "Introduce broadcast or relay nodes between publisher and viewers",
+            "correct": true
+          },
+          {
+            "label": "Sample or rate-limit what is displayed",
+            "correct": true
+          },
+          {
+            "label": "Guarantee every viewer sees every comment",
+            "correct": false
+          }
+        ],
+        "explain": "Nobody can read 500 comments a second, so delivering all of them is neither possible nor useful. You batch, relay through intermediate nodes so no single server fans out to millions, and accept sampling on the largest streams."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Capacity ladder",
+      "xp": 70,
+      "prompt": "Comment delivery under roughly 200ms end to end.",
+      "rungs": [
+        {
+          "q": "Latency target that still feels live",
+          "choices": [
+            "200ms",
+            "2s",
+            "10s"
+          ],
+          "answer": 0,
+          "note": "About the human threshold for interaction feeling immediate."
+        },
+        {
+          "q": "Cost driver with a push transport",
+          "choices": [
+            "Number of viewers",
+            "Number of comments"
+          ],
+          "answer": 1,
+          "note": "Which is the entire reason to push rather than poll."
+        },
+        {
+          "q": "What a mega-stream needs",
+          "choices": [
+            "Direct fanout from one server",
+            "Hierarchical relay nodes"
+          ],
+          "answer": 1,
+          "note": "M broadcast nodes instead of N viewer connections on one box."
+        }
+      ],
+      "explain": "Push makes cost proportional to content rather than audience — then hierarchy keeps the fan-out per node bounded."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the comment delivery path.",
+      "palette": [
+        "Commenter",
+        "API Gateway",
+        "Comment Service",
+        "Pub/Sub",
+        "Broadcast Nodes",
+        "SSE Gateway",
+        "Viewer",
+        "Comment Store",
+        "CDN"
+      ],
+      "slots": [
+        {
+          "accept": "Commenter"
+        },
+        {
+          "accept": "API Gateway"
+        },
+        {
+          "accept": "Comment Service"
+        },
+        {
+          "accept": "Pub/Sub"
+        },
+        {
+          "accept": "Broadcast Nodes"
+        },
+        {
+          "accept": "SSE Gateway"
+        }
+      ],
+      "explain": "The comment is persisted and published once; broadcast nodes sit between pub/sub and the socket gateways so no single node fans out to millions. Viewers hold an SSE connection to a gateway. The store is written on the way in, not read on the way out."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Comments are live on small streams and 90 seconds behind on the biggest one.",
+      "cards": [
+        {
+          "name": "Comment Service",
+          "metric": "p99 25ms",
+          "delta": "+2ms",
+          "state": "ok"
+        },
+        {
+          "name": "Pub/Sub",
+          "metric": "publish p99 3ms",
+          "delta": "0",
+          "state": "ok"
+        },
+        {
+          "name": "Broadcast Nodes",
+          "metric": "fanout per node 900k",
+          "delta": "+700k",
+          "state": "hot"
+        },
+        {
+          "name": "SSE Gateway",
+          "metric": "p99 40ms",
+          "delta": "+5ms",
+          "state": "ok"
+        }
+      ],
+      "answer": "Broadcast Nodes",
+      "explain": "Only the largest stream is affected, so this is fan-out per node rather than anything shared. One broadcast node is pushing to 900k connections and cannot keep up — the tier has not scaled with the audience. Add relay depth so each node fans out to a bounded number, and batch comments into frames instead of sending them individually.",
+      "wrong": {
+        "Pub/Sub": "3ms publish — the message is distributed instantly. Delivery to viewers is the problem.",
+        "SSE Gateway": "Healthy, and it can only forward what the broadcast tier hands it.",
+        "Comment Service": "Ingest is fine; small streams prove the write path works."
+      }
+    }
+  ]
+}
