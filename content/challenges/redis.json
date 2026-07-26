@@ -7,21 +7,21 @@
       "tier": "senior",
       "title": "Tradeoff duel",
       "xp": 80,
-      "prompt": "Workers must receive notifications that were published while they were offline. Which Redis primitive fits the delivery requirement?",
+      "prompt": "A worker pool must ensure every notification is processed by some worker, even when workers disconnect.",
       "options": [
         {
           "id": "pubsub",
           "label": "Redis Pub/Sub",
           "sub": "publish directly to currently subscribed workers",
           "correct": false,
-          "verdict": "Redis Pub/Sub delivers at most once to current subscribers and keeps no backlog. A disconnected worker misses notifications published while it is offline and cannot replay them later."
+          "verdict": "Redis Pub/Sub delivers at most once to current subscribers and keeps no backlog. A disconnected pool or subscriber misses messages published while it is offline and cannot replay them later."
         },
         {
           "id": "streams",
           "label": "Redis Streams consumer group",
           "sub": "persist entries and track pending delivery",
           "correct": true,
-          "verdict": "A stream retains entries subject to Redis persistence and retention settings. A consumer group records pending entries, allowing another worker to reclaim abandoned work, but redelivery means processing must be idempotent."
+          "verdict": "The stream stores entries before delivery, subject to Redis persistence and retention settings. A consumer group distributes each entry to one consumer. After XREADGROUP delivery, unacked entries are tracked as pending and can be claimed by another worker. If every independent subscriber needs every event, use separate groups/cursors."
         }
       ],
       "defend": {
@@ -44,7 +44,7 @@
             "correct": false
           }
         ],
-        "explain": "Workers acknowledge completed entries and use XCLAIM or XAUTOCLAIM to recover pending work abandoned by failed consumers. A slow worker can be mistaken for a failed one, so redelivery is possible and effects must be idempotent. Stream durability still depends on Redis persistence and replication settings. Choose Kafka when message loss is unacceptable or the design needs durable long retention, replay, and many independent consumers."
+        "explain": "The stream stores an entry before a consumer receives it, and one consumer group distributes each entry to one worker. After XREADGROUP delivers an entry, it remains pending until the worker acknowledges completed work. XCLAIM or XAUTOCLAIM lets another worker recover abandoned pending work. A slow worker can be mistaken for a failed one, so redelivery is possible and effects must be idempotent. Independent subscribers that each need every event require separate groups or cursors. Stream durability still depends on Redis persistence and replication settings, so it is not a durable system of record. Choose Kafka when message loss is unacceptable or the design needs durable long retention, replay, and many independent consumers."
       }
     },
     {
@@ -100,8 +100,8 @@
         "Cluster-aware Client",
         "Hash Slot",
         "Primary Node",
-        "Async Replica",
         "Client Response",
+        "Replica May Receive Later",
         "Proxy Every Hop",
         "Cross-slot Join",
         "Synchronous Quorum"
@@ -120,13 +120,13 @@
           "accept": "Primary Node"
         },
         {
-          "accept": "Async Replica"
+          "accept": "Client Response"
         },
         {
-          "accept": "Client Response"
+          "accept": "Replica May Receive Later"
         }
       ],
-      "explain": "The cluster-aware client uses its cached slot map to hash the command's key and route directly to the owning primary. The primary executes the command, propagates it asynchronously to its replica, and returns the default response without waiting for a synchronous quorum. MOVED means the slot has a permanent owner elsewhere, so the client follows the redirect and refreshes its map. ASK is a temporary redirect used while a slot is migrating. Redis does not proxy every hop or support a cross-slot join."
+      "explain": "The cluster-aware client uses its cached slot map to hash the command's key and route directly to the owning primary. The primary executes the command and can acknowledge it without waiting for a synchronous quorum. Asynchronous propagation may reach the replica before or after the client response, but replica receipt is not required first. That gap creates a failover window in which an acknowledged write can be lost. MOVED means the slot has a permanent owner elsewhere, so the client follows the redirect and refreshes its map. ASK is a temporary redirect used while a slot is migrating. Redis does not proxy every hop or support a cross-slot join."
     },
     {
       "id": "bottleneck",
