@@ -48,7 +48,7 @@
       }
     },
     {
-      "id": "cluster",
+      "id": "capacity",
       "type": "ladder",
       "tier": "senior",
       "title": "Cluster ladder",
