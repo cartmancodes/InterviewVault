@@ -102,6 +102,7 @@
         "ISR Replication",
         "Consumer Group",
         "Idempotent Sink",
+        "Offset Commit",
         "Random Router",
         "Blob Payload",
         "Offset Before Work"
@@ -124,9 +125,12 @@
         },
         {
           "accept": "Idempotent Sink"
+        },
+        {
+          "accept": "Offset Commit"
         }
       ],
-      "explain": "The producer attaches a key so related events reach one partition, whose leader appends them to its ordered log. In-sync replicas copy the append for durability according to the acknowledgment configuration. A consumer group assigns each partition to one member for parallel processing. The consumer commits its offset only after successful work, and an idempotent sink makes replay after a pre-commit crash safe. Random routing loses per-key ordering, blob payloads misuse Kafka for large data, and committing an offset before work risks loss if the consumer crashes."
+      "explain": "The producer attaches a key so related events reach one partition, whose leader appends them to its ordered log. In-sync replicas copy the append for durability according to the acknowledgment configuration. A consumer group assigns each partition to one member for parallel processing. A successful sink effect precedes the offset commit, and replay after a pre-commit crash remains safe because the sink is idempotent. Random routing loses per-key ordering, blob payloads misuse Kafka for large data, and committing an offset before work risks loss if the consumer crashes."
     },
     {
       "id": "bottleneck",
@@ -134,19 +138,19 @@
       "tier": "staff",
       "title": "Spot the bottleneck",
       "xp": 90,
-      "prompt": "Consumer lag is rising only on Partition 7 while the rest of the pipeline remains healthy.",
+      "prompt": "One partition's lag is rising while overall broker and consumer capacity remain healthy. Diagnose the root cause.",
       "cards": [
         {
           "name": "Partition 7",
           "metric": "lag 2.4M",
           "delta": "+2.1M",
-          "state": "hot"
+          "state": "warn"
         },
         {
-          "name": "Other Partitions",
-          "metric": "lag under 8k",
-          "delta": "healthy",
-          "state": "ok"
+          "name": "Partition Key",
+          "metric": "top key 62%",
+          "delta": "+47pt concentration",
+          "state": "hot"
         },
         {
           "name": "Broker Network",
@@ -161,10 +165,10 @@
           "state": "ok"
         }
       ],
-      "answer": "Partition 7",
-      "explain": "The isolated lag points to key skew: one or more hot keys are routing disproportionate traffic to Partition 7. Adding consumers to the same group cannot split that partition because only one group member can own a partition at a time. Revisit the key strategy, such as a compound or salted key when the ordering requirement permits it, or apply back pressure.",
+      "answer": "Partition Key",
+      "explain": "The top key carries 62% of traffic, concentrating records on one partition and producing the observed lag. Adding consumers to the same group cannot split that partition because only one group member can own it at a time. Redesign or salt the key only when the ordering requirements permit related events to be distributed across partitions.",
       "wrong": {
-        "Other Partitions": "Their lag remains under 8k, so they show that the topic and most consumers are keeping pace rather than identifying the overloaded shard.",
+        "Partition 7": "Its 2.4M lag is the symptom and identifies where work accumulated, but the concentrated partition key explains why traffic collected there.",
         "Broker Network": "At 38% utilization, shared broker networking has headroom; a network bottleneck would be expected to affect more than one partition.",
         "Consumer Fleet": "Fleet CPU is only 44%. More consumers might help across partitions, but they cannot divide Partition 7 among multiple members of the same group."
       }
