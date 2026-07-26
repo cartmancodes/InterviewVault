@@ -74,14 +74,15 @@
       "tier": "staff",
       "title": "Architecture builder",
       "xp": 100,
-      "prompt": "Build the ZooKeeper leader-election path from candidacy through automatic failover.",
+      "prompt": "Build the path for a waiting contender to become leader.",
       "palette": [
         "Contender",
         "Ephemeral Sequential ZNode",
         "Sort Sequence Numbers",
+        "Not Lowest",
         "Watch Predecessor",
+        "Re-list After Notification",
         "Lowest Node Leads",
-        "Session Expiry Failover",
         "Watch Parent",
         "Persistent Claim",
         "Poll Every Second"
@@ -90,11 +91,12 @@
         { "accept": "Contender" },
         { "accept": "Ephemeral Sequential ZNode" },
         { "accept": "Sort Sequence Numbers" },
+        { "accept": "Not Lowest" },
         { "accept": "Watch Predecessor" },
-        { "accept": "Lowest Node Leads" },
-        { "accept": "Session Expiry Failover" }
+        { "accept": "Re-list After Notification" },
+        { "accept": "Lowest Node Leads" }
       ],
-      "explain": "Each contender creates an ephemeral sequential ZNode, sorts the children by sequence number, and watches only its immediate predecessor. The lowest-numbered node leads. If that client's session expires, ZooKeeper deletes its ephemeral node and the single successor watching it is notified to take over. Watching the parent creates a herd, a persistent claim survives owner failure, and polling adds avoidable load and failover delay."
+      "explain": "Each contender creates an ephemeral sequential ZNode and sorts the children by sequence number. A contender leads immediately if its node is initially lowest; the shown path is the non-lowest branch, which watches only its immediate predecessor. A notification is a hint, so the waiter re-lists the children and re-checks its position before leading or installing another predecessor watch. Session expiration deletes the owner's ephemeral node and allows the queue to progress. Watching the parent creates a herd, a persistent claim survives owner failure, and polling adds avoidable load and failover delay."
     },
     {
       "id": "bottleneck",
@@ -102,19 +104,19 @@
       "tier": "staff",
       "title": "Spot the bottleneck",
       "xp": 90,
-      "prompt": "One leader failure saturates the ZooKeeper ensemble for 20 seconds. Which signal identifies the root cause?",
+      "prompt": "An application leader or lock holder's ZooKeeper session expires, and the ensemble saturates for 20 seconds. Which signal identifies the root cause?",
       "cards": [
-        { "name": "Watch Set", "metric": "9,800 on leader", "delta": "+9,700", "state": "hot" },
-        { "name": "Write Quorum", "metric": "3/5 healthy", "delta": "quorum intact", "state": "warn" },
-        { "name": "ZNode Data", "metric": "2 KB max", "delta": "steady", "state": "ok" },
+        { "name": "Watch Set", "metric": "9,800 on holder ZNode", "delta": "+9,700", "state": "warn" },
+        { "name": "Client Requests", "metric": "getChildren 180k/s", "delta": "+175k/s", "state": "hot" },
+        { "name": "Write Quorum", "metric": "3/5 healthy", "delta": "quorum intact", "state": "ok" },
         { "name": "Transaction Log", "metric": "fsync p99 4 ms", "delta": "steady", "state": "ok" }
       ],
       "answer": "Watch Set",
-      "explain": "The failed leader had 9,800 watchers, so its deletion wakes nearly every contender at once. Their simultaneous child-list reads and retries create a thundering herd that saturates the ensemble. Use ephemeral sequential contender nodes, sort by sequence number, and have each waiter watch only its immediate predecessor. A departure then wakes one successor, which re-reads state and reinstalls its one-shot predecessor watch when needed.",
+      "explain": "All contenders watched the application holder's ZNode. When the holder's session expires, ZooKeeper deletes that ephemeral node, wakes all 9,800 watchers, and causes them to re-list the contenders together. The resulting getChildren spike is the thundering-herd symptom; the shared watch set is the root cause. Use ephemeral sequential contender nodes, sort by sequence number, and have each waiter watch only its immediate predecessor. A deletion then wakes one successor, which re-lists state and reinstalls its one-shot predecessor watch when needed.",
       "wrong": {
-        "Write Quorum": "Three of five servers remain healthy, so the ensemble still has the majority required for writes. The warning reflects reduced redundancy, not the burst that saturates all servers.",
-        "ZNode Data": "The largest ZNode is only 2 KB and remains steady, so neither bulk data nor a sudden payload increase explains the 20-second incident.",
-        "Transaction Log": "A steady 4 ms fsync p99 does not indicate transaction-log saturation. The sharp change is the 9,700 additional clients concentrated in the leader's watch set."
+        "Client Requests": "The 180k getChildren requests per second are the immediate load spike, but they are a symptom: all contenders woke and re-listed because they shared a watch on the holder ZNode.",
+        "Write Quorum": "Three of five servers remain healthy, so the ensemble still has the majority required for writes. Quorum health does not explain the synchronized client burst.",
+        "Transaction Log": "A steady 4 ms fsync p99 does not indicate transaction-log saturation. The sharp change comes from 9,800 contenders waking from the shared holder-ZNode watch."
       }
     }
   ]
