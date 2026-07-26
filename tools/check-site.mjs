@@ -24,6 +24,24 @@ function resolve(ref) {
   return path.join(SITE, ref);
 }
 
+function checkpointIds(checkpoints) {
+  const ids = [], issues = [], seen = new Set();
+  checkpoints.forEach((checkpoint, index) => {
+    if (!checkpoint || typeof checkpoint !== 'object' || Array.isArray(checkpoint)) {
+      issues.push(`checkpoint ${index + 1} must be a non-null object`);
+      return;
+    }
+    if (typeof checkpoint.id !== 'string' || !checkpoint.id.trim()) {
+      issues.push(`checkpoint ${index + 1} id must be a non-empty string`);
+      return;
+    }
+    if (seen.has(checkpoint.id)) issues.push(`duplicate checkpoint id "${checkpoint.id}"`);
+    seen.add(checkpoint.id);
+    ids.push(checkpoint.id);
+  });
+  return { ids, issues };
+}
+
 if (!existsSync(SITE)) {
   console.error('site/ does not exist — run build-site.mjs first');
   process.exit(1);
@@ -33,6 +51,7 @@ const pages = htmlFiles(SITE);
 let links = 0, assets = 0, anchors = 0;
 const problems = [];
 const challengePayloads = [];
+const challengePayloadCounts = new Map();
 
 for (const file of pages) {
   const html = readFileSync(file, 'utf8');
@@ -57,7 +76,13 @@ for (const file of pages) {
     if (!ids.has(decodeURIComponent(m[1]))) problems.push(`${rel}: dead anchor #${m[1]}`);
   }
 
-  for (const m of html.matchAll(/<script\b[^>]*\bid="iv-challenges"[^>]*>([\s\S]*?)<\/script>/g)) {
+  const payloadMatches = [...html.matchAll(/<script\b[^>]*\bid="iv-challenges"[^>]*>([\s\S]*?)<\/script>/g)];
+  challengePayloadCounts.set(rel, payloadMatches.length);
+  if (payloadMatches.length > 1 && (rel.startsWith('answers/') || rel.startsWith('deep-dives/'))) {
+    problems.push(`${rel}: expected exactly one iv-challenges payload, found ${payloadMatches.length}`);
+  }
+
+  for (const m of payloadMatches) {
     if (!rel.startsWith('answers/') && !rel.startsWith('deep-dives/')) {
       problems.push(`${rel}: iv-challenges payload is outside answers/ or deep-dives/`);
     }
@@ -79,6 +104,7 @@ for (const file of pages) {
       if (!Number.isInteger(payload.authoredCount) || payload.authoredCount < 0) {
         shapeProblems.push('authoredCount must be a nonnegative integer');
       }
+      if (Array.isArray(payload.checkpoints)) shapeProblems.push(...checkpointIds(payload.checkpoints).issues);
     }
     if (shapeProblems.length) {
       problems.push(`${rel}: malformed iv-challenges payload — ${shapeProblems.join('; ')}`);
@@ -89,9 +115,7 @@ for (const file of pages) {
       rel,
       slug: payload.slug,
       authoredCount: payload.authoredCount,
-      checkpointIds: payload.checkpoints
-        .map((checkpoint) => checkpoint?.id)
-        .filter((id) => typeof id === 'string'),
+      checkpointIds: checkpointIds(payload.checkpoints).ids,
     });
   }
 }
@@ -113,9 +137,9 @@ for (const file of readdirSync(CHALLENGES).filter((f) => f.endsWith('.json'))) {
   }
 
   const slug = source.slug;
-  const checkpointIds = source.checkpoints.map((checkpoint) => checkpoint?.id);
-  if (checkpointIds.some((id) => typeof id !== 'string' || !id)) {
-    problems.push(`${file}: malformed authored challenge ${slug} — every checkpoint needs a non-empty string id`);
+  const sourceCheckpoints = checkpointIds(source.checkpoints);
+  if (sourceCheckpoints.issues.length) {
+    problems.push(`${file}: malformed authored challenge ${slug} — ${sourceCheckpoints.issues.join('; ')}`);
     continue;
   }
 
@@ -129,6 +153,11 @@ for (const file of readdirSync(CHALLENGES).filter((f) => f.endsWith('.json'))) {
   }
 
   for (const target of targets) {
+    const count = challengePayloadCounts.get(target) || 0;
+    if (count !== 1) {
+      problems.push(`authored challenge ${slug}: ${target}: expected exactly one iv-challenges payload, found ${count}`);
+      continue;
+    }
     const payload = challengePayloads.find((entry) => entry.rel === target && entry.slug === slug);
     if (!payload) {
       problems.push(`authored challenge ${slug}: ${target}: matching iv-challenges payload is missing`);
@@ -137,7 +166,7 @@ for (const file of readdirSync(CHALLENGES).filter((f) => f.endsWith('.json'))) {
     if (payload.authoredCount !== source.checkpoints.length) {
       problems.push(`authored challenge ${slug}: ${target}: authoredCount ${payload.authoredCount}, expected ${source.checkpoints.length}`);
     }
-    const missingIds = checkpointIds.filter((id) => !payload.checkpointIds.includes(id));
+    const missingIds = sourceCheckpoints.ids.filter((id) => !payload.checkpointIds.includes(id));
     if (missingIds.length) {
       problems.push(`authored challenge ${slug}: ${target}: missing checkpoint IDs ${missingIds.join(', ')}`);
     }
