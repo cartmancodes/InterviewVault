@@ -13,6 +13,7 @@
   --paper: #FFFFFF;
   --amber: #F59E0B;
   --good: #10B981;
+  --soft: #F2F5FB;
 
   --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --serif: "IBM Plex Serif", Georgia, "Times New Roman", serif;
@@ -20,7 +21,17 @@
 
   --shell: 1240px;
   --radius: 6px;
+
+  /* doc-page frame. The practice rail holds a pipeline builder and a metrics
+     grid, so it is sized as an instrument panel rather than a margin note. */
+  --side-w: 228px;
+  --rail-w: 348px;
+  --doc-gap: 36px;
 }
+
+/* Doc pages run a three-column frame, so they get a wider shell than the
+   home page — header, footer and content stay on one alignment. */
+body.doc { --shell: 1460px; }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { scroll-behavior: smooth; scroll-padding-top: 84px; }
@@ -169,7 +180,8 @@ a:hover { text-decoration-color: var(--blue); }
 /* ── doc page ──────────────────────────────────────────── */
 .doc-shell {
   max-width: var(--shell); margin: 0 auto; padding: 0 20px;
-  display: grid; grid-template-columns: 220px minmax(0,1fr) 210px; gap: 34px; align-items: start;
+  display: grid; grid-template-columns: var(--side-w) minmax(0,1fr) var(--rail-w);
+  gap: var(--doc-gap); align-items: start;
 }
 /* grid items default to min-width:auto and would otherwise be forced wide by a
    large diagram or code block, pushing the whole page into horizontal scroll */
@@ -254,7 +266,12 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
 }
 
 /* ── responsive ────────────────────────────────────────── */
-@media (max-width: 1080px) {
+/* The rail narrows a step before it is dropped, so a 1280px laptop still gets
+   the panel instead of falling straight back to the bottom sheet. */
+@media (max-width: 1400px) {
+  body.doc { --side-w: 206px; --rail-w: 306px; --doc-gap: 26px; }
+}
+@media (max-width: 1180px) {
   .doc-shell { grid-template-columns: 200px minmax(0,1fr); }
   .toc { display: none; }
 }
@@ -288,64 +305,66 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
 
 .sidecar {
   border: 1px solid var(--rule); border-radius: 10px; background: var(--paper);
-  padding: 13px 14px 12px;
+  padding: 17px 18px 15px;
 }
-.sc-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .sc-eyebrow {
-  font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em;
+  font-family: var(--mono); font-size: 11px; letter-spacing: .12em;
   text-transform: uppercase; color: var(--mut);
 }
-.sc-timed { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--mut); cursor: pointer; }
+.sc-timed { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--mut); cursor: pointer; }
 .sc-timed input { accent-color: var(--blue); }
 
-.sc-level { display: flex; align-items: center; gap: 10px; margin-top: 11px; }
+.sc-level { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
 .sc-lv {
-  width: 34px; height: 34px; flex: none; border-radius: 8px; background: var(--blue-wash);
-  color: var(--blue-deep); font-family: var(--mono); font-weight: 600; font-size: 13px;
+  width: 42px; height: 42px; flex: none; border-radius: 9px; background: var(--blue-wash);
+  color: var(--blue-deep); font-family: var(--mono); font-weight: 600; font-size: 15px;
   display: grid; place-items: center;
 }
 .sc-meta { flex: 1; min-width: 0; }
-.sc-bar { height: 5px; background: var(--soft); border-radius: 3px; overflow: hidden; }
+.sc-bar { height: 6px; background: var(--soft); border-radius: 3px; overflow: hidden; }
 .sc-bar i { display: block; height: 100%; background: var(--blue); transition: width .4s ease; }
-.sc-xp { font-family: var(--mono); font-size: 11px; color: var(--mut); display: block; margin-top: 4px; }
+.sc-xp { font-family: var(--mono); font-size: 12px; color: var(--mut); display: block; margin-top: 5px; }
 
-.sc-tabs { display: flex; gap: 3px; margin-top: 13px; background: var(--soft); padding: 3px; border-radius: 7px; }
+.sc-tabs { display: flex; gap: 3px; margin-top: 16px; background: var(--soft); padding: 4px; border-radius: 8px; }
 .sc-tab {
-  flex: 1; border: 0; background: none; border-radius: 5px; padding: 5px 4px; cursor: pointer;
-  font: 500 12px var(--sans); color: var(--mut);
+  flex: 1; border: 0; background: none; border-radius: 6px; padding: 7px 4px; cursor: pointer;
+  font: 500 13px var(--sans); color: var(--mut);
 }
 .sc-tab.on { background: var(--paper); color: var(--ink); box-shadow: 0 1px 2px rgba(14,26,43,.1); }
 
-.sc-track { font-family: var(--mono); font-size: 11px; color: var(--mut); margin-top: 11px; }
+.sc-track { font-family: var(--mono); font-size: 12px; color: var(--mut); margin-top: 14px; }
 
-.sc-list { margin-top: 8px; display: flex; flex-direction: column; gap: 5px; }
-.sc-cp { border: 1px solid var(--rule); border-radius: 7px; overflow: hidden; }
+.sc-list { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.sc-cp { border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
 .sc-cp.done { border-color: color-mix(in srgb, var(--good) 45%, var(--rule)); }
 .sc-cp-head {
-  width: 100%; display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 12px;
   background: none; border: 0; cursor: pointer; text-align: left;
 }
 .sc-cp-head:hover { background: var(--blue-wash); }
-.sc-dot { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--bd, #C6D3EC); flex: none; }
+.sc-dot { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--bd, #C6D3EC); flex: none; }
 .sc-cp.done .sc-dot { background: var(--good); border-color: var(--good); }
-.sc-cp-t { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.sc-cp-t b { font-size: 12.5px; font-weight: 500; }
-.sc-cp-sub { font-family: var(--mono); font-size: 10.5px; color: var(--mut); }
+/* the title column has to be able to shrink, or a long checkpoint name pushes
+   the START pill off the row instead of wrapping inside it */
+.sc-cp-t { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.sc-cp-t b { font-size: 14px; font-weight: 500; line-height: 1.35; }
+.sc-cp-sub { font-family: var(--mono); font-size: 11.5px; color: var(--mut); white-space: nowrap; }
 .sc-go {
-  margin-left: auto; flex: none; font-family: var(--mono); font-size: 10px;
+  flex: none; font-family: var(--mono); font-size: 10.5px;
   letter-spacing: .06em; text-transform: uppercase; color: var(--blue-deep);
-  background: var(--blue-wash); padding: 3px 7px; border-radius: 100px;
+  background: var(--blue-wash); padding: 4px 9px; border-radius: 100px;
 }
 .sc-cp.done .sc-go { color: var(--mut); background: var(--soft); }
 
-.sc-levels { margin-top: 12px; font-size: 12px; color: var(--ink-2); }
-.sc-levels summary { font-family: var(--mono); font-size: 11px; color: var(--mut); cursor: pointer; }
-.sc-levels ol { margin: 7px 0 0 16px; display: flex; flex-direction: column; gap: 3px; }
+.sc-levels { margin-top: 14px; font-size: 13px; color: var(--ink-2); }
+.sc-levels summary { font-family: var(--mono); font-size: 12px; color: var(--mut); cursor: pointer; }
+.sc-levels ol { margin: 8px 0 0 18px; display: flex; flex-direction: column; gap: 4px; }
 
 .sc-foot {
-  display: flex; justify-content: space-between; align-items: center; gap: 8px;
-  margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--rule);
-  font-family: var(--mono); font-size: 11px; color: var(--mut);
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--rule);
+  font-family: var(--mono); font-size: 12px; color: var(--mut);
 }
 
 /* ── shared mechanic chrome ─────────────────────────────── */
@@ -472,7 +491,7 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
   box-shadow: 0 6px 20px rgba(37,99,235,.35);
 }
 
-@media (max-width: 1080px) {
+@media (max-width: 1180px) {
   .rail { display: none; }
   .sheet-open-btn { display: block; }
   body.sheet-open .rail {
@@ -541,14 +560,14 @@ body.mech-open { overflow: hidden; }
 @keyframes mo-in { from { opacity: 0; } }
 
 .mech-panel {
-  width: min(620px, 100%); max-height: min(86vh, 780px);
+  width: min(780px, 100%); max-height: min(90vh, 900px);
   display: flex; flex-direction: column;
   background: var(--paper); border-radius: 12px;
   border: 1px solid var(--rule);
   box-shadow: 0 24px 70px rgba(14,26,43,.28);
   animation: mp-in .18s cubic-bezier(.2,.7,.3,1);
 }
-.mech-panel.wide { width: min(880px, 100%); }
+.mech-panel.wide { width: min(1180px, 100%); }
 @keyframes mp-in { from { transform: translateY(8px) scale(.99); opacity: 0; } }
 
 .mp-head {
@@ -568,31 +587,48 @@ body.mech-open { overflow: hidden; }
 }
 .mp-close:hover { background: var(--soft); color: var(--ink); }
 
-.mp-body { padding: 4px 18px 16px; overflow-y: auto; }
-.mp-body .mech { padding-top: 12px; }
-.mp-body .mech > * + * { margin-top: 12px; }
-.mp-body .mech-prompt { font-size: 15px; line-height: 1.45; }
-.mp-body .triage-t, .mp-body .recall-row { font-size: 13.5px; }
-.mp-body .triage-row { padding: 8px 10px; }
-.mp-body .tg { font-size: 11px; padding: 4px 9px; }
-.mp-body .mech-note, .mp-body .mech-verdict { font-size: 13px; }
-.mp-body .duel-opt b { font-size: 14px; }
-.mp-body .duel-sub { font-size: 11.5px; }
-.mp-body .rung-q { font-size: 13.5px; }
-.mp-body .rung-c { font-size: 12.5px; padding: 6px 12px; }
-.mp-body .mech-go { width: auto; padding: 8px 18px; font-size: 13px; }
+.mp-body { padding: 6px 24px 20px; overflow-y: auto; }
+.mp-body .mech { padding-top: 14px; }
+.mp-body .mech > * + * { margin-top: 14px; }
+.mp-body .mech-prompt { font-size: 16.5px; line-height: 1.45; }
+.mp-body .mech-hint { font-size: 13.5px; }
+.mp-body .triage-t, .mp-body .recall-row { font-size: 14.5px; }
+.mp-body .triage-row { padding: 10px 12px; }
+.mp-body .tg { font-size: 11.5px; padding: 5px 10px; }
+.mp-body .mech-note, .mp-body .mech-verdict { font-size: 14px; }
+.mp-body .mech-verdict { padding: 12px 14px; }
+.mp-body .duel-opt { padding: 14px 14px; }
+.mp-body .duel-opt b { font-size: 15.5px; }
+.mp-body .duel-sub { font-size: 12.5px; }
+.mp-body .rung { padding: 12px; }
+.mp-body .rung-q { font-size: 15px; }
+.mp-body .rung-c { font-size: 13.5px; padding: 8px 14px; }
+.mp-body .rung-note { font-size: 13px; }
+.mp-body .mech-go { width: auto; padding: 10px 22px; font-size: 14px; }
 
 /* the two space-hungry mechanics, now with room to breathe */
-.mech-panel.wide .build-track { flex-wrap: nowrap; gap: 6px; }
-.mech-panel.wide .slot { flex: 1 1 0; min-height: 58px; font-size: 12.5px; padding: 8px; }
-.mech-panel.wide .build-arrow { font-size: 14px; }
-.mech-panel.wide .palette { gap: 6px; margin-top: 4px; }
-.mech-panel.wide .chip { font-size: 12.5px; padding: 6px 12px; }
-.mech-panel.wide .dash { grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.mech-panel.wide .dash-card { padding: 12px; }
-.mech-panel.wide .dash-name { font-size: 13px; }
-.mech-panel.wide .dash-metric { font-size: 12px; }
-.mech-panel.wide .dash-delta { font-size: 11.5px; }
+.mech-panel.wide .build-track { flex-wrap: nowrap; gap: 0; }
+.mech-panel.wide .slot { flex: 1 1 0; min-height: 84px; font-size: 14px; padding: 10px; }
+.mech-panel.wide .build-arrow { font-size: 15px; padding: 0 9px; }
+.mech-panel.wide .dash { grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.mech-panel.wide .dash-card { padding: 16px; }
+.mech-panel.wide .dash-name { font-size: 14.5px; }
+.mech-panel.wide .dash-metric { font-size: 13.5px; margin-top: 5px; }
+.mech-panel.wide .dash-delta { font-size: 12.5px; margin-top: 4px; }
+
+/* The palette is a component tray: the source blocks share the slots' shape, so
+   it is legible where a piece is going before it is dropped. Cells are sized so
+   the longest component name in the vault ("Local delivery service", 24 chars)
+   still sits on one line, which lands 9 items as 5 + 4 at full width. */
+.mech-panel.wide .build-track { padding: 6px 0 2px; }
+.mech-panel.wide .palette {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px; margin-top: 6px;
+}
+.mech-panel.wide .chip {
+  font-size: 13.5px; padding: 11px 12px; border-radius: 7px;
+  min-height: 46px; display: grid; place-items: center; text-align: center;
+}
 
 .mp-foot {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -611,8 +647,12 @@ body.mech-open { overflow: hidden; }
   .mech-panel, .mech-panel.wide {
     width: 100%; max-height: 92vh; border-radius: 14px 14px 0 0; border-bottom: 0;
   }
-  .mech-panel.wide .build-track { flex-wrap: wrap; }
-  .mech-panel.wide .slot { flex: 1 1 44%; }
+  .mp-body { padding: 6px 16px 18px; }
+  /* the track wraps here, so the drawn baseline would cut across two rows */
+  .mech-panel.wide .build-track { flex-wrap: wrap; gap: 6px; padding: 4px 0; }
+  .mech-panel.wide .build-arrow { padding: 0; }
+  .mech-panel.wide .slot { flex: 1 1 44%; min-height: 64px; }
+  .mech-panel.wide .palette { grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); }
   .mech-panel.wide .dash { grid-template-columns: 1fr 1fr; }
   .mp-foot { border-radius: 0; }
 }
@@ -626,3 +666,4 @@ body.mech-open { overflow: hidden; }
   font-family: var(--mono); font-size: 13px; color: #A9BAD8;
 }
 .slot:not(.filled):hover::after { color: var(--blue); }
+.mech-panel.wide .slot:not(.filled)::after { font-size: 17px; }

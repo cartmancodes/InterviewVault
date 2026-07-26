@@ -73,12 +73,14 @@ Challenge content comes from two places:
 | Source | Mechanics | Coverage |
 |---|---|---|
 | Extracted from the markdown at build time | requirements triage, win conditions | 28 docs |
-| Hand-authored in [`content/challenges/`](content/challenges/) | tradeoff duel, capacity ladder, architecture builder, spot the bottleneck | Bitly |
+| Hand-authored in [`content/challenges/`](content/challenges/) | tradeoff duel, capacity ladder, architecture builder, spot the bottleneck | 28 docs |
 
 Triage comes straight from each doc's own `In scope` / `Out of scope` lists, and win
 conditions from its Insider Tips. To add authored challenges for another doc, drop a
 `content/challenges/<slug>.json` alongside `bitly.json` and rebuild — authored
 checkpoints override extracted ones with the same id.
+
+The build machinery is documented in **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
 ### How the build works
 

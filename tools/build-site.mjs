@@ -271,7 +271,7 @@ ${sheetBtn}
   writeFileSync(doc.out, page({
     title: `${doc.title} — InterviewVault`,
     desc: `${doc.title}: ${doc.col.blurb}`,
-    body, active: doc.col.key,
+    body, active: doc.col.key, cls: 'doc',
   }));
 }
 
