@@ -70,14 +70,15 @@
       "tier": "staff",
       "title": "Architecture builder",
       "xp": 100,
-      "prompt": "Build the acknowledged Cassandra write path in order.",
+      "prompt": "Build the Cassandra write path through acknowledgment at the selected consistency level.",
       "palette": [
         "Client Write",
         "Coordinator",
         "Replica Set",
         "Commit Log",
         "Memtable",
-        "Quorum Ack",
+        "Replica Acks",
+        "Consistency Level Satisfied",
         "SSTable Flush",
         "Global Join",
         "Single Leader"
@@ -88,9 +89,10 @@
         { "accept": "Replica Set" },
         { "accept": "Commit Log" },
         { "accept": "Memtable" },
-        { "accept": "Quorum Ack" }
+        { "accept": "Replica Acks" },
+        { "accept": "Consistency Level Satisfied" }
       ],
-      "explain": "The client can contact any node, which becomes the coordinator and routes the write to the replica set. Each replica appends to its local commit log for durability and updates its local Memtable. The coordinator acknowledges after the selected consistency level is satisfied. Memtables flush to immutable SSTables later, asynchronously and outside this acknowledgment path; Cassandra has neither a global join nor a single leader here."
+      "explain": "The client can contact any node, which becomes the coordinator and routes the write to the replica set. Each replica durably appends to its local commit log, updates its local Memtable, and then acknowledges the coordinator. The coordinator responds to the client after the configured consistency-level response count is satisfied. Memtables flush to immutable SSTables later, asynchronously and outside this acknowledgment path; Cassandra has neither a global join nor a single leader here."
     },
     {
       "id": "bottleneck",
@@ -100,15 +102,15 @@
       "xp": 90,
       "prompt": "A TTL-heavy workload has a sudden read p99 spike. Which signal identifies the direct read-path bottleneck?",
       "cards": [
-        { "name": "Tombstone Scan", "metric": "180k/read", "delta": "+175k", "state": "hot" },
-        { "name": "Compaction Queue", "metric": "42 pending", "delta": "+36", "state": "warn" },
+        { "name": "Tombstone Scan", "metric": "80k/read", "delta": "+75k", "state": "warn" },
+        { "name": "Compaction Queue", "metric": "42 pending", "delta": "+36", "state": "hot" },
         { "name": "Coordinator CPU", "metric": "48%", "delta": "steady", "state": "ok" },
         { "name": "Gossip", "metric": "12/12 live", "delta": "steady", "state": "ok" }
       ],
       "answer": "Tombstone Scan",
-      "explain": "Expired and deleted values remain as tombstones until Cassandra can safely purge them. Reads that scan 180k dead cells do work without returning useful rows, directly driving tail latency. Compaction debt prolongs tombstone retention, but the direct read-path bottleneck is the scan. Fix the data model and TTL pattern to limit dead cells per query, and provision or tune compaction capacity so safe purging keeps pace.",
+      "explain": "Expired and deleted values remain as tombstones until Cassandra can safely purge them. Scanning 80k dead cells is below Cassandra's default 100k failure threshold but still creates severe scan amplification: the read does substantial work without returning useful rows, directly driving tail latency. Compaction debt prolongs tombstone retention, but the direct read-path bottleneck is the scan. Fix the data model and TTL pattern to limit dead cells per query, and provision or tune compaction capacity so safe purging keeps pace.",
       "wrong": {
-        "Compaction Queue": "The queue is a contributing symptom: compaction debt keeps tombstones around longer, but the measured read-path work causing this p99 spike is the 180k tombstones scanned per read.",
+        "Compaction Queue": "The hot queue is contributing cleanup debt that keeps tombstones around longer, but it is not the direct read-path operation. The measured work causing this p99 spike is the 80k tombstones scanned per read.",
         "Coordinator CPU": "CPU is only 48% and steady, so coordinator saturation does not explain the latency jump.",
         "Gossip": "All 12 nodes are live and gossip is steady; membership health does not explain excessive dead-cell work on reads."
       }
