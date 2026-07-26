@@ -32,8 +32,10 @@ schema:
 1. A senior `duel` worth 80 XP that asks the learner to choose between two
    plausible designs, followed by a multi-select defense.
 2. A senior `ladder` worth 70 XP with three progressively connected questions.
-3. A staff `builder` worth 100 XP with a palette, six ordered slots, realistic
-   distractors, and an explanation of the resulting flow.
+3. A staff `builder` worth 100 XP with a palette, six ordered slots by default,
+   with a seventh allowed when an explicit acknowledgment or commit boundary
+   is itself a required learning step, realistic distractors, and an
+   explanation of the resulting flow.
 4. A staff `bottleneck` worth 90 XP with four operational signals, one root
    cause, targeted explanations for the distractors, and a causal diagnosis.
 
@@ -131,6 +133,8 @@ hardware unless the question clearly marks them as rough estimates.
   symptoms.
 - Each builder must describe one meaningful ordered path; optional branches
   belong in the palette or explanation rather than ordered slots.
+- Ordered slots must represent actual data or control flow and must not
+  serialize orthogonal or mutually exclusive operations.
 - Do not claim end-to-end exactly-once behavior unless the source, state, and
   sink participate through idempotent or transactional semantics.
 - Preserve the article's interview-oriented level: senior checkpoints test
