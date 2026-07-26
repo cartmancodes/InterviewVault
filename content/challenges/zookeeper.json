@@ -79,10 +79,9 @@
         "Contender",
         "Ephemeral Sequential ZNode",
         "Sort Sequence Numbers",
-        "Not Lowest",
         "Watch Predecessor",
         "Re-list After Notification",
-        "Lowest Node Leads",
+        "Lead Only If Lowest",
         "Watch Parent",
         "Persistent Claim",
         "Poll Every Second"
@@ -91,12 +90,11 @@
         { "accept": "Contender" },
         { "accept": "Ephemeral Sequential ZNode" },
         { "accept": "Sort Sequence Numbers" },
-        { "accept": "Not Lowest" },
         { "accept": "Watch Predecessor" },
         { "accept": "Re-list After Notification" },
-        { "accept": "Lowest Node Leads" }
+        { "accept": "Lead Only If Lowest" }
       ],
-      "explain": "Each contender creates an ephemeral sequential ZNode and sorts the children by sequence number. A contender leads immediately if its node is initially lowest; the shown path is the non-lowest branch, which watches only its immediate predecessor. A notification is a hint, so the waiter re-lists the children and re-checks its position before leading or installing another predecessor watch. Session expiration deletes the owner's ephemeral node and allows the queue to progress. Watching the parent creates a herd, a persistent claim survives owner failure, and polling adds avoidable load and failover delay."
+      "explain": "Because this is the waiting-contender path, the contender watches only its immediate predecessor. A notification is a hint, so it re-lists the children and re-checks its position. If its node is now lowest, it leads; otherwise, it watches its new immediate predecessor and repeats the loop. A contender whose node was initially lowest would lead immediately instead of entering this waiting path. Session expiration deletes the owner's ephemeral node and allows the queue to progress. Watching the parent creates a herd, a persistent claim survives owner failure, and polling adds avoidable load and failover delay."
     },
     {
       "id": "bottleneck",
