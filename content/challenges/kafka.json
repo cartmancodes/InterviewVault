@@ -1,0 +1,173 @@
+{
+  "slug": "kafka",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "How should customer events be partitioned to preserve ordering per customer while scaling across partitions?",
+      "options": [
+        {
+          "id": "random",
+          "label": "Send without a key",
+          "sub": "let the producer distribute events across partitions",
+          "correct": false,
+          "verdict": "This can spread load well, but two events for the same customer may land on different partitions. Kafka does not guarantee topic-wide order, so consumers could observe those customer events out of sequence."
+        },
+        {
+          "id": "customer-key",
+          "label": "Key by customer_id",
+          "sub": "route each customer's events to one partition",
+          "correct": true,
+          "verdict": "A stable customer_id key sends that customer's events to the same partition, preserving their partition-local order while other customers are processed in parallel. The tradeoff is hot-key skew: a very active customer can overload one partition."
+        }
+      ],
+      "defend": {
+        "prompt": "Which consequences follow from partitioning and consumer groups?",
+        "options": [
+          {
+            "label": "Ordering is guaranteed within a partition",
+            "correct": true
+          },
+          {
+            "label": "Consumer-group parallelism is bounded by partition count",
+            "correct": true
+          },
+          {
+            "label": "A hot customer can skew load onto one partition",
+            "correct": true
+          },
+          {
+            "label": "All consumer groups share one committed offset",
+            "correct": false
+          }
+        ],
+        "explain": "Kafka orders records within each partition, and one partition can be assigned to only one active consumer in a group, so adding group members beyond the partition count adds no parallelism. A heavily used customer_id can create a hot partition. Separate consumer groups maintain independent offsets, allowing each group to consume or replay the same log at its own pace."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Semantics ladder",
+      "xp": 70,
+      "prompt": "Reason from Kafka's ordering, parallelism, and offset semantics.",
+      "rungs": [
+        {
+          "q": "What is Kafka's ordering scope?",
+          "choices": [
+            "One topic",
+            "One partition",
+            "One consumer group"
+          ],
+          "answer": 1,
+          "note": "Offsets define record order inside a partition; Kafka does not provide one total order across a multi-partition topic."
+        },
+        {
+          "q": "With 12 partitions, how many consumers in one group can actively consume them at once?",
+          "choices": [
+            "At most 6",
+            "At most 12",
+            "Any number"
+          ],
+          "answer": 1,
+          "note": "Each partition is assigned to one consumer in the group, so a thirteenth consumer has no partition to own."
+        },
+        {
+          "q": "What happens if a consumer writes output, then crashes before committing its offset?",
+          "choices": [
+            "The record is reprocessed",
+            "The record is skipped",
+            "The output is automatically rolled back"
+          ],
+          "answer": 0,
+          "note": "On restart, the consumer resumes from the last committed offset and processes the record again. Kafka cannot automatically undo an external write."
+        }
+      ],
+      "explain": "Kafka's default consumer behavior is at-least-once: work completed before an offset commit can be repeated after a crash. Commit after successful output to avoid loss, and make an external sink idempotent or coordinate it transactionally so replay does not duplicate effects."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the durable, ordered path from an event to replay-safe processing.",
+      "palette": [
+        "Producer Event",
+        "Partition Key",
+        "Partition Leader",
+        "ISR Replication",
+        "Consumer Group",
+        "Idempotent Sink",
+        "Random Router",
+        "Blob Payload",
+        "Offset Before Work"
+      ],
+      "slots": [
+        {
+          "accept": "Producer Event"
+        },
+        {
+          "accept": "Partition Key"
+        },
+        {
+          "accept": "Partition Leader"
+        },
+        {
+          "accept": "ISR Replication"
+        },
+        {
+          "accept": "Consumer Group"
+        },
+        {
+          "accept": "Idempotent Sink"
+        }
+      ],
+      "explain": "The producer attaches a key so related events reach one partition, whose leader appends them to its ordered log. In-sync replicas copy the append for durability according to the acknowledgment configuration. A consumer group assigns each partition to one member for parallel processing. The consumer commits its offset only after successful work, and an idempotent sink makes replay after a pre-commit crash safe. Random routing loses per-key ordering, blob payloads misuse Kafka for large data, and committing an offset before work risks loss if the consumer crashes."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Consumer lag is rising only on Partition 7 while the rest of the pipeline remains healthy.",
+      "cards": [
+        {
+          "name": "Partition 7",
+          "metric": "lag 2.4M",
+          "delta": "+2.1M",
+          "state": "hot"
+        },
+        {
+          "name": "Other Partitions",
+          "metric": "lag under 8k",
+          "delta": "healthy",
+          "state": "ok"
+        },
+        {
+          "name": "Broker Network",
+          "metric": "utilization 38%",
+          "delta": "healthy",
+          "state": "ok"
+        },
+        {
+          "name": "Consumer Fleet",
+          "metric": "CPU 44%",
+          "delta": "moderate",
+          "state": "ok"
+        }
+      ],
+      "answer": "Partition 7",
+      "explain": "The isolated lag points to key skew: one or more hot keys are routing disproportionate traffic to Partition 7. Adding consumers to the same group cannot split that partition because only one group member can own a partition at a time. Revisit the key strategy, such as a compound or salted key when the ordering requirement permits it, or apply back pressure.",
+      "wrong": {
+        "Other Partitions": "Their lag remains under 8k, so they show that the topic and most consumers are keeping pace rather than identifying the overloaded shard.",
+        "Broker Network": "At 38% utilization, shared broker networking has headroom; a network bottleneck would be expected to affect more than one partition.",
+        "Consumer Fleet": "Fleet CPU is only 44%. More consumers might help across partitions, but they cannot divide Partition 7 among multiple members of the same group."
+      }
+    }
+  ]
+}
