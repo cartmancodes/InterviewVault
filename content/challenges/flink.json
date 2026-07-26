@@ -1,0 +1,117 @@
+{
+  "slug": "flink",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "Mobile events arrive up to 2 minutes late. Hourly totals must reflect when each event occurred. Which time model should the job use?",
+      "options": [
+        {
+          "id": "processing-time",
+          "label": "Processing-time arrival windows",
+          "sub": "bucket each event when Flink receives it",
+          "correct": false,
+          "verdict": "Arrival time is nondeterministic. A delayed mobile event is assigned to a later hour, and replaying the same Kafka records at a different speed can produce different buckets. That breaks occurrence-time totals."
+        },
+        {
+          "id": "event-time",
+          "label": "Event time with bounded watermarks",
+          "sub": "extract occurrence timestamps and allow 2 minutes of disorder",
+          "correct": true,
+          "verdict": "Event timestamps place records in the hour when they occurred. A two-minute bounded-out-of-orderness watermark gives expected delayed records time to arrive, with an explicit tradeoff: windows finalize later for better completeness, while records beyond the bound need a late-event policy."
+        }
+      ],
+      "defend": {
+        "prompt": "Defend the event-time design. Which claims are required?",
+        "options": [
+          { "label": "Extract the true occurrence timestamp from each event", "correct": true },
+          { "label": "Set the disorder bound from observed arrival delay", "correct": true },
+          { "label": "Define a policy for events that arrive after the watermark", "correct": true },
+          { "label": "A watermark proves every earlier event will eventually arrive", "correct": false }
+        ],
+        "explain": "A watermark is the job's progress claim about event time, not proof that every earlier event has arrived or ever will. Timestamp extraction and the disorder bound determine window assignment and finalization latency. Events arriving after that boundary must be dropped, sent to a late-data side output, or included through allowed lateness; durable raw events can also feed an offline reconciliation job that repairs final hourly totals."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Streaming ladder",
+      "xp": 70,
+      "prompt": "Reason through event-time progress, overlapping windows, and recovery boundaries.",
+      "rungs": [
+        {
+          "q": "A two-input operator receives watermarks 12:08 and 12:11. What watermark can it emit downstream?",
+          "choices": ["12:08", "12:11", "12:19"],
+          "answer": 0,
+          "note": "An operator cannot claim progress beyond its slowest input, so the downstream watermark is the minimum, 12:08."
+        },
+        {
+          "q": "How many overlapping 5-minute sliding windows contain one event when a new window starts every minute?",
+          "choices": ["1", "5", "10"],
+          "answer": 1,
+          "note": "A 5-minute window with a 1-minute slide places an event into five concurrent windows, increasing state and computation relative to a tumbling window."
+        },
+        {
+          "q": "A checkpointed operator calls a plain HTTP endpoint, then fails before the next completed checkpoint. What protects the replayed call?",
+          "choices": ["The checkpoint alone", "An idempotency key or transactional protocol", "The watermark"],
+          "answer": 1,
+          "note": "Recovery restores checkpointed Flink state and replays source records, but it cannot roll back an HTTP side effect that already escaped the job."
+        }
+      ],
+      "explain": "Watermarks track event-time progress and a multi-input operator is held to its minimum input watermark. Sliding windows trade more frequent results for overlapping state: a 5-minute size and 1-minute slide maintain five memberships per event. Checkpoints consistently restore managed state and source positions, but the guarantee ends at an uncoordinated external side effect, so a plain HTTP sink still needs idempotency or a transactional boundary."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build a replay-safe event-time aggregation path from Kafka to an external result.",
+      "palette": [
+        "Kafka Source",
+        "Timestamps and Watermarks",
+        "keyBy",
+        "Stateful Window",
+        "Checkpointed State",
+        "Idempotent Sink",
+        "Processing Clock",
+        "Local Variable",
+        "Fire-and-Forget API"
+      ],
+      "slots": [
+        { "accept": "Kafka Source" },
+        { "accept": "Timestamps and Watermarks" },
+        { "accept": "keyBy" },
+        { "accept": "Stateful Window" },
+        { "accept": "Checkpointed State" },
+        { "accept": "Idempotent Sink" }
+      ],
+      "explain": "The Kafka source records checkpointed offsets so recovery can rewind and replay retained records. Extracted timestamps and watermarks drive occurrence-time windows, keyBy routes each key to one logical state partition, and the stateful window keeps aggregation data in Flink-managed checkpointed state rather than a local variable. After restore, records since the checkpoint can run again, so the external sink must make repeated writes harmless or coordinate them transactionally. A processing clock mis-buckets delayed events, a local variable is not restored or rescaled, and a fire-and-forget API can duplicate effects after replay."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Records are still flowing, but event-time windows have stopped closing. Which signal identifies the cause?",
+      "cards": [
+        { "name": "Idle Source Partition", "metric": "watermark 18m behind", "delta": "-18m", "state": "hot" },
+        { "name": "Active Partitions", "metric": "watermarks current", "delta": "steady", "state": "ok" },
+        { "name": "Task Slots", "metric": "CPU 52%", "delta": "steady", "state": "ok" },
+        { "name": "Sink", "metric": "p99 24ms", "delta": "+4ms", "state": "warn" }
+      ],
+      "answer": "Idle Source Partition",
+      "explain": "Downstream event-time progress is the minimum watermark across upstream inputs. A quiet partition that emits no records and is not marked idle leaves its watermark 18 minutes behind, holding every downstream window open even while active partitions continue delivering records. Configure source idleness detection so Flink temporarily excludes truly idle partitions from watermark alignment, while monitoring for partitions that are stalled rather than legitimately quiet.",
+      "wrong": {
+        "Active Partitions": "Their watermarks are current and records are flowing, but downstream progress cannot advance past the minimum watermark from the idle partition.",
+        "Task Slots": "CPU at 52% is steady and leaves headroom. Resource saturation would slow processing, but the explicit 18-minute watermark gap explains why event-time triggers do not fire.",
+        "Sink": "A 24ms p99 deserves observation, but it is not enough to explain an 18-minute event-time stall while records continue to flow. Window closure is waiting on upstream watermark progress."
+      }
+    }
+  ]
+}
