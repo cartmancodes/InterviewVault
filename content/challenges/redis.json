@@ -1,0 +1,173 @@
+{
+  "slug": "redis",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "Workers must receive notifications that were published while they were offline. Which Redis primitive fits the delivery requirement?",
+      "options": [
+        {
+          "id": "pubsub",
+          "label": "Redis Pub/Sub",
+          "sub": "publish directly to currently subscribed workers",
+          "correct": false,
+          "verdict": "Redis Pub/Sub delivers at most once to current subscribers and keeps no backlog. A disconnected worker misses notifications published while it is offline and cannot replay them later."
+        },
+        {
+          "id": "streams",
+          "label": "Redis Streams consumer group",
+          "sub": "persist entries and track pending delivery",
+          "correct": true,
+          "verdict": "A stream retains entries subject to Redis persistence and retention settings. A consumer group records pending entries, allowing another worker to reclaim abandoned work, but redelivery means processing must be idempotent."
+        }
+      ],
+      "defend": {
+        "prompt": "Defend the Streams design. Which claims are sound?",
+        "options": [
+          {
+            "label": "Acknowledge an entry only after its work completes",
+            "correct": true
+          },
+          {
+            "label": "Claim abandoned pending work after a worker failure",
+            "correct": true
+          },
+          {
+            "label": "Make processing idempotent because entries can be redelivered",
+            "correct": true
+          },
+          {
+            "label": "Assume Redis is a durable system of record",
+            "correct": false
+          }
+        ],
+        "explain": "Workers acknowledge completed entries and use XCLAIM or XAUTOCLAIM to recover pending work abandoned by failed consumers. A slow worker can be mistaken for a failed one, so redelivery is possible and effects must be idempotent. Stream durability still depends on Redis persistence and replication settings. Choose Kafka when message loss is unacceptable or the design needs durable long retention, replay, and many independent consumers."
+      }
+    },
+    {
+      "id": "cluster",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Cluster ladder",
+      "xp": 70,
+      "prompt": "Reason from Redis Cluster routing, key colocation, and replication semantics.",
+      "rungs": [
+        {
+          "q": "How many hash slots does Redis Cluster distribute across primary nodes?",
+          "choices": [
+            "1,024",
+            "16,384",
+            "65,536"
+          ],
+          "answer": 1,
+          "note": "Each key hashes to one of 16,384 slots, and assigning slots across primaries distributes the keyspace and load."
+        },
+        {
+          "q": "How can two keys be colocated for a multi-key operation in cluster mode?",
+          "choices": [
+            "Give both keys the same hash tag in braces",
+            "Send both through a proxy on every hop",
+            "Run a cross-slot join"
+          ],
+          "answer": 0,
+          "note": "Redis hashes only the shared text inside braces, so matching hash tags place related keys in the same slot and on the same primary."
+        },
+        {
+          "q": "What can happen when a primary acknowledges a write before its asynchronous replica receives it?",
+          "choices": [
+            "Failover can lose the acknowledged write",
+            "The client waits for a synchronous quorum",
+            "The write is copied to every primary"
+          ],
+          "answer": 0,
+          "note": "The speed-first default responds after primary execution while replication proceeds asynchronously, so promotion of a lagging replica can lose a recent acknowledged write."
+        }
+      ],
+      "explain": "Cluster-aware clients cache the 16,384-slot map, compute a key's slot, and route directly to its primary, avoiding a proxy hop and distributing keys across nodes. Hash tags deliberately trade some distribution for colocation when multi-key operations must execute on one node. Primary execution and asynchronous replication keep the default path fast, but they do not provide synchronous-quorum safety and recent acknowledged writes can disappear during failover."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the default Redis Cluster command path from request through replication and response.",
+      "palette": [
+        "Client Command",
+        "Cluster-aware Client",
+        "Hash Slot",
+        "Primary Node",
+        "Async Replica",
+        "Client Response",
+        "Proxy Every Hop",
+        "Cross-slot Join",
+        "Synchronous Quorum"
+      ],
+      "slots": [
+        {
+          "accept": "Client Command"
+        },
+        {
+          "accept": "Cluster-aware Client"
+        },
+        {
+          "accept": "Hash Slot"
+        },
+        {
+          "accept": "Primary Node"
+        },
+        {
+          "accept": "Async Replica"
+        },
+        {
+          "accept": "Client Response"
+        }
+      ],
+      "explain": "The cluster-aware client uses its cached slot map to hash the command's key and route directly to the owning primary. The primary executes the command, propagates it asynchronously to its replica, and returns the default response without waiting for a synchronous quorum. MOVED means the slot has a permanent owner elsewhere, so the client follows the redirect and refreshes its map. ASK is a temporary redirect used while a slot is migrating. Redis does not proxy every hop or support a cross-slot join."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Read p99 spikes during a launch, but adding shards does not help. Which signal identifies the bottleneck?",
+      "cards": [
+        {
+          "name": "Hot Key",
+          "metric": "210k ops/s",
+          "delta": "+195k",
+          "state": "hot"
+        },
+        {
+          "name": "Other Primaries",
+          "metric": "CPU 22%",
+          "delta": "healthy",
+          "state": "ok"
+        },
+        {
+          "name": "Slot Map",
+          "metric": "MOVED 0.01%",
+          "delta": "steady",
+          "state": "ok"
+        },
+        {
+          "name": "Replica Reads",
+          "metric": "disabled",
+          "delta": "no read offload",
+          "state": "warn"
+        }
+      ],
+      "answer": "Hot Key",
+      "explain": "One key always maps to one slot and therefore one primary, so adding shards cannot divide its 210k ops/s across the cluster. For read-hot data, reduce primary traffic with a client-side cache, spread key copies across slots, or explicitly enable replica reads when stale reads are acceptable. Replica reads and copies do not solve a write-hot key: redesign or partition the write workload so one key no longer owns every mutation.",
+      "wrong": {
+        "Other Primaries": "CPU at 22% shows the rest of the cluster has headroom. Extra primaries do not help because the hot key remains assigned to one slot and one primary.",
+        "Slot Map": "A MOVED rate of 0.01% is low and steady, so stale client routing is not driving the p99 spike.",
+        "Replica Reads": "Disabled replica reads leave a useful read-scaling option unused, but they are not the root cause. The measured concentration on one key explains why one primary is overloaded, and replicas would help only for reads that may be stale."
+      }
+    }
+  ]
+}
