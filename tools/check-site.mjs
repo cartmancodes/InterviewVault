@@ -8,6 +8,12 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SITE = path.resolve(__dirname, '..', 'site');
 const CHALLENGES = path.resolve(__dirname, '..', 'content', 'challenges');
+const AUTHORED_CONTRACT = {
+  tradeoff: { type: 'duel', tier: 'senior', xp: 80 },
+  capacity: { type: 'ladder', tier: 'senior', xp: 70 },
+  architecture: { type: 'builder', tier: 'staff', xp: 100 },
+  bottleneck: { type: 'bottleneck', tier: 'staff', xp: 90 },
+};
 
 function htmlFiles(dir, acc = []) {
   for (const entry of readdirSync(dir)) {
@@ -42,6 +48,109 @@ function checkpointIds(checkpoints) {
   return { ids, issues };
 }
 
+function isObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function optionIssues(options, label, exactlyOneCorrect = false) {
+  const issues = [];
+  if (!Array.isArray(options) || options.length < 2) return [`${label} must be an array with at least 2 entries`];
+  options.forEach((option, index) => {
+    if (!isObject(option)) {
+      issues.push(`${label}[${index}] must be an object`);
+      return;
+    }
+    if (typeof option.label !== 'string' || !option.label.trim()) issues.push(`${label}[${index}].label must be a non-empty string`);
+    if (typeof option.correct !== 'boolean') issues.push(`${label}[${index}].correct must be boolean`);
+  });
+  if (exactlyOneCorrect && options.filter((option) => isObject(option) && option.correct === true).length !== 1) {
+    issues.push(`${label} must contain exactly one correct option`);
+  }
+  return issues;
+}
+
+function mechanicIssues(checkpoint) {
+  const issues = [];
+  if (checkpoint.id === 'tradeoff') {
+    issues.push(...optionIssues(checkpoint.options, 'options', true));
+    if (!isObject(checkpoint.defend)) issues.push('defend must be an object');
+    else issues.push(...optionIssues(checkpoint.defend.options, 'defend.options'));
+  } else if (checkpoint.id === 'capacity') {
+    if (!Array.isArray(checkpoint.rungs) || !checkpoint.rungs.length) return ['rungs must be a non-empty array'];
+    checkpoint.rungs.forEach((rung, index) => {
+      if (!isObject(rung)) {
+        issues.push(`rungs[${index}] must be an object`);
+        return;
+      }
+      if (!Array.isArray(rung.choices) || rung.choices.length < 2) {
+        issues.push(`rungs[${index}].choices must be an array with at least 2 entries`);
+      }
+      if (!Number.isInteger(rung.answer)
+          || !Array.isArray(rung.choices)
+          || rung.answer < 0
+          || rung.answer >= rung.choices.length) {
+        issues.push(`rungs[${index}].answer must be an integer within choices bounds`);
+      }
+    });
+  } else if (checkpoint.id === 'architecture') {
+    const palette = checkpoint.palette;
+    const paletteValues = new Set();
+    if (!Array.isArray(palette) || !palette.length) issues.push('palette must be a non-empty array');
+    else palette.forEach((entry, index) => {
+      if (typeof entry !== 'string' || !entry.trim()) issues.push(`palette[${index}] must be a non-empty string`);
+      else if (paletteValues.has(entry)) issues.push(`palette contains duplicate "${entry}"`);
+      else paletteValues.add(entry);
+    });
+
+    const accepts = new Set();
+    if (!Array.isArray(checkpoint.slots) || !checkpoint.slots.length) issues.push('slots must be a non-empty array');
+    else checkpoint.slots.forEach((slot, index) => {
+      if (!isObject(slot)) {
+        issues.push(`slots[${index}] must be an object`);
+        return;
+      }
+      if (typeof slot.accept !== 'string' || !slot.accept.trim()) {
+        issues.push(`slots[${index}].accept must be a non-empty string`);
+        return;
+      }
+      if (!paletteValues.has(slot.accept)) issues.push(`slots[${index}].accept "${slot.accept}" is not in palette`);
+      if (accepts.has(slot.accept)) issues.push(`slots contain duplicate accept "${slot.accept}"`);
+      accepts.add(slot.accept);
+    });
+  } else if (checkpoint.id === 'bottleneck') {
+    const cardNames = [];
+    const seen = new Set();
+    if (!Array.isArray(checkpoint.cards) || checkpoint.cards.length < 2) issues.push('cards must be an array with at least 2 entries');
+    else checkpoint.cards.forEach((card, index) => {
+      if (!isObject(card)) {
+        issues.push(`cards[${index}] must be an object`);
+        return;
+      }
+      if (typeof card.name !== 'string' || !card.name.trim()) {
+        issues.push(`cards[${index}].name must be a non-empty string`);
+        return;
+      }
+      if (seen.has(card.name)) issues.push(`cards contain duplicate name "${card.name}"`);
+      seen.add(card.name);
+      cardNames.push(card.name);
+    });
+    if (typeof checkpoint.answer !== 'string' || !cardNames.includes(checkpoint.answer)) {
+      issues.push('answer must match a card name');
+    }
+    if (!isObject(checkpoint.wrong)) issues.push('wrong must be an object');
+    else {
+      const expected = cardNames.filter((name) => name !== checkpoint.answer);
+      const actual = Object.keys(checkpoint.wrong);
+      const missing = expected.filter((name) => !actual.includes(name));
+      const extra = actual.filter((name) => !expected.includes(name));
+      if (missing.length || extra.length) {
+        issues.push(`wrong keys must equal non-answer card names (missing: ${missing.join(', ') || 'none'}; extra: ${extra.join(', ') || 'none'})`);
+      }
+    }
+  }
+  return issues;
+}
+
 if (!existsSync(SITE)) {
   console.error('site/ does not exist — run build-site.mjs first');
   process.exit(1);
@@ -52,6 +161,7 @@ let links = 0, assets = 0, anchors = 0;
 const problems = [];
 const challengePayloads = [];
 const challengePayloadCounts = new Map();
+const authoredSlugs = new Set();
 
 for (const file of pages) {
   const html = readFileSync(file, 'utf8');
@@ -137,11 +247,33 @@ for (const file of readdirSync(CHALLENGES).filter((f) => f.endsWith('.json'))) {
   }
 
   const slug = source.slug;
+  const basename = file.slice(0, -5);
   const sourceCheckpoints = checkpointIds(source.checkpoints);
-  if (sourceCheckpoints.issues.length) {
-    problems.push(`${file}: malformed authored challenge ${slug} — ${sourceCheckpoints.issues.join('; ')}`);
+  const sourceIssues = [...sourceCheckpoints.issues];
+  if (basename !== slug) sourceIssues.push(`filename slug "${basename}" must equal source.slug "${slug}"`);
+  if (source.checkpoints.length !== 4) sourceIssues.push(`checkpoints must contain exactly 4 entries, found ${source.checkpoints.length}`);
+  if (!sourceCheckpoints.issues.length) {
+    const byId = new Map(source.checkpoints.map((checkpoint) => [checkpoint.id, checkpoint]));
+    for (const [id, contract] of Object.entries(AUTHORED_CONTRACT)) {
+      const checkpoint = byId.get(id);
+      if (!checkpoint) {
+        sourceIssues.push(`missing standard checkpoint "${id}"`);
+        continue;
+      }
+      if (checkpoint.type !== contract.type) sourceIssues.push(`${id}.type must be "${contract.type}"`);
+      if (checkpoint.tier !== contract.tier) sourceIssues.push(`${id}.tier must be "${contract.tier}"`);
+      if (checkpoint.xp !== contract.xp) sourceIssues.push(`${id}.xp must be ${contract.xp}`);
+      sourceIssues.push(...mechanicIssues(checkpoint).map((issue) => `${id}.${issue}`));
+    }
+    for (const id of sourceCheckpoints.ids) {
+      if (!AUTHORED_CONTRACT[id]) sourceIssues.push(`unexpected checkpoint id "${id}"`);
+    }
+  }
+  if (sourceIssues.length) {
+    problems.push(`${file}: malformed authored challenge ${slug} — ${sourceIssues.join('; ')}`);
     continue;
   }
+  authoredSlugs.add(slug);
 
   const targets = [
     `answers/${slug}/index.html`,
@@ -170,6 +302,15 @@ for (const file of readdirSync(CHALLENGES).filter((f) => f.endsWith('.json'))) {
     if (missingIds.length) {
       problems.push(`authored challenge ${slug}: ${target}: missing checkpoint IDs ${missingIds.join(', ')}`);
     }
+  }
+}
+
+for (const payload of challengePayloads.filter((entry) => entry.rel.startsWith('deep-dives/'))) {
+  if (!authoredSlugs.has(payload.slug)) {
+    problems.push(`${payload.rel}: deep-dive payload slug "${payload.slug}" has no matching authored source`);
+  }
+  if (payload.authoredCount <= 0) {
+    problems.push(`${payload.rel}: deep-dive payload authoredCount must be greater than 0`);
   }
 }
 
