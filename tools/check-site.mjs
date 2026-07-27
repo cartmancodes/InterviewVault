@@ -4,6 +4,7 @@
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { DSA_TOPICS } from './dsa-config.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SITE = path.resolve(__dirname, '..', 'site');
@@ -311,6 +312,50 @@ for (const payload of challengePayloads.filter((entry) => entry.rel.startsWith('
   }
   if (payload.authoredCount <= 0) {
     problems.push(`${payload.rel}: deep-dive payload authoredCount must be greater than 0`);
+  }
+}
+
+const orderedDsa = Object.entries(DSA_TOPICS)
+  .sort(([, a], [, b]) => a.order - b.order);
+
+for (const [index, [slug, topic]] of orderedDsa.entries()) {
+  const rel = `dsa/${slug}/index.html`;
+  const file = path.join(SITE, rel);
+  if (!existsSync(file)) {
+    problems.push(`${rel}: missing ordered DSA page`);
+    continue;
+  }
+
+  const html = readFileSync(file, 'utf8');
+  if (!html.includes('class="doc dsa-doc"')) {
+    problems.push(`${rel}: missing dsa-doc body class`);
+  }
+  if (!html.includes(`data-dsa-order="${topic.order}"`)) {
+    problems.push(`${rel}: missing study order ${topic.order}`);
+  }
+  if (!html.includes(`>${topic.pattern}<`)) {
+    problems.push(`${rel}: missing pattern metadata`);
+  }
+  if (!html.includes(`>${topic.difficulty}<`)) {
+    problems.push(`${rel}: missing difficulty metadata`);
+  }
+  if (!html.includes(`>${topic.reviewMinutes} min review<`)) {
+    problems.push(`${rel}: missing review-time metadata`);
+  }
+  for (const className of ['dsa-summary', 'dsa-method', 'dsa-warning', 'dsa-recall']) {
+    if (!html.includes(` ${className}"`)) {
+      problems.push(`${rel}: missing ${className} section`);
+    }
+  }
+
+  const previous = orderedDsa[index - 1]?.[0];
+  const next = orderedDsa[index + 1]?.[0];
+  const pager = (html.match(/<nav class="pager">([\s\S]*?)<\/nav>/) || [])[1] || '';
+  if (previous && !pager.includes(`href="/dsa/${previous}/"`)) {
+    problems.push(`${rel}: missing previous topic ${previous}`);
+  }
+  if (next && !pager.includes(`href="/dsa/${next}/"`)) {
+    problems.push(`${rel}: missing next topic ${next}`);
   }
 }
 

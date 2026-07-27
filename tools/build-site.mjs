@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { marked } from 'marked';
 import { hashOf, extractMermaid } from './render-diagrams.mjs';
 import { buildChallenges } from './gen-challenges.mjs';
+import { DSA_TOPICS } from './dsa-config.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, '..');
@@ -85,8 +86,10 @@ for (const c of COLLECTIONS) {
     const words = md.split(/\s+/).length;
     const diagrams = extractMermaid(md).length;
     const images = (md.match(/!\[[^\]]*\]\([^)]+\.(?:svg|png|jpe?g)/gi) || []).length;
+    const dsa = c.key === 'dsa' ? DSA_TOPICS[slug] : null;
+    if (c.key === 'dsa' && !dsa) throw new Error(`${rel}: missing DSA metadata for slug ${slug}`);
     docs.push({
-      rel, md, slug, title, words, diagrams, images,
+      rel, md, slug, title, words, diagrams, images, dsa,
       col: c, url: `/${c.url}/${slug}/`,
       out: path.join(SITE, c.url, slug, 'index.html'),
     });
@@ -94,6 +97,12 @@ for (const c of COLLECTIONS) {
 }
 // registry for cross-links: repo-relative md path -> url
 const byRel = new Map(docs.map((d) => [d.rel, d]));
+
+function docsForCollection(collection) {
+  const list = docs.filter((doc) => doc.col.key === collection.key);
+  if (collection.key !== 'dsa') return list;
+  return list.sort((a, b) => a.dsa.order - b.dsa.order);
+}
 
 /* ── markdown -> html ──────────────────────────────────── */
 marked.setOptions({ gfm: true, breaks: false, mangle: false, headerIds: false });
@@ -109,6 +118,22 @@ function copyAsset(repoRelPath) {
     copiedAssets.add(repoRelPath);
   }
   return '/assets/docs/' + repoRelPath.split(path.sep).join('/');
+}
+
+function decorateDsaSections(html) {
+  const classes = {
+    'at-a-glance': 'dsa-summary',
+    'interview-method': 'dsa-method',
+    'failure-modes': 'dsa-warning',
+    'recall-drill': 'dsa-recall',
+  };
+
+  return html.replace(
+    /<h2 id="([^"]+)">([\s\S]*?)<\/h2>([\s\S]*?)(?=<h2 id="|$)/g,
+    (full, id, title, content) => classes[id]
+      ? `<section class="dsa-section ${classes[id]}"><h2 id="${id}">${title}</h2>${content}</section>`
+      : full,
+  );
 }
 
 function renderDoc(doc) {
@@ -173,6 +198,8 @@ function renderDoc(doc) {
     return `<div class="diagram">${readFileSync(f, 'utf8')}</div>`;
   });
 
+  if (doc.col.key === 'dsa') html = decorateDsaSections(html);
+
   return { html, headings, diagramCount: diagrams.length };
 }
 
@@ -236,14 +263,20 @@ function buildDocPage(doc, siblings, idx) {
     vaultScript = `<script src="/assets/vault.js" defer></script>`;
   }
   const rail = sidecar || toc ? `<aside class="rail">${sidecar}${toc}</aside>` : '<aside></aside>';
-  const side = `<nav class="side"><h4>${esc(doc.col.label)}</h4><ol>${siblings
-    .map((s) => `<li><a href="${s.url}"${s.slug === doc.slug ? ' aria-current="page"' : ''}>${esc(s.title)}</a></li>`).join('')}</ol></nav>`;
+  const side = doc.dsa
+    ? `<nav class="side dsa-track" aria-label="DSA study track"><h4>DSA study track</h4><ol>${siblings
+        .map((s) => `<li><a href="${s.url}"${s.slug === doc.slug ? ' aria-current="page"' : ''}><span class="track-n">${String(s.dsa.order).padStart(2, '0')}</span><span>${esc(s.title)}</span></a></li>`).join('')}</ol></nav>`
+    : `<nav class="side"><h4>${esc(doc.col.label)}</h4><ol>${siblings
+        .map((s) => `<li><a href="${s.url}"${s.slug === doc.slug ? ' aria-current="page"' : ''}>${esc(s.title)}</a></li>`).join('')}</ol></nav>`;
 
   const meta = [
     `${doc.words.toLocaleString()} words`,
     doc.diagrams ? `${doc.diagrams} diagram${doc.diagrams > 1 ? 's' : ''}` : null,
     doc.images ? `${doc.images} figure${doc.images > 1 ? 's' : ''}` : null,
   ].filter(Boolean).map((m) => `<span>${m}</span>`).join('');
+  const dsaMeta = doc.dsa
+    ? `<div class="dsa-meta" data-dsa-order="${doc.dsa.order}"><span>${String(doc.dsa.order).padStart(2, '0')} / ${String(siblings.length).padStart(2, '0')}</span><span>${esc(doc.dsa.pattern)}</span><span>${esc(doc.dsa.difficulty)}</span><span>${doc.dsa.reviewMinutes} min review</span></div>`
+    : '';
 
   const body = `<div class="doc-shell">
 ${side}
@@ -253,6 +286,7 @@ ${side}
 <div class="art-kicker">${esc(doc.col.label)}</div>
 <h1>${esc(doc.title)}</h1>
 <div class="art-meta">${meta}</div>
+${dsaMeta}
 </div>
 <div class="prose">${html}</div>
 </article>
@@ -270,7 +304,7 @@ ${sheetBtn}
   writeFileSync(doc.out, page({
     title: `${doc.title} — InterviewVault`,
     desc: `${doc.title}: ${doc.col.blurb}`,
-    body, active: doc.col.key, cls: 'doc',
+    body, active: doc.col.key, cls: doc.dsa ? 'doc dsa-doc' : 'doc',
   }));
 }
 
@@ -337,7 +371,7 @@ function buildIndex() {
     `<button class="chip" data-f="${c.key}" aria-pressed="false">${c.label}<span class="c-n">${counts[c.key] || 0}</span></button>`).join('');
 
   const rows = COLLECTIONS.map((c) => {
-    const list = docs.filter((d) => d.col.key === c.key);
+    const list = docsForCollection(c);
     if (!list.length) return '';
     return `<div class="sec" data-sec="${c.key}" id="${c.key}">
 <div class="sec-h">${c.label} · <span style="text-transform:none;letter-spacing:0">${esc(c.blurb)}</span></div>
@@ -443,7 +477,7 @@ function build() {
   mkdirSync(path.join(SITE, 'assets'), { recursive: true });
 
   for (const c of COLLECTIONS) {
-    const sibs = docs.filter((d) => d.col.key === c.key);
+    const sibs = docsForCollection(c);
     sibs.forEach((d, i) => buildDocPage(d, sibs, i));
   }
   buildIndex();
