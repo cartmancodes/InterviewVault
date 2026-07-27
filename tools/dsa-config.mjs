@@ -40,7 +40,7 @@ export const DSA_TOPICS = Object.freeze({
     difficulty: 'Intermediate',
     reviewMinutes: 15,
   },
-  'lru-cache': {
+  lrucache: {
     order: 6,
     pattern: 'Map plus linked list',
     difficulty: 'Intermediate',

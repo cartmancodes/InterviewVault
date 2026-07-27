@@ -38,7 +38,7 @@ Questions.
 
 test('the registry covers all eight fixed DSA slugs in study order', () => {
   assert.deepEqual(Object.keys(DSA_TOPICS).sort(), [
-    'bfs', 'dsu', 'heap', 'linked-lists', 'lru-cache',
+    'bfs', 'dsu', 'heap', 'linked-lists', 'lrucache',
     'segment-tree', 'ternary-search', 'trie',
   ]);
   assert.deepEqual(

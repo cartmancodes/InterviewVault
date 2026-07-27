@@ -86,7 +86,7 @@ Questions.
 
 test('the registry covers all eight fixed DSA slugs in study order', () => {
   assert.deepEqual(Object.keys(DSA_TOPICS).sort(), [
-    'bfs', 'dsu', 'heap', 'linked-lists', 'lru-cache',
+    'bfs', 'dsu', 'heap', 'linked-lists', 'lrucache',
     'segment-tree', 'ternary-search', 'trie',
   ]);
   assert.deepEqual(
@@ -157,7 +157,7 @@ export const DSA_TOPICS = Object.freeze({
   heap: { order: 3, pattern: 'Top-k and streaming', difficulty: 'Intermediate', reviewMinutes: 14 },
   trie: { order: 4, pattern: 'Prefix search', difficulty: 'Intermediate', reviewMinutes: 12 },
   dsu: { order: 5, pattern: 'Dynamic connectivity', difficulty: 'Intermediate', reviewMinutes: 15 },
-  'lru-cache': { order: 6, pattern: 'Map plus linked list', difficulty: 'Intermediate', reviewMinutes: 15 },
+  lrucache: { order: 6, pattern: 'Map plus linked list', difficulty: 'Intermediate', reviewMinutes: 15 },
   'segment-tree': { order: 7, pattern: 'Range aggregation', difficulty: 'Advanced', reviewMinutes: 18 },
   'ternary-search': { order: 8, pattern: 'Unimodal optimization', difficulty: 'Advanced', reviewMinutes: 12 },
 });
