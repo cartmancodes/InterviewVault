@@ -1,5 +1,9 @@
 # Specs
 
+- **`2026-07-28-dsa-methodology-ux-design.md`** — the design for rewriting the
+  eight DSA notes around a consistent interview method and adding an ordered,
+  DSA-specific study experience to the generated site.
+
 - **`2026-07-24-lld-doc-enrichment-design.md`** — the spec that drove the documentation
   enrichment pass (emoji scaffolding, mermaid diagrams, key takeaways, cross-links).
 
