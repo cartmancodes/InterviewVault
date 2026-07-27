@@ -20,10 +20,13 @@ never be hand-edited. GitHub Actions builds and deploys it to Cloudflare Pages.
   the docs wrong.
 - **Mermaid**: no `;` inside label or message text; quote any label containing brackets
   or parentheses. A block that will not parse fails the build.
-- **Run the gates before claiming done** — CI runs the same four and a failure blocks the
+- **DSA chapter structure is enforced** — every file under `DSA/` follows the heading
+  order exported by `tools/dsa-config.mjs`; every `cpp` block must compile as C++17.
+- **Run the gates before claiming done** — CI runs the same five and a failure blocks the
   deploy:
 
   ```bash
+  node tools/check-dsa.mjs
   python3 tools/check-python.py
   cd tools && node render-diagrams.mjs && node build-site.mjs && cd ..
   node tools/check-site.mjs

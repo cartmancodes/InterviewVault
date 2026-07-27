@@ -47,6 +47,9 @@ jobs:
           restore-keys: |
             diagrams-
 
+      - name: Check DSA chapters and C++ samples
+        run: node tools/check-dsa.mjs
+
       - name: Check Python samples parse
         run: python3 tools/check-python.py
 
