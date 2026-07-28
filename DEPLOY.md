@@ -95,7 +95,7 @@ cd ../site && python3 -m http.server 8899   # http://localhost:8899
 ### 2a — GitHub Actions (the normal path)
 
 Push to `master`. The workflow validates, builds and deploys, and you get
-`https://interviewvault.shubhchak.workers.dev`, and `https://cartmancodes.com` once section 3 is done.
+`https://cartmancodes.shubhchak.workers.dev`, and `https://cartmancodes.com` once section 3 is done.
 Setup is in section 0.
 
 Do **not** also connect Cloudflare's own Git integration to this repo — it would try to
@@ -117,7 +117,7 @@ npx wrangler deploy --dry-run  # validate without publishing
 > the first deploy:
 >
 > ```bash
-> curl -sI https://interviewvault.shubhchak.workers.dev/assets/site.css | grep -i cache-control
+> curl -sI https://cartmancodes.shubhchak.workers.dev/assets/site.css | grep -i cache-control
 > ```
 >
 > If the header is missing, add a small Worker script to set it around the asset fetch.
@@ -151,7 +151,7 @@ Builder plan separately if you no longer want to be billed for it.
    Leave `MX`, `TXT` (SPF/DKIM/domain verification) and any other subdomains alone —
    deleting those breaks email and third-party verifications.
 
-3. Cloudflare → **Workers & Pages** → `interviewvault` → **Settings** → **Domains & Routes**
+3. Cloudflare → **Workers & Pages** → `cartmancodes` → **Settings** → **Domains & Routes**
    → **Add** → `cartmancodes.com`. Repeat for `www.cartmancodes.com`.
 
 Cloudflare recreates the correct records itself and issues the certificate. The apex is
