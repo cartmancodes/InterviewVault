@@ -335,14 +335,18 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
   list-style: none; padding: 0; counter-reset: dsa-step;
   display: grid; gap: 9px;
 }
+/* The counter hangs in the item's padding rather than a grid column: a list
+   item here is mixed inline content (a bold lead phrase plus the rest of the
+   sentence), and grid auto-placement would split those into separate cells. */
 .dsa-method ol > li {
-  counter-increment: dsa-step; display: grid;
-  grid-template-columns: 2em 1fr; gap: 9px; align-items: start;
+  counter-increment: dsa-step;
+  position: relative; padding-left: 2.9em;
 }
 .dsa-method ol > li + li { margin-top: 0; }
 .dsa-method ol > li::before {
   content: counter(dsa-step, decimal-leading-zero);
-  font: 600 11px var(--mono); color: var(--blue-deep); padding-top: 3px;
+  position: absolute; left: 0; top: 4px;
+  font: 600 11px var(--mono); color: var(--blue-deep);
 }
 .dsa-warning { border-left: 4px solid var(--amber); background: #FFFBEB; }
 .dsa-recall { border-style: dashed; background: var(--paper); }
