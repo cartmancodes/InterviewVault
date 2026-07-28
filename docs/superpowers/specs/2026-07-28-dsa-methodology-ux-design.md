@@ -242,3 +242,10 @@ Implementation is complete when:
 - Replacing the site's shared visual identity with a separate DSA theme.
 - Supporting arbitrary author-defined DSA metadata or front matter.
 - Preserving incorrect snippets for backward compatibility.
+
+## User-Requested Amendment
+
+After implementation, the user requested that the rewritten C++ be removed while the
+methodology prose and DSA-specific site UX remain. The original notebook snippets are
+therefore preserved verbatim in `cpp legacy` fences. The DSA checker validates their
+placement but does not compile them; ordinary `cpp` fences remain compiler-checked.

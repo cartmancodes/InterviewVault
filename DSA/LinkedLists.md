@@ -65,30 +65,42 @@ must meet it.
 
 ## Reusable C++ Template
 
-The platform may provide `ListNode`. This standalone version defines it so the sample can
-be syntax-checked independently.
+The original reverse-list snippet is preserved verbatim:
 
-```cpp
-#include <cstddef>
+```cpp legacy
+/**
+ * Definition for singly-linked list.
+ * struct ListNode {
+ *     int val;
+ *     ListNode *next;
+ *     ListNode() : val(0), next(nullptr) {}
+ *     ListNode(int x) : val(x), next(nullptr) {}
+ *     ListNode(int x, ListNode *next) : val(x), next(next) {}
+ * };
+ */
+class Solution {
+public:
+    ListNode* reverseList(ListNode* head) {
+        // Maintain three pointers, prev, curr and next 
+        ListNode *prev = nullptr, *curr = head, *next;
 
-struct ListNode {
-    int value;
-    ListNode* next;
-};
+        while(curr != nullptr) {
+            // Store next pointer temporraily 
+            next = curr -> next;
 
-ListNode* reverseList(ListNode* head) {
-    ListNode* previous = nullptr;
-    ListNode* current = head;
+            // Update next to store previous 
+            curr -> next = prev;
 
-    while (current != nullptr) {
-        ListNode* next = current->next;
-        current->next = previous;
-        previous = current;
-        current = next;
+            // Copy newly prepared curr to prev 
+            prev = curr;
+
+            // Update curr with next value
+            curr = next;
+        }
+        return prev;
+
     }
-
-    return previous;
-}
+};
 ```
 
 The loop invariant is precise: all nodes before `current` have been reversed and are
@@ -112,26 +124,57 @@ no repeated node. If a cycle exists, both pointers eventually enter it. Measured
 the cycle length, `fast` gains one position on `slow` each iteration, so their relative
 distance must become zero.
 
-```cpp
-#include <cstddef>
+The original hashing and Floyd snippets are preserved verbatim:
 
-struct ListNode {
-    int value;
-    ListNode* next;
-};
-
-bool hasCycle(ListNode* head) {
-    ListNode* slow = head;
-    ListNode* fast = head;
-
-    while (fast != nullptr && fast->next != nullptr) {
-        slow = slow->next;
-        fast = fast->next->next;
-        if (slow == fast) return true;
+```cpp legacy
+/**
+ * Definition for singly-linked list.
+ * struct ListNode {
+ *     int val;
+ *     ListNode *next;
+ *     ListNode(int x) : val(x), next(NULL) {}
+ * };
+ */
+class Solution {
+public:
+    bool hasCycle(ListNode *head) {
+        unordered_set<ListNode*> st;
+        while(head != nullptr) {
+            if (st.find(head) != st.end())
+                return true;
+            st.insert(head);
+            head = head -> next;
+        }
+        return false;
     }
+};
+```
 
-    return false;
-}
+```cpp legacy
+/**
+ * Definition for singly-linked list.
+ * struct ListNode {
+ *     int val;
+ *     ListNode *next;
+ *     ListNode(int x) : val(x), next(NULL) {}
+ * };
+ */
+class Solution {
+public:
+    bool hasCycle(ListNode *head) {
+
+        ListNode *slow_pointer = head, *fast_pointer = head;
+
+        while(slow_pointer != nullptr && fast_pointer != nullptr && fast_pointer-> next != nullptr) {
+            slow_pointer = slow_pointer->next;
+            fast_pointer = fast_pointer->next->next;
+
+            if (slow_pointer == fast_pointer)
+                return true;
+        }
+        return false;
+    }
+};
 ```
 
 **Dry run:** for `A -> B -> C -> D -> B`, the pointer pairs after each move are `(B, C)`,
@@ -145,6 +188,66 @@ bool hasCycle(ListNode* head) {
 - One node pointing to `nullptr`: `fast->next` stops the loop safely.
 - One node pointing to itself: both pointers move to that node and compare equal.
 - Repeated values without repeated nodes: pointer identity avoids a false positive.
+
+### Additional original middle-node snippets
+
+```cpp legacy
+/**
+ * Definition for singly-linked list.
+ * struct ListNode {
+ *     int val;
+ *     ListNode *next;
+ *     ListNode() : val(0), next(nullptr) {}
+ *     ListNode(int x) : val(x), next(nullptr) {}
+ *     ListNode(int x, ListNode *next) : val(x), next(next) {}
+ * };
+ */
+class Solution {
+public:
+    ListNode* middleNode(ListNode* head) {
+        int node_count = 0;
+        ListNode *temp_head = head;
+
+        while(temp_head != nullptr) {
+            temp_head = temp_head->next;
+            node_count++;
+        }
+        
+        int middle = node_count / 2;
+        while(middle--) {
+            head = head ->next;
+        }
+        
+        return head;
+    }
+};
+```
+
+```cpp legacy
+/**
+ * Definition for singly-linked list.
+ * struct ListNode {
+ *     int val;
+ *     ListNode *next;
+ *     ListNode() : val(0), next(nullptr) {}
+ *     ListNode(int x) : val(x), next(nullptr) {}
+ *     ListNode(int x, ListNode *next) : val(x), next(next) {}
+ * };
+ */
+class Solution {
+public:
+    ListNode* middleNode(ListNode* head) {
+        ListNode *slow_pointer = head, *fast_pointer = head;
+
+        while(slow_pointer != nullptr && fast_pointer != nullptr && fast_pointer -> next != nullptr) {
+            slow_pointer = slow_pointer -> next;
+            fast_pointer = fast_pointer -> next -> next;
+        }
+
+        return slow_pointer;
+    }
+};
+```
 
 ## Failure Modes
 

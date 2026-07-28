@@ -21,7 +21,8 @@ never be hand-edited. GitHub Actions builds and deploys it to Cloudflare Pages.
 - **Mermaid**: no `;` inside label or message text; quote any label containing brackets
   or parentheses. A block that will not parse fails the build.
 - **DSA chapter structure is enforced** — every file under `DSA/` follows the heading
-  order exported by `tools/dsa-config.mjs`; every `cpp` block must compile as C++17.
+  order exported by `tools/dsa-config.mjs`. Ordinary `cpp` blocks must compile as C++17;
+  `cpp legacy` blocks preserve original notebook code verbatim and are not compiled.
 - **Run the gates before claiming done** — CI runs the same five and a failure blocks the
   deploy:
 

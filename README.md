@@ -35,10 +35,11 @@ same problem-solving path: `At a Glance`, `Interview Method`, `How It Works`, `R
 C++ Template`, `Worked Problems`, `Failure Modes`, `Recall Drill`, and `Related Topics`.
 The fixed study metadata lives in [`tools/dsa-config.mjs`](tools/dsa-config.mjs).
 
-Every `cpp` fence is compiled as C++17 by `tools/check-dsa.mjs`. Samples therefore use
-standard types and explicit includes instead of unexplained contest macros. Run a
-focused check while editing with `node tools/check-dsa.mjs DSA/BFS.md`, or omit the path
-to validate the whole collection.
+Ordinary `cpp` fences are compiled as C++17 by `tools/check-dsa.mjs`. The original
+notebook snippets are preserved verbatim in `cpp legacy` fences and are intentionally
+not compiled because some depend on platform types, contest macros, or unfinished code.
+Run a focused check with `node tools/check-dsa.mjs DSA/BFS.md`, or omit the path to
+validate the whole collection.
 
 ---
 
@@ -66,7 +67,7 @@ Cloudflare Pages. Deployment and one-time secret setup are documented in
 Every push and pull request runs the same five checks you can run locally:
 
 ```bash
-node tools/check-dsa.mjs        # DSA structure, links and C++17 samples
+node tools/check-dsa.mjs        # DSA structure, links and non-legacy C++17 samples
 python3 tools/check-python.py    # every ```python block parses
 cd tools && node render-diagrams.mjs   # every mermaid block renders
 node build-site.mjs && cd ..

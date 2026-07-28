@@ -59,61 +59,73 @@ two boundary indices upward and selecting boundary nodes when needed.
 
 ## Reusable C++ Template
 
-This iterative tree stores sums. Public queries use inclusive bounds.
+The original recursive bitwise-OR snippet is preserved verbatim. It includes an
+unfinished solution stub and a constructor-name mismatch from the notebook.
 
-```cpp
-#include <stdexcept>
-#include <vector>
-
+```cpp legacy
 class SegmentTree {
 public:
-    explicit SegmentTree(const std::vector<int>& values)
-        : size_(static_cast<int>(values.size())), tree_(2 * values.size(), 0) {
-        for (int index = 0; index < size_; ++index) {
-            tree_[size_ + index] = values[index];
-        }
-        for (int index = size_ - 1; index > 0; --index) {
-            tree_[index] = tree_[2 * index] + tree_[2 * index + 1];
-        }
+    vector<int> tree;
+    int n;
+    SegTree(vector<int>& arr) {
+        n = arr.size();
+        tree.resize(4*n, 0);
+        build(0, 0, n - 1, arr);
     }
 
-    void update(int index, int value) {
-        if (index < 0 || index >= size_) throw std::out_of_range("update index");
-        int position = index + size_;
-        tree_[position] = value;
-        while (position > 1) {
-            position /= 2;
-            tree_[position] = tree_[2 * position] + tree_[2 * position + 1];
-        }
-    }
-
-    long long query(int left, int right) const {
-        if (left < 0 || right < left || right >= size_) {
-            throw std::out_of_range("query range");
-        }
-
-        left += size_;
-        right += size_ + 1;
-        long long total = 0;
-
-        while (left < right) {
-            if (left % 2 == 1) total += tree_[left++];
-            if (right % 2 == 1) total += tree_[--right];
-            left /= 2;
-            right /= 2;
-        }
-
-        return total;
+    int getOR(int left, int right) {
+        return query(0, 0, n - 1, left, right);
     }
 
 private:
-    int size_;
-    std::vector<long long> tree_;
+    int combine(int a, int b) {
+        return a | b;
+    }
+    void build(int index, int left, int right, vector<int> &arr) {
+        if (left == right) {
+            tree[index] = arr[left];
+            return;
+        }
+        int mid = (left + right) / 2;
+        build(2*index + 1, left, mid, arr);
+        build(2*index + 2, mid + 1, right, arr);
+        tree[index] = combine(tree[2*index + 1], tree[2*index + 2]);
+    }
+
+    int query(int index, int left, int right, int queryLeft, int queryRight) {
+        if (queryRight < left || right < queryLeft)
+            return 0;
+        if (queryLeft <= left && right <= queryRight)
+            return tree[index];
+        int mid = (left + right) / 2;
+        int leftResult = query(2*index + 1, left, mid, queryLeft, queryRight);
+        int rightResult = query(2*index + 2, mid + 1, right, queryLeft, queryRight);
+        return combine(leftResult, rightResult);
+        
+    }
+
+    void update(int index, int left, int right, int pos, int val) {
+        if (left == right) {
+            tree[index] = val;
+            return;
+        }
+        int mid = (left + right)/2;
+        if (pos <= mid) 
+            update(2*index + 1, left, mid, pos, val);
+        else 
+            update(2*index + 2, mid + 1, right, pos, val);
+        tree[index] = combine(tree[2*index + 1], tree[2*index + 2]);
+    }
+
+}
+
+class Solution {
+public:
+    int minimumDifference(vector<int>& nums, int k) {
+        
+    }
 };
 ```
-
-The half-open internal interval `[left, right)` avoids double-counting when both
-boundaries climb toward their lowest common ancestor.
 
 ## Worked Problems
 
@@ -128,51 +140,8 @@ operations calls for a hierarchy of partial sums.
 **Invariant:** `tree_[p]` equals the sum of every leaf in the range represented by node
 `p`. Updating one leaf and recomputing its ancestors restores that invariant globally.
 
-```cpp
-#include <stdexcept>
-#include <vector>
-
-class NumArray {
-public:
-    explicit NumArray(const std::vector<int>& values)
-        : size_(static_cast<int>(values.size())), tree_(2 * values.size(), 0) {
-        for (int index = 0; index < size_; ++index) {
-            tree_[size_ + index] = values[index];
-        }
-        for (int index = size_ - 1; index > 0; --index) {
-            tree_[index] = tree_[2 * index] + tree_[2 * index + 1];
-        }
-    }
-
-    void update(int index, int value) {
-        if (index < 0 || index >= size_) throw std::out_of_range("update index");
-        int position = index + size_;
-        tree_[position] = value;
-
-        for (position /= 2; position > 0; position /= 2) {
-            tree_[position] = tree_[2 * position] + tree_[2 * position + 1];
-        }
-    }
-
-    long long sumRange(int left, int right) const {
-        if (left < 0 || right < left || right >= size_) {
-            throw std::out_of_range("sum range");
-        }
-
-        long long total = 0;
-        for (left += size_, right += size_ + 1; left < right;
-             left /= 2, right /= 2) {
-            if (left % 2 == 1) total += tree_[left++];
-            if (right % 2 == 1) total += tree_[--right];
-        }
-        return total;
-    }
-
-private:
-    int size_;
-    std::vector<long long> tree_;
-};
-```
+The original notebook did not contain a separate completed Range Sum Query Mutable
+implementation. Use the invariant and overlap analysis above when completing one.
 
 **Dry run:** for `[1, 3, 5]`, `sumRange(0, 2)` is `9`. After `update(1, 2)`, the changed
 leaf and its ancestors are recomputed, so `sumRange(0, 2)` is `8`.

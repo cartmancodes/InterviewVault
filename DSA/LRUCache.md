@@ -55,40 +55,8 @@ constant-time recency maintenance.
 
 ## Reusable C++ Template
 
-This focused helper shows the stable-iterator recency pattern. The list owns nodes; the
-map only indexes them.
-
-```cpp
-#include <list>
-#include <unordered_map>
-
-class RecencyIndex {
-public:
-    void touch(int key) {
-        auto found = positions_.find(key);
-        if (found != positions_.end()) {
-            order_.splice(order_.begin(), order_, found->second);
-            return;
-        }
-
-        order_.push_front(key);
-        positions_[key] = order_.begin();
-    }
-
-    void eraseLeastRecent() {
-        if (order_.empty()) return;
-        positions_.erase(order_.back());
-        order_.pop_back();
-    }
-
-private:
-    std::list<int> order_;
-    std::unordered_map<int, std::list<int>::iterator> positions_;
-};
-```
-
-Erasing the map entry before popping the list node avoids leaving an iterator that points
-to destroyed storage.
+The original notebook did not contain a separate reusable helper. Its worked snippet
+implements the map and doubly linked list directly.
 
 ## Worked Problems
 
@@ -103,49 +71,99 @@ nor a list alone satisfies both requirements.
 **Invariant:** `entries_[key]` points to the unique list pair for `key`; list order from
 front to back is newest to oldest; list size never exceeds capacity.
 
-```cpp
-#include <cstddef>
-#include <list>
-#include <unordered_map>
-#include <utility>
+The original notebook snippet is preserved verbatim:
 
+```cpp legacy
 class LRUCache {
 public:
-    explicit LRUCache(std::size_t capacity) : capacity_(capacity) {}
 
-    int get(int key) {
-        auto found = entries_.find(key);
-        if (found == entries_.end()) return -1;
+    // Create a doubly linked list 
 
-        items_.splice(items_.begin(), items_, found->second);
-        return found->second->second;
+    class Node {
+        public:
+        Node *next;
+        Node *prev;
+        int key;
+        int val;
+
+        Node(int _key, int _val) {
+            key = _key;
+            val = _val;
+        }
+    };
+
+    Node* head = new Node(-1, -1);
+    Node* tail = new Node(-1, -1); 
+
+    int cap;
+
+    unordered_map<int,Node*> nodeMap;
+
+    LRUCache(int capacity) {
+        cap = capacity;
+        head -> next = tail;
+        tail -> prev = head;
     }
 
-    void put(int key, int value) {
-        auto found = entries_.find(key);
-        if (found != entries_.end()) {
-            found->second->second = value;
-            items_.splice(items_.begin(), items_, found->second);
-            return;
-        }
+    // Function to add a node right after head
+    void addNode(Node* newNode) {
+        Node* tempNode;
+        tempNode = head -> next;
+        newNode -> next = tempNode;
+        newNode -> prev = head;
+        head -> next = newNode;
+        tempNode -> prev = newNode;
 
-        if (capacity_ == 0) return;
-        if (items_.size() == capacity_) {
-            entries_.erase(items_.back().first);
-            items_.pop_back();
-        }
-
-        items_.emplace_front(key, value);
-        entries_[key] = items_.begin();
     }
 
-private:
-    using Iterator = std::list<std::pair<int, int>>::iterator;
+    // Function to remove a given node from list
+    void deleteNode(Node* delNode) {
+        Node* delPrev = delNode -> prev;
+        Node* delNext = delNode -> next;
+        delPrev -> next = delNext;
+        delNext -> prev = delPrev;
+    }
+    
+    int get(int _key) {
+        // Check if key is availabel in map
+        if (nodeMap.find(_key) != nodeMap.end()) {
+            Node* resNode = nodeMap[_key];
+            int res = resNode -> val;
 
-    std::size_t capacity_;
-    std::list<std::pair<int, int>> items_;
-    std::unordered_map<int, Iterator> entries_;
+            nodeMap.erase(_key);
+            deleteNode(resNode);
+            addNode(resNode);
+
+            nodeMap[_key] = head -> next;
+
+            return res;
+
+        }
+        return -1;
+    }
+    
+    void put(int _key, int value) {
+        if (nodeMap.find(_key) != nodeMap.end()) {
+            Node* curNode = nodeMap[_key];
+            nodeMap.erase(_key);
+            deleteNode(curNode);
+        }
+        // If capacity brached
+        if (nodeMap.size() == cap) {
+            nodeMap.erase(tail->prev->key);
+            deleteNode(tail->prev);
+        }
+        addNode(new Node(_key, value));
+        nodeMap[_key] = head->next;
+    }
 };
+
+/**
+ * Your LRUCache object will be instantiated and called as such:
+ * LRUCache* obj = new LRUCache(capacity);
+ * int param_1 = obj->get(key);
+ * obj->put(key,value);
+ */
 ```
 
 **Dry run with capacity two:**
@@ -155,8 +173,8 @@ private:
 3. `get(1)` returns `10` and gives `[1, 2]`.
 4. `put(3, 30)` evicts `2` and gives `[3, 1]`.
 
-**Why it is correct:** every successful read and update splices the corresponding node
-to the front, so the front is newest. New keys also enter at the front. If full, removing
+**Why it is correct:** every successful read and update moves the corresponding node to
+the front, so the front is newest. New keys also enter at the front. If full, removing
 the back removes exactly the oldest key. Every insertion and removal updates the map and
 list together, preserving one-to-one correspondence.
 

@@ -61,53 +61,34 @@ over arbitrary boundaries.
 
 ## Reusable C++ Template
 
-The discrete template leaves at most four candidates and scans them. The continuous
-template uses 200 rounds, enough to shrink ordinary double-precision ranges far below
-typical interview tolerances.
+The original notebook template is preserved verbatim. Its final loop increments `r`
+instead of `i`; the failure is intentionally retained with the original code.
 
-```cpp
-#include <algorithm>
-#include <limits>
+```cpp legacy
+while (hi - lo > 3) {
+    int mid1 = lo + (hi - lo) / 3;
+    int mid2 = hi - (hi - lo) / 3;
 
-template <typename Function>
-long long discreteTernaryMinimum(long long left, long long right, Function objective) {
-    while (right - left > 3) {
-        long long third = (right - left) / 3;
-        long long mid1 = left + third;
-        long long mid2 = right - third;
+    int f1 = fx(mid1);
+    int f2 = fx(mid2);
 
-        if (objective(mid1) <= objective(mid2)) {
-            right = mid2 - 1;
-        } else {
-            left = mid1 + 1;
-        }
+    if (f1 <= f2) {
+        hi = mid2 - 1;
+    } else {
+        lo = mid1 + 1;
     }
-
-    long long answer = std::numeric_limits<long long>::max();
-    for (long long point = left; point <= right; ++point) {
-        answer = std::min(answer, objective(point));
-    }
-    return answer;
 }
 
-template <typename Function>
-double continuousTernaryArgmin(double left, double right, Function objective) {
-    for (int iteration = 0; iteration < 200; ++iteration) {
-        double mid1 = left + (right - left) / 3.0;
-        double mid2 = right - (right - left) / 3.0;
-
-        if (objective(mid1) <= objective(mid2)) {
-            right = mid2;
-        } else {
-            left = mid1;
-        }
-    }
-    return (left + right) / 2.0;
-}
+// Iterate fx() over lo to hi and return the max/min as per use case, 
+for (int i = lo; i <= hi; r++) 
+    ans = min(ans, fx(i));
 ```
 
 For maximization, reverse the comparison or minimize the negated objective. Keep the
 objective pure so repeated evaluations at nearby points do not mutate shared state.
+
+The original note associated this template with LeetCode 3171 and referenced
+`https://codeforces.com/blog/entry/126959`.
 
 ## Worked Problems
 
@@ -123,48 +104,8 @@ the ternary-search precondition.
 **Bounds:** an optimum lies between the smallest and largest input x-coordinate. Outside
 that interval, moving toward all points cannot increase any horizontal distance.
 
-```cpp
-#include <algorithm>
-#include <cmath>
-#include <limits>
-#include <utility>
-#include <vector>
-
-std::pair<double, double> bestXAxisMeetingPoint(
-    const std::vector<std::pair<double, double>>& points
-) {
-    if (points.empty()) return {0.0, 0.0};
-
-    double left = std::numeric_limits<double>::infinity();
-    double right = -std::numeric_limits<double>::infinity();
-    for (const auto& [x, y] : points) {
-        (void)y;
-        left = std::min(left, x);
-        right = std::max(right, x);
-    }
-
-    auto cost = [&points](double x) {
-        double total = 0.0;
-        for (const auto& [pointX, pointY] : points) {
-            total += std::hypot(x - pointX, pointY);
-        }
-        return total;
-    };
-
-    for (int iteration = 0; iteration < 200; ++iteration) {
-        double mid1 = left + (right - left) / 3.0;
-        double mid2 = right - (right - left) / 3.0;
-        if (cost(mid1) <= cost(mid2)) {
-            right = mid2;
-        } else {
-            left = mid1;
-        }
-    }
-
-    double position = (left + right) / 2.0;
-    return {position, cost(position)};
-}
-```
+The original notebook did not contain a separate solution for this worked example. The
+convexity proof and interval method above describe how to implement it.
 
 **Why it is correct:** convexity guarantees that objective values do not improve again
 after passing the minimum region. Each comparison discards only points on the side that

@@ -108,8 +108,11 @@ export function run(args = process.argv.slice(2)) {
   const files = selectedFiles(args);
   const issues = [];
   const positions = new Map();
+  let checkedBlocks = 0;
+  let legacyBlocks = 0;
 
   for (const rel of files) {
+    const source = readFileSync(path.join(REPO, rel), 'utf8');
     const slug = slugOf(rel);
     const topic = DSA_TOPICS[slug];
     if (!topic) {
@@ -119,7 +122,9 @@ export function run(args = process.argv.slice(2)) {
     } else {
       positions.set(topic.order, rel);
     }
-    issues.push(...validateDocument(rel, readFileSync(path.join(REPO, rel), 'utf8')));
+    checkedBlocks += [...source.matchAll(/```cpp\n/g)].length;
+    legacyBlocks += [...source.matchAll(/```cpp legacy\n/g)].length;
+    issues.push(...validateDocument(rel, source));
   }
 
   if (!args.length) {
@@ -134,7 +139,10 @@ export function run(args = process.argv.slice(2)) {
     return 1;
   }
 
-  console.log(`DSA OK - ${files.length} document(s), C++17 syntax checked`);
+  console.log(
+    `DSA OK - ${files.length} document(s), ${checkedBlocks} C++17 block(s) checked, ` +
+    `${legacyBlocks} legacy block(s) preserved`,
+  );
   return 0;
 }
 

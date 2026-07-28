@@ -56,52 +56,8 @@ changes which valid representative is selected but not which elements are groupe
 
 ## Reusable C++ Template
 
-```cpp
-#include <numeric>
-#include <utility>
-#include <vector>
-
-class DisjointSet {
-public:
-    explicit DisjointSet(int count)
-        : parent_(count), size_(count, 1), components_(count) {
-        std::iota(parent_.begin(), parent_.end(), 0);
-    }
-
-    int find(int node) {
-        if (parent_[node] != node) parent_[node] = find(parent_[node]);
-        return parent_[node];
-    }
-
-    bool unite(int a, int b) {
-        a = find(a);
-        b = find(b);
-        if (a == b) return false;
-
-        if (size_[a] < size_[b]) std::swap(a, b);
-        parent_[b] = a;
-        size_[a] += size_[b];
-        --components_;
-        return true;
-    }
-
-    bool connected(int a, int b) {
-        return find(a) == find(b);
-    }
-
-    int components() const {
-        return components_;
-    }
-
-private:
-    std::vector<int> parent_;
-    std::vector<int> size_;
-    int components_;
-};
-```
-
-Only roots have authoritative `size_` values. Reading the size of a non-root without
-first finding its representative is a common source of bugs.
+The original notebook did not contain a standalone generic template. Its preserved
+worked snippets below each define the DSU state they need.
 
 ## Worked Problems
 
@@ -117,74 +73,154 @@ edges and uses DSU to reject cycle-forming edges.
 forest that can be extended to a minimum spanning tree. A successful union connects two
 different trees; a failed union would create a cycle.
 
-```cpp
-#include <algorithm>
-#include <cstdlib>
-#include <numeric>
-#include <utility>
-#include <vector>
+The original notebook snippets are preserved verbatim:
 
-class DisjointSet {
+```cpp legacy
+// https://leetcode.com/problems/min-cost-to-connect-all-points
+
+class Node {
+    public: 
+        int x;
+        int y;
+        int cost;
+        Node(int x1, int y1, int cost1) {
+            x = x1;
+            y = y1;
+            cost = cost1;
+        }
+};
+
+class DSU {
+    public:
+        vector<int> parent;
+        DSU(int sz) {
+            parent.resize(sz, 0);
+            for(int i = 0; i < sz; i++) 
+                parent[i] = i;
+        }
+        int find(int cur) {
+            if (parent[cur] == cur)
+                return cur;
+            return parent[cur] = find(parent[cur]);
+        }
+
+        void merge(int x, int y) {
+            int parentX = find(x);
+            int parentY = find(y);
+            if (parentX != parentY)
+                parent[parentY] = parentX;
+        }
+};
+
+class Solution {
 public:
-    explicit DisjointSet(int count) : parent_(count), size_(count, 1) {
-        std::iota(parent_.begin(), parent_.end(), 0);
-    }
+    int minCostConnectPoints(vector<vector<int>>& points) {
+        int rows = points.size();
+        int cols = points[0].size();
+        vector<Node> edges;
+        for(int i = 0; i < points.size(); i++)  {
+            for(int j = 0;j < points.size(); j++) {
+                if (i == j)
+                    continue;
+                int cost = abs(points[i][0] - points[j][0]) + abs(points[i][1] -points[j][1]);
+                edges.push_back(Node(i, j, cost));
+            }
+        }
+        // Sort by cost in ascending order
+        sort(edges.begin(), edges.end(), [](const Node &a, const Node &b) {
+            return a.cost < b.cost;
+        });
 
-    int find(int node) {
-        if (parent_[node] != node) parent_[node] = find(parent_[node]);
-        return parent_[node];
-    }
+        DSU dsu(points.size());
+        int totalCost = 0;
+        for(int i = 0; i < edges.size(); i++)  {
+            if (dsu.find(edges[i].x) != dsu.find(edges[i].y)) {
+                totalCost += edges[i].cost;
+                dsu.merge(edges[i].x, edges[i].y);
+            }
+        }
 
-    bool unite(int a, int b) {
-        a = find(a);
-        b = find(b);
-        if (a == b) return false;
-        if (size_[a] < size_[b]) std::swap(a, b);
-        parent_[b] = a;
-        size_[a] += size_[b];
-        return true;
-    }
+        return totalCost;
 
-private:
-    std::vector<int> parent_;
-    std::vector<int> size_;
+    }
 };
 
-struct Edge {
-    int from;
-    int to;
-    int cost;
-};
 
-long long minCostConnectPoints(const std::vector<std::vector<int>>& points) {
-    const int count = static_cast<int>(points.size());
-    if (count <= 1) return 0;
+// https://leetcode.com/problems/minimum-cost-walk-in-weighted-graph
 
-    std::vector<Edge> edges;
-    for (int from = 0; from < count; ++from) {
-        for (int to = from + 1; to < count; ++to) {
-            int cost = std::abs(points[from][0] - points[to][0]) +
-                       std::abs(points[from][1] - points[to][1]);
-            edges.push_back({from, to, cost});
+class DSU {
+public:
+
+    vector<int> parent;
+    vector<int> componentAnds;
+    void merge(int x, int y, int cost) {
+        int parentX = find(x);
+        int parentY = find(y);
+
+        // Merge
+        if(parentX != parentY) {
+            parent[parentY] = parentX;
+        }
+        if (componentAnds[parentX] == -1 && componentAnds[parentY] == -1) {
+            componentAnds[parentX] = cost;
+        } else if (componentAnds[parentX] == -1) {
+            componentAnds[parentX] = componentAnds[parentY] & cost;
+        } else if (componentAnds[parentY] == -1) {
+            componentAnds[parentX] = componentAnds[parentX] & cost;
+        } else {
+            componentAnds[parentX] &= componentAnds[parentY] & cost;
         }
     }
 
-    std::sort(edges.begin(), edges.end(), [](const Edge& a, const Edge& b) {
-        return a.cost < b.cost;
-    });
-
-    DisjointSet sets(count);
-    long long total = 0;
-    int selected = 0;
-
-    for (const Edge& edge : edges) {
-        if (!sets.unite(edge.from, edge.to)) continue;
-        total += edge.cost;
-        if (++selected == count - 1) break;
+    int find(int x) {
+        if (parent[x] == x)
+            return x;
+        return parent[x] = find(parent[x]);
     }
 
-    return total;
-}
+    int cost(int x) {
+        return componentAnds[x];
+    }
+
+    DSU(int n) {
+        parent.resize(n + 5, 0);
+        componentAnds.resize(n + 5, -1);
+
+        for(int i = 0; i <= n; i++) {
+            parent[i] = i;
+        }
+    }
+};
+class Solution {
+public:
+    vector<int> minimumCost(int n, vector<vector<int>>& edges, vector<vector<int>>& query) {
+        DSU dsu(n);
+
+        // Processand merge all edges
+        int rows = edges.size();
+        int columns = edges[0].size();
+
+        for(int i = 0; i < rows; i++) {
+            dsu.merge(edges[i][0], edges[i][1], edges[i][2]);
+        }
+
+        vector<int> result;
+
+        for(int i = 0; i < query.size(); i++) {
+            int pX = dsu.find(query[i][0]);
+            int pY = dsu.find(query[i][1]);
+
+            int ans;
+            if (pX != pY)
+                ans = -1;
+            else 
+                ans = dsu.cost(pX);
+
+            result.push_back(ans);
+        }
+        return result;
+    }
+};
 ```
 
 **Why it is correct:** by the cut property, the cheapest edge connecting two current

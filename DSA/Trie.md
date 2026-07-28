@@ -55,67 +55,82 @@ distinguish whether `app` was inserted as a complete word or appears only as a p
 
 ## Reusable C++ Template
 
-This implementation accepts lowercase `a` through `z` and throws for other characters.
-`std::unique_ptr` gives every node one clear owner and recursively frees the trie.
+The original notebook snippet is preserved verbatim. It counts how many inserted strings
+share a queried prefix and depends on contest aliases and input macros defined elsewhere.
 
-```cpp
-#include <array>
-#include <memory>
-#include <stdexcept>
-#include <string>
-
-class Trie {
+```cpp legacy
+class TrieNode {
 public:
-    void insert(const std::string& word) {
-        Node* node = &root_;
-        for (char character : word) {
-            std::size_t index = toIndex(character);
-            if (!node->children[index]) {
-                node->children[index] = std::make_unique<Node>();
-            }
-            node = node->children[index].get();
+    TrieNode* next[26];
+    ll cnt;
+ 
+    TrieNode() {
+        for (ll i = 0; i < 26; i++) {
+            next[i] = NULL;
         }
-        node->terminal = true;
+        cnt = 0;
     }
-
-    bool contains(const std::string& word) const {
-        const Node* node = walk(word);
-        return node != nullptr && node->terminal;
-    }
-
-    bool startsWith(const std::string& prefix) const {
-        return walk(prefix) != nullptr;
-    }
-
-private:
-    struct Node {
-        std::array<std::unique_ptr<Node>, 26> children{};
-        bool terminal = false;
-    };
-
-    static std::size_t toIndex(char character) {
-        if (character < 'a' || character > 'z') {
-            throw std::invalid_argument("trie accepts lowercase letters only");
-        }
-        return static_cast<std::size_t>(character - 'a');
-    }
-
-    const Node* walk(const std::string& text) const {
-        const Node* node = &root_;
-        for (char character : text) {
-            std::size_t index = toIndex(character);
-            if (!node->children[index]) return nullptr;
-            node = node->children[index].get();
-        }
-        return node;
-    }
-
-    Node root_;
 };
+ 
+class Trie {
+private:
+    TrieNode* root;
+ 
+public:
+    Trie() {
+        root = new TrieNode();
+    }
+ 
+    void insert(const string& str) {
+        TrieNode* node = root;
+        for (char ch : str) {
+            ll temp = ch - 'a';
+            if (node->next[temp] == NULL) {
+                node->next[temp] = new TrieNode();
+            }
+            node = node->next[temp];
+            node->cnt++;
+        }
+    }
+ 
+    ll find(const string& str) {
+        TrieNode* node = root;
+        for (char ch : str) {
+            ll temp = ch - 'a';
+            if (node->next[temp] != NULL) {
+                node = node->next[temp];
+            } else {
+                return 0;
+            }
+        }
+        return node->cnt;
+    }
+};
+ 
+int main() {
+    ll n, m;
+    slli(n);
+    slli(m);
+ 
+    Trie trie;
+    string str;
+    
+    for (ll i = 0; i < n; i++) {
+        cin >> str;
+        trie.insert(str);
+    }
+    
+    for (ll i = 0; i < m; i++) {
+        cin >> str;
+        cout << trie.find(str) << endl;
+    }
+ 
+    return 0;
+}
 ```
 
-An empty prefix always exists at the root. An empty word exists only after `insert("")`
-sets the root's terminal flag.
+The snippet assumes lowercase English letters. Because it has no terminal flag, it is a
+prefix-frequency structure rather than an exact-word membership trie.
 
 ## Worked Problems
 
@@ -131,72 +146,8 @@ dictionary. Checking every root repeatedly wastes shared work.
 characters consumed. The first terminal node is the shortest matching root because
 depth increases one character at a time.
 
-```cpp
-#include <array>
-#include <memory>
-#include <sstream>
-#include <string>
-#include <vector>
-
-class RootDictionary {
-public:
-    void insert(const std::string& root) {
-        Node* node = &root_;
-        for (char character : root) {
-            std::size_t index = static_cast<std::size_t>(character - 'a');
-            if (!node->children[index]) {
-                node->children[index] = std::make_unique<Node>();
-            }
-            node = node->children[index].get();
-        }
-        node->terminal = true;
-    }
-
-    std::string shortestRoot(const std::string& word) const {
-        const Node* node = &root_;
-        std::string prefix;
-
-        for (char character : word) {
-            std::size_t index = static_cast<std::size_t>(character - 'a');
-            if (!node->children[index]) return word;
-            prefix.push_back(character);
-            node = node->children[index].get();
-            if (node->terminal) return prefix;
-        }
-
-        return word;
-    }
-
-private:
-    struct Node {
-        std::array<std::unique_ptr<Node>, 26> children{};
-        bool terminal = false;
-    };
-
-    Node root_;
-};
-
-std::string replaceWords(
-    const std::vector<std::string>& dictionary,
-    const std::string& sentence
-) {
-    RootDictionary roots;
-    for (const std::string& root : dictionary) roots.insert(root);
-
-    std::istringstream input(sentence);
-    std::ostringstream output;
-    std::string word;
-    bool first = true;
-
-    while (input >> word) {
-        if (!first) output << ' ';
-        output << roots.shortestRoot(word);
-        first = false;
-    }
-
-    return output.str();
-}
-```
+The original notebook did not contain a separate Replace Words implementation. Apply the
+terminal-marker and first-match method above when solving it in an interview.
 
 **Why it is correct:** traversal follows exactly the word's prefixes in increasing
 length. Returning at the first terminal node selects the shortest stored root. A missing
