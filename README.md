@@ -56,7 +56,8 @@ cd ../site && python3 -m http.server 8899    # preview at localhost:8899
 
 Diagrams are pre-rendered to SVG at build time, so pages ship with **no client-side
 JavaScript for rendering** — they load instantly and work without JS. The only scripts
-are a small search filter on the home page and a table-of-contents highlighter.
+are progressive enhancements: the home-page search filter and Packet Runner mini-game,
+a table-of-contents highlighter, and the practice sidecar.
 
 `site/` is **not committed** — GitHub Actions builds it on every push and deploys to
 Cloudflare Pages. Deployment and one-time secret setup are documented in
@@ -88,8 +89,8 @@ Challenge content comes from two places:
 
 | Source | Mechanics | Coverage |
 |---|---|---|
-| Extracted from the markdown at build time | requirements triage, win conditions | 28 docs |
-| Hand-authored in [`content/challenges/`](content/challenges/) | tradeoff duel, capacity ladder, architecture builder, spot the bottleneck | 28 docs |
+| Extracted from the markdown at build time | requirements triage, win conditions | 28 answer docs |
+| Hand-authored in [`content/challenges/`](content/challenges/) | tradeoff duel, capacity ladder, architecture builder, spot the bottleneck | 33 docs (28 answers + 5 deep dives) |
 
 Triage comes straight from each doc's own `In scope` / `Out of scope` lists, and win
 conditions from its Insider Tips. To add authored challenges for another doc, drop a
@@ -105,7 +106,7 @@ The build machinery is documented in **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 | [tools/render-diagrams.mjs](tools/render-diagrams.mjs) | Extracts every mermaid block, renders it through headless Chrome, writes `site/assets/diagrams/<hash>.svg`. Re-runs only for new diagrams. |
 | [tools/build-site.mjs](tools/build-site.mjs) | Walks the collections, converts markdown to HTML, rewrites internal links and image paths, injects the rendered diagrams, and emits the pages, index and sitemap. |
 | [tools/gen-challenges.mjs](tools/gen-challenges.mjs) | Extracts requirements triage and win conditions from each answer doc, merges the hand-authored JSON, and emits the checkpoint set the sidecar runs. |
-| [tools/template/](tools/template/) | The design system and client code: `site.css`, `vault.js` (sidecar + mechanics), `progress.js` (vault map), the home-page filter, the TOC highlighter, favicon, and Cloudflare `_headers` / `_redirects`. |
+| [tools/template/](tools/template/) | The design system and client code: `site.css`, `vault.js` (sidecar + mechanics), `progress.js` (vault map), `game.js` (Packet Runner), the home-page filter, the TOC highlighter, favicon, and Cloudflare `_headers` / `_redirects`. |
 
 Adding a document is just adding a markdown file to one of the collection folders and
 rebuilding — it appears in the library, the section nav, and the sitemap automatically.

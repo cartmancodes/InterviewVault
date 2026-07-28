@@ -12,16 +12,17 @@ publishing.
 One-way data flow, no database, no server-rendered request path:
 
 ```
-LLD/**.md  DSA/**.md          content/challenges/*.json
-     │                                  │
-     ├──────────────┐                   │
-     ▼              ▼                   │
-check-python.py   render-diagrams.mjs   │
-  (gate)            │                   │
-                    ▼                   │
-          site/assets/diagrams/*.svg    │
-                    │                   │
-                    └────► build-site.mjs ◄──── tools/template/*
+LLD/**.md  DSA/**.md                content/challenges/*.json
+     │         │                              │
+     │         ├──► check-dsa.mjs   (gate)    │
+     ├─────────┤                              │
+     ▼         ▼                              │
+check-python.py   render-diagrams.mjs         │
+  (gate)            │                         │
+                    ▼                         │
+          site/assets/diagrams/*.svg          │
+                    │                         │
+                    └────► build-site.mjs ◄───┴─── tools/template/*  tools/dsa-config.mjs
                                 │
                                 ▼
                              site/                 ← gitignored build output
@@ -37,7 +38,7 @@ Three properties fall out of this shape and are worth preserving:
 - **Pages ship without render-time JavaScript.** Mermaid runs at *build* time in
   headless Chrome, so an article is readable with JS disabled. The only client
   scripts are progressive enhancements (search filter, TOC highlighter, practice
-  sidecar).
+  sidecar, the front-page mini-game).
 - **There is no registration step.** Dropping a `.md` file into a collection folder
   is the entire act of adding a document — the library, section nav, pager and
   sitemap all derive from a directory walk.
@@ -47,9 +48,9 @@ Three properties fall out of this shape and are worth preserving:
 | | |
 |---|---|
 | Documents | 122 across 10 collections |
-| Pre-rendered diagrams | 607 unique |
-| Authored challenge files | 28 |
-| Build + client source | ~2,260 lines (`tools/`) |
+| Pre-rendered diagrams | 615 unique |
+| Authored challenge files | 33 (28 interview answers + 5 deep dives) |
+| Build + client source | ~3,180 lines (`tools/`) |
 | Runtime dependencies | none — 3 build-time (`marked`, `mermaid`, `puppeteer`) |
 
 ---
@@ -63,18 +64,22 @@ LLD/                          the vault — system design source markdown
   SystemDesign/
     InaHurry/  CoreConcepts/  Patterns/  Patterns/QuickReference/
     DeepDives/  ProblemBreakdowns/  IntheWild/
-DSA/                          → /dsa/   (C++ notes)
+DSA/                          → /dsa/   (an ordered C++ interview track)
 
 content/challenges/<slug>.json    hand-authored practice checkpoints
 
 tools/
+  check-dsa.mjs               gate: DSA chapter contract, links, C++17 syntax
+  check-dsa.test.mjs          unit tests for that gate
   check-python.py             gate: every ```python block parses
+  dsa-config.mjs              DSA study metadata: order, pattern, difficulty
   render-diagrams.mjs         mermaid → SVG, content-hashed
   build-site.mjs              the generator
   gen-challenges.mjs          checkpoint extraction + merge
-  check-site.mjs              gate: links, assets, anchors, script syntax
+  check-site.mjs              gate: links, anchors, script syntax, challenge
+                              contract, DSA page assertions
   template/                   design system + client runtime, copied verbatim
-    site.css  vault.js  progress.js  home.js  doc.js
+    site.css  vault.js  progress.js  home.js  doc.js  game.js
     favicon.svg  _headers  _redirects  robots.txt
 
 site/                         build output — never hand-edit, never committed
@@ -86,15 +91,35 @@ wrangler.toml                 Cloudflare Worker static-asset config
 
 ## 3. The build pipeline
 
-Four stages. CI runs all four; a non-zero exit at any stage blocks the deploy.
+Five stages. CI runs all five; a non-zero exit at any stage blocks the deploy.
 
 ```bash
+node tools/check-dsa.mjs
 python3 tools/check-python.py
 cd tools && node render-diagrams.mjs && node build-site.mjs && cd ..
 node tools/check-site.mjs
 ```
 
-### Stage 0 — `check-python.py`
+### Stage 0a — `check-dsa.mjs`
+
+The DSA collection is a *contract-checked* track, not free-form notes. For every
+`DSA/*.md` the gate enforces:
+
+- exactly one H1, and the H2 sequence must equal `REQUIRED_DSA_SECTIONS` from
+  `dsa-config.mjs`, in order: At a Glance → Interview Method → How It Works →
+  Reusable C++ Template → Worked Problems → Failure Modes → Recall Drill →
+  Related Topics;
+- a `dsa-config.mjs` entry exists for the slug, and no two chapters claim the
+  same study-order position;
+- every relative `.md` link resolves, and no code fence is untagged;
+- every plain ` ```cpp ` block passes `c++ -std=c++17 -Wall -Wextra -pedantic
+  -fsyntax-only`. Blocks tagged ` ```cpp legacy ` are preserved verbatim and
+  skipped — they are the original notebook snippets, kept as written.
+
+`node tools/check-dsa.mjs DSA/BFS.md` runs a focused check for one file;
+`check-dsa.test.mjs` unit-tests the validator itself.
+
+### Stage 0b — `check-python.py`
 
 Walks `LLD/**` and `DSA/**`, extracts every ` ```python ` block with a regex, and
 runs `ast.parse` on each. Reports `path:line` plus the offending source line on
@@ -167,14 +192,27 @@ copied verbatim and `sitemap.xml` is written from `SITE_ORIGIN`.
 
 ### Stage 3 — `check-site.mjs`
 
-Post-build validation over the emitted HTML:
+Post-build validation over the emitted HTML. The original three checks:
 
 - every root-relative `href`/`src` resolves to a real file on disk;
 - every same-page `#anchor` has a matching `id` in that page;
-- every `site/assets/*.js` parses (`new Function(src)`).
+- every `site/assets/*.js` parses (`new Function(src)`) — a syntax error in
+  `vault.js` would otherwise silently kill the sidecar while the site looked fine.
 
-The script check is there because a syntax error in `vault.js` would silently kill
-the practice sidecar on every answer page while the site still looked fine.
+Plus two contract sweeps added with the deep-dive challenges and the DSA track:
+
+- **Authored-challenge contract.** Every `content/challenges/*.json` must contain
+  exactly the four standard checkpoints with fixed ids, types, tiers and XP
+  (`tradeoff`/duel/senior/80 · `capacity`/ladder/senior/70 ·
+  `architecture`/builder/staff/100 · `bottleneck`/bottleneck/staff/90), each
+  mechanic's payload is shape-checked (builder slots must accept palette members,
+  bottleneck `wrong` keys must equal the non-answer cards, …), the filename must
+  equal the inner slug, and the built target page must embed exactly one matching
+  `iv-challenges` payload. A deep-dive page carrying a payload with no authored
+  source is an error.
+- **DSA page assertions.** Each configured chapter's page must exist, carry the
+  `dsa-doc` body class, and render its study order, pattern and difficulty
+  metadata.
 
 ---
 
@@ -189,7 +227,7 @@ The folder decides everything — URL, section nav, and whether a sidecar is bui
 | `LLD/SystemDesign/CoreConcepts/` | `concepts` | `/concepts/<slug>/` | — |
 | `LLD/SystemDesign/Patterns/QuickReference/` | `quickref` | `/patterns/quick-reference/<slug>/` | — |
 | `LLD/SystemDesign/Patterns/` | `patterns` | `/patterns/<slug>/` | — |
-| `LLD/SystemDesign/DeepDives/` | `deep-dives` | `/deep-dives/<slug>/` | — |
+| `LLD/SystemDesign/DeepDives/` | `deep-dives` | `/deep-dives/<slug>/` | if authored |
 | `LLD/SystemDesign/ProblemBreakdowns/` | `breakdowns` | `/breakdowns/<slug>/` | — |
 | `LLD/SystemDesign/IntheWild/` | `in-the-wild` | `/in-the-wild/<slug>/` | — |
 | **`LLD/questions/`** | `answers` | `/answers/<slug>/` | **yes** |
@@ -198,6 +236,39 @@ The folder decides everything — URL, section nav, and whether a sidecar is bui
 `quickref` is deliberately excluded from the header nav — it is reachable from the
 library and from Patterns, and listing it twice would clutter a nav that is already
 nine items wide.
+
+Sidecar rules differ by collection: an **answers** doc gets one whenever any
+checkpoint exists (extracted or authored); a **deep-dives** doc gets one only when
+an authored `content/challenges/<slug>.json` exists for it (currently cassandra,
+flink, kafka, redis, zookeeper).
+
+### The DSA track
+
+`DSA/` is not an alphabetical folder of notes — it is an ordered study track. The
+per-chapter metadata lives in code, in `tools/dsa-config.mjs`:
+
+```js
+DSA_TOPICS = { 'linked-lists': { order: 1, pattern: 'Pointer invariants',
+                                 difficulty: 'Beginner', reviewMinutes: 12 }, … }
+```
+
+The build fails on a `DSA/*.md` whose slug has no entry here, so adding a chapter
+is a two-file change (markdown + config). From this metadata the build derives:
+
+- **ordering** — `docsForCollection()` sorts the DSA collection by `order`, which
+  drives the section list, the prev/next pager and the numbered "DSA study track"
+  side nav (`01`–`08`), instead of the filename order every other collection uses;
+- **the meta strip** — order `05 / 08`, pattern, difficulty and review minutes
+  render under the article header (`.dsa-meta`);
+- **section decoration** — `decorateDsaSections()` wraps four of the contract
+  headings in styled `<section>` shells: At a Glance (`dsa-summary`), Interview
+  Method (`dsa-method`, with `01`–`08` step counters), Failure Modes
+  (`dsa-warning`, amber), Recall Drill (`dsa-recall`, dashed). The wrapper keys on
+  the heading's slugified id, so renaming a heading silently drops its styling —
+  except the rename would fail `check-dsa.mjs` first, which is the point of
+  enforcing the H2 sequence in a gate.
+
+DSA pages carry `body.doc.dsa-doc`; the extra class scopes the track styling.
 
 ### Slug derivation
 
@@ -235,8 +306,9 @@ renders — it just silently loses a feature.
 
 ## 5. The challenge system
 
-Every `/answers/` page gets a practice sidecar. Its checkpoints come from two
-sources, merged in `gen-challenges.mjs` at build time.
+Every `/answers/` page — and the five deep dives with authored files — gets a
+practice sidecar. Its checkpoints come from two sources, merged in
+`gen-challenges.mjs` at build time.
 
 ### Source A — extracted from the markdown
 
@@ -257,14 +329,19 @@ sidecar's collapsible list.
 ### Source B — hand-authored JSON
 
 Four mechanics cannot be derived from headings and live in
-`content/challenges/<slug>.json` — one file per doc, 28 files, each with all four:
+`content/challenges/<slug>.json` — one file per doc, 33 files, each with all four:
 
-| Type | Shape | Scored on |
-|---|---|---|
-| `duel` | two options with verdicts, plus a `defend` follow-up | picking the right option, then which costs you can name |
-| `ladder` | ordered rungs of multiple-choice capacity estimates | fraction of rungs correct |
-| `builder` | `palette` of 9 components, `slots` with an `accept` each | fraction of slots filled correctly |
-| `bottleneck` | 4 metric cards with `state`, one `answer`, per-card `wrong` explanations | correct on first pick |
+| Id | Type | Tier · XP | Shape | Scored on |
+|---|---|---|---|---|
+| `tradeoff` | `duel` | senior · 80 | two options with verdicts, plus a `defend` follow-up | picking the right option, then which costs you can name |
+| `capacity` | `ladder` | senior · 70 | ordered rungs of multiple-choice capacity estimates | fraction of rungs correct |
+| `architecture` | `builder` | staff · 100 | `palette` of components, `slots` with an `accept` each | fraction of slots filled correctly |
+| `bottleneck` | `bottleneck` | staff · 90 | metric cards with `state`, one `answer`, per-card `wrong` explanations | correct on first pick |
+
+The ids, types, tiers and XP values are a **fixed contract** — `check-site.mjs`
+fails the build on a file with different ids, a fifth checkpoint, a builder slot
+accepting something outside its palette, or `wrong` keys that don't match the
+non-answer cards. Authoring a challenge file means filling in this exact shape.
 
 ### The merge rule
 
@@ -286,8 +363,15 @@ an error.
 |---|---|---|
 | `doc.js` | every doc page | IntersectionObserver highlights the TOC entry for the section on screen |
 | `home.js` | index | text + collection-chip filtering, `/` to focus search, Esc to clear |
-| `vault.js` | answer pages with checkpoints | the practice sidecar and all six mechanics |
+| `game.js` | index | Packet Runner, the hero's snake-style mini-game |
+| `vault.js` | pages with checkpoints | the practice sidecar and all six mechanics |
 | `progress.js` | `/progress/` | the vault map, reading the same blob `vault.js` writes |
+
+`game.js` follows the same discipline as the rest: inert until an explicit START
+(arrow keys scroll the page as normal), only capturing keys while a run is live,
+and still under `prefers-reduced-motion` apart from that explicit opt-in. The
+board is fluid below 440px — the script measures the cell size into a `--cell`
+custom property rather than assuming the 400px design width.
 
 ### Storage
 
@@ -347,6 +431,13 @@ Mono (data, labels, counts), a single blue accent, and a faint drafting grid on 
 surfaces. All of it is one hand-written stylesheet — no framework, no build step for
 CSS.
 
+The front page opens on a split hero: copy and stats on the left, **Packet Runner**
+on the right — a playable board in the same navy as the docs' code blocks, under the
+theme "every doc travels as a packet". GitHub and LinkedIn icon buttons sit in the
+shared header. DSA chapters add their own layer on top of the doc frame: a numbered
+study-track side nav, a metadata strip, and the four decorated contract sections
+from §4.
+
 ### Tokens
 
 ```css
@@ -389,11 +480,11 @@ otherwise stretch the column and push the whole page into horizontal scroll.
 
 **build job** — checkout → Node 20 with `tools/package-lock.json` npm cache →
 `npm ci` → install Chrome for Puppeteer → **restore the diagram cache** →
-the four gates → upload `site/` as an artifact.
+the five gates → upload `site/` as an artifact.
 
 The diagram cache is keyed on `hashFiles('LLD/**/*.md', 'DSA/**/*.md')` with a
 `diagrams-` restore prefix, so an exact hit skips rendering entirely and a partial
-hit re-renders only what changed. This is what keeps a 607-diagram build fast.
+hit re-renders only what changed. This is what keeps a 615-diagram build fast.
 
 **deploy job** — gated on `push` to `master`, so pull requests build and validate but
 never publish. Downloads the artifact and runs `wrangler deploy`.
@@ -408,10 +499,13 @@ maps `/answers/bitly/` to that directory's `index.html`.
 build never emits a `site/404.html`, so unmatched paths fall back to Cloudflare's
 default response. Emitting one from `build-site.mjs` would close the gap.
 
-`_headers` sets a year-long immutable cache on `/assets/*`, drops the mutable
-`site.css` / `home.js` / `doc.js` to one hour, and applies `nosniff`,
-`strict-origin-when-cross-origin` and `SAMEORIGIN` site-wide. Both `_headers` and
-`_redirects` are carried over from the earlier Cloudflare Pages setup.
+`_headers` asks for a year-long immutable cache on `/assets/*` and one hour on the
+mutable scripts — but `_headers` / `_redirects` are a **Pages convention that
+Workers Static Assets ignores**. Verified against production: `/assets/site.css`
+comes back `cache-control: public, max-age=0, must-revalidate`, not the configured
+value. The files are carried over from the earlier Pages setup and are currently
+inert; honouring them would take a small Worker script that sets `Cache-Control`
+around the asset fetch.
 
 `SITE_ORIGIN` is `https://cartmancodes.com` in CI and defaults to the
 `pages.dev` host locally; it only affects `sitemap.xml`.
@@ -433,12 +527,18 @@ Things that will bite if broken:
 4. **Mermaid must parse** — a failing block fails the build (see Stage 1).
 5. **Mechanics must call `done()` exactly once**, or the checkpoint never scores.
 6. **`marked` runs after mermaid extraction**, never before.
+7. **DSA chapters keep the exact H2 sequence** from `dsa-config.mjs`, and every
+   plain ` ```cpp ` block must compile as C++17 — `check-dsa.mjs` fails the build
+   otherwise. Notebook-era snippets that should not be modernised are tagged
+   ` ```cpp legacy `.
+8. **Authored challenge files match the fixed contract** — four checkpoints with
+   the standard ids, types, tiers and XP; `check-site.mjs` enforces it.
 
 ### Known rough edges
 
 - `site/assets/` is **not** cleaned between builds, only the section directories.
   Orphaned diagram SVGs accumulate — there is currently one on disk with no
-  referencing doc (608 files, 607 live). Harmless, but the count drifts.
+  referencing doc (616 files, 615 live). Harmless, but the count drifts.
 - `collectionFor()` in `build-site.mjs` and `authoredSlugs()` in
   `gen-challenges.mjs` are both dead — nothing calls them.
 - `buildIndex()` contains a no-op `map.replace(…, (m) => m)` left from an earlier
@@ -452,9 +552,14 @@ Things that will bite if broken:
 **Add a document** — drop a `.md` into a collection folder, write the H1 and the
 heading contracts from §4, rebuild. Nothing to register.
 
-**Add practice challenges** — create `content/challenges/<slug>.json` with a
-`checkpoints` array. The slug must match the doc's derived slug. Rebuild; the
-sidecar picks it up.
+**Add practice challenges** — create `content/challenges/<slug>.json` with the
+four standard checkpoints from §5 (the contract is enforced, so copy an existing
+file as the template). The filename must match the doc's derived slug. Works for
+answer docs and deep dives alike; rebuild and the sidecar picks it up.
+
+**Add a DSA chapter** — two files: the markdown in `DSA/` following the exact H2
+sequence, and an entry in `tools/dsa-config.mjs` with a free `order` slot. The
+gate tells you precisely what is missing; ` ```cpp ` blocks must compile as C++17.
 
 **Add a mechanic** — write `(cp, done) => node` in `vault.js`, register it in
 `MECHANICS`, add it to `WIDTH` if it needs the wide overlay, and style it in
