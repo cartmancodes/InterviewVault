@@ -33,6 +33,20 @@ Redis is the default answer to "we need this fast" in most backend architectures
 6. **Replication and clustering built in** — primary/replica with async replication, plus Redis Cluster for sharded multi-node deployments.
 
 ```mermaid
+---
+config:
+  look: handDrawn
+  handDrawnSeed: 7
+  theme: base
+  themeVariables:
+    primaryColor: "#FFFFFF"
+    primaryBorderColor: "#0E1A2B"
+    primaryTextColor: "#0E1A2B"
+    lineColor: "#0E1A2B"
+    clusterBkg: "#FFFFFF"
+    clusterBorder: "#6B7C96"
+    edgeLabelBackground: "#FFFFFF"
+---
 graph LR
     APP[App Server]
     R[(Redis<br/>In-Memory<br/>Single-Threaded)]
@@ -42,8 +56,8 @@ graph LR
     APP -->|Fallback<br/>~50ms| DB
     R -.->|persist| DB
 
-    style R fill:#FF6B6B,color:#fff
-    style DB fill:#FFB6C1
+    style R fill:#F0F4FF,stroke:#2563EB
+    style DB fill:#FFFFFF,stroke:#6B7C96
 ```
 
 ### When NOT to use Redis
@@ -82,6 +96,20 @@ Real Redis has clustering, replication, and Sentinel-driven failover that don't 
 The most important fact about Redis: **all command execution happens on a single thread**. Network I/O can be multi-threaded (since Redis 6 with `io-threads`), but command processing — the actual logic — is single-threaded.
 
 ```mermaid
+---
+config:
+  look: handDrawn
+  handDrawnSeed: 7
+  theme: base
+  themeVariables:
+    primaryColor: "#FFFFFF"
+    primaryBorderColor: "#0E1A2B"
+    primaryTextColor: "#0E1A2B"
+    lineColor: "#0E1A2B"
+    clusterBkg: "#FFFFFF"
+    clusterBorder: "#6B7C96"
+    edgeLabelBackground: "#FFFFFF"
+---
 graph TB
     subgraph "Redis Process"
         EL[Event Loop<br/>Single Thread]
@@ -97,8 +125,8 @@ graph TB
     C2[Client 2] -->|GET k2| Q
     C3[Client 3] -->|LPUSH q1 v| Q
 
-    style EL fill:#FF6B6B,color:#fff
-    style EX fill:#90EE90
+    style EL fill:#F0F4FF,stroke:#2563EB
+    style EX fill:#E7F8F1,stroke:#10B981
 ```
 
 ### Implications
@@ -140,6 +168,20 @@ Every Redis command's docs list its time complexity. **Treat O(N) commands as pr
 ### Choosing the Right Structure
 
 ```mermaid
+---
+config:
+  look: handDrawn
+  handDrawnSeed: 7
+  theme: base
+  themeVariables:
+    primaryColor: "#FFFFFF"
+    primaryBorderColor: "#0E1A2B"
+    primaryTextColor: "#0E1A2B"
+    lineColor: "#0E1A2B"
+    clusterBkg: "#FFFFFF"
+    clusterBorder: "#6B7C96"
+    edgeLabelBackground: "#FFFFFF"
+---
 graph TD
     Q{What do you need?}
 
@@ -155,8 +197,8 @@ graph TD
     L1 -->|Yes| ST1
     L1 -->|No / fast| L2[List + LPUSH/BRPOP]
 
-    style Q fill:#FFD700
-    style ST1 fill:#90EE90
+    style Q fill:#FEF3C7,stroke:#F59E0B
+    style ST1 fill:#E7F8F1,stroke:#10B981
 ```
 
 ---
@@ -188,14 +230,28 @@ Redis is in-memory, but it can persist to disk. The choice of persistence mode i
 Since Redis 4.0, AOF can begin with an RDB snapshot followed by AOF entries: best of both — fast restart from RDB, full durability from AOF tail.
 
 ```mermaid
+---
+config:
+  look: handDrawn
+  handDrawnSeed: 7
+  theme: base
+  themeVariables:
+    primaryColor: "#FFFFFF"
+    primaryBorderColor: "#0E1A2B"
+    primaryTextColor: "#0E1A2B"
+    lineColor: "#0E1A2B"
+    clusterBkg: "#FFFFFF"
+    clusterBorder: "#6B7C96"
+    edgeLabelBackground: "#FFFFFF"
+---
 graph LR
     M[Memory State] -->|periodic| RDB[RDB Snapshot]
     M -->|every write| AOF[AOF Log]
     AOF -->|rewrite| AOFC[Compact AOF<br/>RDB header + tail]
 
-    style RDB fill:#87CEEB
-    style AOF fill:#FFA500
-    style AOFC fill:#90EE90
+    style RDB fill:#FFFFFF,stroke:#6B7C96
+    style AOF fill:#FDE9C8,stroke:#D97706
+    style AOFC fill:#E7F8F1,stroke:#10B981
 ```
 
 **Production recommendation**: AOF `everysec` + periodic RDB for backup. Pure cache use cases can disable both.
@@ -207,6 +263,20 @@ graph LR
 Redis supports asynchronous primary-replica replication out of the box.
 
 ```mermaid
+---
+config:
+  look: handDrawn
+  handDrawnSeed: 7
+  theme: base
+  themeVariables:
+    primaryColor: "#FFFFFF"
+    primaryBorderColor: "#0E1A2B"
+    primaryTextColor: "#0E1A2B"
+    lineColor: "#0E1A2B"
+    clusterBkg: "#FFFFFF"
+    clusterBorder: "#6B7C96"
+    edgeLabelBackground: "#FFFFFF"
+---
 graph TB
     P[(Primary<br/>Read/Write)]
     R1[(Replica 1<br/>Read)]
@@ -217,10 +287,10 @@ graph TB
     P -->|async stream| R2
     P -->|async stream| R3
 
-    style P fill:#FF6B6B,color:#fff
-    style R1 fill:#87CEEB
-    style R2 fill:#87CEEB
-    style R3 fill:#87CEEB
+    style P fill:#F0F4FF,stroke:#2563EB
+    style R1 fill:#FFFFFF,stroke:#6B7C96
+    style R2 fill:#FFFFFF,stroke:#6B7C96
+    style R3 fill:#FFFFFF,stroke:#6B7C96
 ```
 
 ### Failover with Sentinel
@@ -250,6 +320,20 @@ slot = CRC16(key) mod 16384
 Each primary owns a range of slots. Clients compute the slot client-side and route the request directly to the owning node.
 
 ```mermaid
+---
+config:
+  look: handDrawn
+  handDrawnSeed: 7
+  theme: base
+  themeVariables:
+    primaryColor: "#FFFFFF"
+    primaryBorderColor: "#0E1A2B"
+    primaryTextColor: "#0E1A2B"
+    lineColor: "#0E1A2B"
+    clusterBkg: "#FFFFFF"
+    clusterBorder: "#6B7C96"
+    edgeLabelBackground: "#FFFFFF"
+---
 graph LR
     C[Client]
     C -->|slot 0-5460| N1[(Node 1<br/>Primary)]
@@ -260,9 +344,9 @@ graph LR
     N2 -.replica.-> R2[(Replica 2)]
     N3 -.replica.-> R3[(Replica 3)]
 
-    style N1 fill:#FF6B6B,color:#fff
-    style N2 fill:#FF6B6B,color:#fff
-    style N3 fill:#FF6B6B,color:#fff
+    style N1 fill:#F0F4FF,stroke:#2563EB
+    style N2 fill:#F0F4FF,stroke:#2563EB
+    style N3 fill:#F0F4FF,stroke:#2563EB
 ```
 
 ### Hash Tags
@@ -378,6 +462,26 @@ This means an expired key occupies memory until either is accessed or sampled.
 Standard cache-aside has a brutal failure mode under cache miss:
 
 ```mermaid
+---
+config:
+  look: handDrawn
+  handDrawnSeed: 7
+  theme: base
+  themeVariables:
+    primaryColor: "#FFFFFF"
+    primaryBorderColor: "#0E1A2B"
+    primaryTextColor: "#0E1A2B"
+    lineColor: "#0E1A2B"
+    actorBkg: "#FFFFFF"
+    actorBorder: "#0E1A2B"
+    actorTextColor: "#0E1A2B"
+    actorLineColor: "#6B7C96"
+    signalColor: "#0E1A2B"
+    signalTextColor: "#0E1A2B"
+    noteBkgColor: "#F0F4FF"
+    noteBorderColor: "#0E1A2B"
+    noteTextColor: "#0E1A2B"
+---
 sequenceDiagram
     participant C as Client
     participant App as App Server
@@ -410,6 +514,20 @@ Value: {
 ```
 
 ```mermaid
+---
+config:
+  look: handDrawn
+  handDrawnSeed: 7
+  theme: base
+  themeVariables:
+    primaryColor: "#FFFFFF"
+    primaryBorderColor: "#0E1A2B"
+    primaryTextColor: "#0E1A2B"
+    lineColor: "#0E1A2B"
+    clusterBkg: "#FFFFFF"
+    clusterBorder: "#6B7C96"
+    edgeLabelBackground: "#FFFFFF"
+---
 graph LR
     T0["t=0<br/>Set"]
     T1["t=60s<br/>FRESH expires"]
@@ -420,10 +538,10 @@ graph LR
     T1 -->|return stale + revalidate| T2
     T2 -->|cache miss<br/>fetch synchronously| T3
 
-    style T0 fill:#90EE90
-    style T1 fill:#FFD700
-    style T2 fill:#FFA500
-    style T3 fill:#FFB6C1
+    style T0 fill:#E7F8F1,stroke:#10B981
+    style T1 fill:#FEF3C7,stroke:#F59E0B
+    style T2 fill:#FDE9C8,stroke:#D97706
+    style T3 fill:#FFFFFF,stroke:#6B7C96
 ```
 
 ### Implementation Sketch
@@ -470,6 +588,26 @@ Only the lock-winner triggers the actual refresh. Others see stale data this rou
 The above is **pull-based SWR**: the next reader checks freshness and triggers refresh. There's also **push-based SWR** using Pub/Sub:
 
 ```mermaid
+---
+config:
+  look: handDrawn
+  handDrawnSeed: 7
+  theme: base
+  themeVariables:
+    primaryColor: "#FFFFFF"
+    primaryBorderColor: "#0E1A2B"
+    primaryTextColor: "#0E1A2B"
+    lineColor: "#0E1A2B"
+    actorBkg: "#FFFFFF"
+    actorBorder: "#0E1A2B"
+    actorTextColor: "#0E1A2B"
+    actorLineColor: "#6B7C96"
+    signalColor: "#0E1A2B"
+    signalTextColor: "#0E1A2B"
+    noteBkgColor: "#F0F4FF"
+    noteBorderColor: "#0E1A2B"
+    noteTextColor: "#0E1A2B"
+---
 sequenceDiagram
     participant Writer
     participant DB
@@ -519,6 +657,20 @@ Redis Pub/Sub is the simplest possible messaging primitive: publishers send to c
 ### How Pub/Sub Works
 
 ```mermaid
+---
+config:
+  look: handDrawn
+  handDrawnSeed: 7
+  theme: base
+  themeVariables:
+    primaryColor: "#FFFFFF"
+    primaryBorderColor: "#0E1A2B"
+    primaryTextColor: "#0E1A2B"
+    lineColor: "#0E1A2B"
+    clusterBkg: "#FFFFFF"
+    clusterBorder: "#6B7C96"
+    edgeLabelBackground: "#FFFFFF"
+---
 graph LR
     P1[Publisher 1] -->|PUBLISH news hello| R[(Redis)]
     P2[Publisher 2] -->|PUBLISH news world| R
@@ -527,7 +679,7 @@ graph LR
     R -->|hello, world| S2[Subscriber B<br/>SUBSCRIBE news]
     R -->|hello, world| S3[Subscriber C<br/>SUBSCRIBE news]
 
-    style R fill:#FF6B6B,color:#fff
+    style R fill:#F0F4FF,stroke:#2563EB
 ```
 
 - `PUBLISH channel msg` — pushes to all currently subscribed clients.
@@ -588,6 +740,26 @@ XACK mystream workers 1735000000-0
 A common production pattern: use Pub/Sub for low-latency wake-up + a durable store for actual data.
 
 ```mermaid
+---
+config:
+  look: handDrawn
+  handDrawnSeed: 7
+  theme: base
+  themeVariables:
+    primaryColor: "#FFFFFF"
+    primaryBorderColor: "#0E1A2B"
+    primaryTextColor: "#0E1A2B"
+    lineColor: "#0E1A2B"
+    actorBkg: "#FFFFFF"
+    actorBorder: "#0E1A2B"
+    actorTextColor: "#0E1A2B"
+    actorLineColor: "#6B7C96"
+    signalColor: "#0E1A2B"
+    signalTextColor: "#0E1A2B"
+    noteBkgColor: "#F0F4FF"
+    noteBorderColor: "#0E1A2B"
+    noteTextColor: "#0E1A2B"
+---
 sequenceDiagram
     participant Producer
     participant Worker
@@ -663,6 +835,26 @@ INCR product:123:ver
 After invalidation, all readers compute a new key and miss the cache, falling back to the source of truth. The old `product:123:v3` entry is orphaned and will be evicted by LRU/TTL.
 
 ```mermaid
+---
+config:
+  look: handDrawn
+  handDrawnSeed: 7
+  theme: base
+  themeVariables:
+    primaryColor: "#FFFFFF"
+    primaryBorderColor: "#0E1A2B"
+    primaryTextColor: "#0E1A2B"
+    lineColor: "#0E1A2B"
+    actorBkg: "#FFFFFF"
+    actorBorder: "#0E1A2B"
+    actorTextColor: "#0E1A2B"
+    actorLineColor: "#6B7C96"
+    signalColor: "#0E1A2B"
+    signalTextColor: "#0E1A2B"
+    noteBkgColor: "#F0F4FF"
+    noteBorderColor: "#0E1A2B"
+    noteTextColor: "#0E1A2B"
+---
 sequenceDiagram
     participant App
     participant R as Redis
@@ -757,6 +949,26 @@ This eliminates the "stale write after invalidation" race entirely.
 For multi-tier caches (L1 in-process + L2 Redis), the version pattern combined with pub/sub propagation gives near-instant cross-process invalidation:
 
 ```mermaid
+---
+config:
+  look: handDrawn
+  handDrawnSeed: 7
+  theme: base
+  themeVariables:
+    primaryColor: "#FFFFFF"
+    primaryBorderColor: "#0E1A2B"
+    primaryTextColor: "#0E1A2B"
+    lineColor: "#0E1A2B"
+    actorBkg: "#FFFFFF"
+    actorBorder: "#0E1A2B"
+    actorTextColor: "#0E1A2B"
+    actorLineColor: "#6B7C96"
+    signalColor: "#0E1A2B"
+    signalTextColor: "#0E1A2B"
+    noteBkgColor: "#F0F4FF"
+    noteBorderColor: "#0E1A2B"
+    noteTextColor: "#0E1A2B"
+---
 sequenceDiagram
     participant Writer
     participant DB
