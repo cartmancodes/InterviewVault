@@ -88,6 +88,14 @@ a:hover { text-decoration-color: var(--blue); }
 }
 .hdr-nav a:hover { background: var(--blue-wash); color: var(--blue-deep); }
 .hdr-nav a[aria-current="page"] { background: var(--blue-wash); color: var(--blue-deep); font-weight: 500; }
+.socials { display: flex; gap: 10px; flex: none; }
+.socials a {
+  width: 32px; height: 32px; color: var(--blue); border-radius: 8px;
+  border: 1.5px solid color-mix(in srgb, var(--blue) 45%, transparent);
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s, border-color .15s;
+}
+.socials a:hover { background: color-mix(in srgb, var(--blue) 12%, transparent); border-color: var(--blue); }
 
 /* ── hero ──────────────────────────────────────────────── */
 .hero { border-bottom: 1px solid var(--rule); }
@@ -108,6 +116,61 @@ a:hover { text-decoration-color: var(--blue); }
 .stats { display: flex; flex-wrap: wrap; gap: 26px; margin-top: 24px; font-family: var(--mono); }
 .stat b { display: block; font-size: 21px; font-weight: 600; letter-spacing: -.02em; }
 .stat span { font-size: 11.5px; color: var(--mut); letter-spacing: .06em; text-transform: uppercase; }
+.story { font: 400 11.5px/1.8 var(--mono); color: var(--mut); margin-top: 30px; }
+
+/* ── packet runner: the hero splits copy | game ─────────── */
+.hero-split { display: flex; gap: 48px; align-items: flex-start; }
+.hero-copy { flex: 1; min-width: 0; padding-top: 8px; }
+.hero-game { display: flex; flex-direction: column; align-items: center; flex: none; }
+.game-caption { font: 500 10.5px var(--mono); letter-spacing: 2.2px; color: var(--mut); }
+
+/* The board is the docs' own code-block navy, so the terminal reads as part of
+   the family. 20 x 12 grid; --cell is measured by game.js so the board can be
+   fluid below 440px while landing on the spec's exact 20px cell at 400 wide. */
+#pr-board {
+  --cell: 20px;
+  position: relative; width: 400px; aspect-ratio: 5 / 3; margin-top: 12px;
+  background-color: var(--ink); border-radius: 10px; overflow: hidden;
+  box-shadow: 0 14px 34px rgba(14,26,43,.35);
+  background-image: linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+  background-size: var(--cell) var(--cell);
+}
+.pr-seg {
+  position: absolute; width: calc(var(--cell) * .9); height: calc(var(--cell) * .9);
+  border-radius: 4px; background: var(--blue);
+}
+.pr-seg.head { background: var(--good); }
+#pr-food {
+  position: absolute; width: calc(var(--cell) * .55); height: calc(var(--cell) * .55);
+  border-radius: 50%; background: var(--good);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--good) 80%, transparent);
+  animation: pr-ping 1.2s ease-in-out infinite;
+}
+@keyframes pr-ping { 0%, 100% { opacity: 1; } 50% { opacity: .2; } }
+@media (prefers-reduced-motion: reduce) { #pr-food { animation: none; } }
+#pr-overlay {
+  position: absolute; inset: 0; background: rgba(14,26,43,.82);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; text-align: center; padding: 0 16px;
+}
+#pr-overlay h2 { font: 700 15px var(--mono); letter-spacing: 3px; color: #fff; }
+#pr-overlay p { font: 400 10.5px var(--mono); color: #9FB3DD; }
+#pr-btn {
+  margin-top: 8px; font: 700 12px var(--mono); letter-spacing: 2px; color: #fff;
+  background: var(--blue); border: 0; border-radius: 8px; padding: 10px 26px; cursor: pointer;
+}
+#pr-btn:hover { background: var(--blue-deep); }
+.scorebar { display: flex; gap: 36px; align-items: baseline; margin-top: 16px; font-family: var(--mono); }
+.score-label { font-size: 12px; letter-spacing: .04em; }
+.score-label b { font-size: 18px; font-weight: 700; color: var(--blue); margin-left: 4px; }
+.scorebar .keys { font-size: 10.5px; color: var(--mut); }
+
+@media (max-width: 900px) {
+  .hero-split { flex-direction: column; }
+  .hero-game { align-self: center; width: 100%; max-width: 400px; }
+  #pr-board { width: 100%; }
+}
 
 /* ── signature: architecture-diagram nav ───────────────── */
 .map { max-width: var(--shell); margin: 0 auto; padding: 30px 20px 52px; }
@@ -315,8 +378,10 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
   /* brand on its own line, sections as one swipeable row — wrapping the nav
      would otherwise build a header several hundred pixels tall */
   .hdr-in { flex-wrap: wrap; gap: 8px; padding: 8px 14px; }
+  /* socials stay on the brand row; the nav wraps below them */
+  .socials { margin-left: auto; }
   .hdr-nav {
-    margin-left: 0; width: 100%; flex-wrap: nowrap; overflow-x: auto;
+    order: 3; margin-left: 0; width: 100%; flex-wrap: nowrap; overflow-x: auto;
     scrollbar-width: none; -webkit-overflow-scrolling: touch;
   }
   .hdr-nav::-webkit-scrollbar { display: none; }

@@ -58,41 +58,8 @@ receives its distance from the nearest source.
 
 ## Reusable C++ Template
 
-This template returns shortest distances from one source in an adjacency-list graph.
-Unreachable vertices remain `-1`.
-
-```cpp
-#include <queue>
-#include <vector>
-
-std::vector<int> bfsDistances(
-    const std::vector<std::vector<int>>& graph,
-    int source
-) {
-    std::vector<int> distance(graph.size(), -1);
-    if (source < 0 || source >= static_cast<int>(graph.size())) return distance;
-
-    std::queue<int> pending;
-    pending.push(source);
-    distance[source] = 0;
-
-    while (!pending.empty()) {
-        int node = pending.front();
-        pending.pop();
-
-        for (int neighbor : graph[node]) {
-            if (distance[neighbor] != -1) continue;
-            distance[neighbor] = distance[node] + 1;
-            pending.push(neighbor);
-        }
-    }
-
-    return distance;
-}
-```
-
-Using `distance != -1` as the visited check keeps discovery state and shortest distance
-in one array.
+The original notebook did not contain a separate reusable BFS template. Use the queue,
+visited-state, and layer invariants above when adapting its preserved worked snippet.
 
 ## Worked Problems
 
@@ -108,57 +75,71 @@ each rotten orange repeats work; one multi-source BFS models all spread fronts t
 can spread at the current minute. A fresh cell is changed to rotten when enqueued, so it
 can enter the queue only once.
 
-```cpp
-#include <queue>
-#include <utility>
+The original notebook snippet is preserved verbatim:
+
+```cpp legacy
+// https://leetcode.com/problems/rotting-oranges
+
 #include <vector>
+#include <queue>
+#include <algorithm>
 
-int orangesRotting(std::vector<std::vector<int>>& grid) {
-    if (grid.empty() || grid.front().empty()) return 0;
+using namespace std;
 
-    const int rows = static_cast<int>(grid.size());
-    const int columns = static_cast<int>(grid.front().size());
-    const int directions[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-    std::queue<std::pair<int, int>> pending;
-    int fresh = 0;
+struct Node {
+    int x, y, time;
+};
 
-    for (int row = 0; row < rows; ++row) {
-        for (int column = 0; column < columns; ++column) {
-            if (grid[row][column] == 2) pending.push({row, column});
-            if (grid[row][column] == 1) ++fresh;
-        }
-    }
+class Solution {
+public:
+    int orangesRotting(vector<vector<int>>& grid) {
+        int rows = grid.size();
+        int cols = grid[0].size();
+        queue<Node> q;
+        int freshCount = 0;
 
-    int minutes = 0;
-    while (!pending.empty() && fresh > 0) {
-        int layerSize = static_cast<int>(pending.size());
-        bool rottedAny = false;
-
-        while (layerSize-- > 0) {
-            auto [row, column] = pending.front();
-            pending.pop();
-
-            for (const auto& direction : directions) {
-                int nextRow = row + direction[0];
-                int nextColumn = column + direction[1];
-                if (nextRow < 0 || nextRow >= rows ||
-                    nextColumn < 0 || nextColumn >= columns ||
-                    grid[nextRow][nextColumn] != 1) {
-                    continue;
+        // 1. Initial Scan: Find all rotten oranges and count fresh ones
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
+                if (grid[i][j] == 2) {
+                    q.push({i, j, 0});
+                } else if (grid[i][j] == 1) {
+                    freshCount++;
                 }
-
-                grid[nextRow][nextColumn] = 2;
-                --fresh;
-                rottedAny = true;
-                pending.push({nextRow, nextColumn});
             }
         }
 
-        if (rottedAny) ++minutes;
-    }
+        // If there are no fresh oranges, it takes 0 minutes.
+        if (freshCount == 0) return 0;
 
-    return fresh == 0 ? minutes : -1;
-}
+        int minutes = 0;
+        int dx[] = {1, -1, 0, 0};
+        int dy[] = {0, 0, 1, -1};
+
+        // 2. Multi-source BFS
+        while (!q.empty()) {
+            Node curr = q.front();
+            q.pop();
+
+            minutes = max(minutes, curr.time);
+
+            for (int i = 0; i < 4; i++) {
+                int nx = curr.x + dx[i];
+                int ny = curr.y + dy[i];
+
+                // Check bounds and if the neighbor is a fresh orange
+                if (nx >= 0 && nx < rows && ny >= 0 && ny < cols && grid[nx][ny] == 1) {
+                    grid[nx][ny] = 2; // Mark as rotten
+                    freshCount--;
+                    q.push({nx, ny, curr.time + 1});
+                }
+            }
+        }
+
+        // 3. Final Check: If fresh oranges remain, they are unreachable
+        return (freshCount == 0) ? minutes : -1;
+    }
+};
 ```
 
 **Why it is correct:** all initially rotten oranges begin in layer zero. Inductively,
@@ -170,7 +151,8 @@ fresh oranges remain after the queue empties, no path from any source reaches th
 case.
 
 **Edge cases:** no fresh oranges returns `0`; fresh oranges with no source return `-1`;
-an isolated fresh region remains unreachable; an empty grid returns `0` defensively.
+an isolated fresh region remains unreachable. The preserved snippet assumes the grid is
+non-empty before reading `grid[0]`.
 
 ## Failure Modes
 

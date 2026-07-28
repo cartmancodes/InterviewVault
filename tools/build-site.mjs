@@ -207,10 +207,21 @@ function renderDoc(doc) {
 const FONTS = `<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@400;600&display=swap" rel="stylesheet">`;
 
+// GitHub / LinkedIn brand marks, inlined so there are no icon assets to fetch.
+const SOCIALS = `<div class="socials">
+<a href="https://github.com/cartmancodes" title="GitHub" aria-label="GitHub profile" rel="me">
+<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+</a>
+<a href="https://in.linkedin.com/in/shubhojeet-chakraborty-540570b0" title="LinkedIn" aria-label="LinkedIn profile" rel="me">
+<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.36V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.72v20.55C0 23.22.79 24 1.77 24h20.45c.98 0 1.78-.78 1.78-1.73V1.72C24 .77 23.2 0 22.22 0z"/></svg>
+</a>
+</div>`;
+
 const header = (active) => `<header class="hdr"><div class="hdr-in">
 <a class="brand" href="/"><span class="brand-mark">IV</span><span class="brand-name">Interview<span>Vault</span></span></a>
 <nav class="hdr-nav">${COLLECTIONS.filter((c) => c.key !== 'quickref')
   .map((c) => `<a href="/#${c.key}"${active === c.key ? ' aria-current="page"' : ''}>${c.label}</a>`).join('')}</nav>
+${SOCIALS}
 </div></header>`;
 
 const footer = () => `<footer class="foot"><div class="foot-in">
@@ -360,7 +371,6 @@ ${N(898, 172, 88, 56, 'dsa', 'DSA')}
 function buildIndex() {
   const counts = Object.fromEntries(COLLECTIONS.map((c) => [c.key, docs.filter((d) => d.col.key === c.key).length]));
   const totalDiagrams = docs.reduce((a, d) => a + d.diagrams, 0);
-  const totalFigures = docs.reduce((a, d) => a + d.images, 0);
   const totalWords = docs.reduce((a, d) => a + d.words, 0);
 
   // map svg with real counts substituted
@@ -383,15 +393,36 @@ ${list.map((d) => `<a class="row" href="${d.url}" data-t="${esc((d.title + ' ' +
 </div>`;
   }).join('');
 
-  const body = `<section class="hero blueprint"><div class="hero-in">
-<div class="eyebrow">System design · study vault</div>
+  // Hero: copy left, Packet Runner right ("every doc travels as a packet").
+  // See docs/superpowers — CartmanCodes Portfolio Animation Concepts, concept 2a.
+  const body = `<section class="hero blueprint"><div class="hero-in hero-split">
+<div class="hero-copy">
 <h1>Everything I know about <em>designing systems</em>, in one place.</h1>
 <p class="hero-sub">Worked breakdowns, pattern cheat-sheets and long-form notes — written to be read the week before an interview, and re-read the morning of.</p>
 <div class="stats">
 <div class="stat"><b>${docs.length}</b><span>Documents</span></div>
 <div class="stat"><b>${totalDiagrams}</b><span>Diagrams</span></div>
-<div class="stat"><b>${totalFigures}</b><span>Figures</span></div>
 <div class="stat"><b>${Math.round(totalWords / 1000)}k</b><span>Words</span></div>
+</div>
+<div class="story">
+<div>$ ping knowledge.local</div>
+<div>$ 64 bytes received: curiosity alive</div>
+</div>
+</div>
+<div class="hero-game">
+<div class="game-caption">PACKET RUNNER — DON'T DROP THE STREAM</div>
+<div id="pr-board" aria-label="Packet Runner, a snake-style mini-game. Use arrow keys or WASD once started.">
+<div id="pr-food"></div>
+<div id="pr-overlay">
+<h2 id="pr-title">PACKET RUNNER</h2>
+<p id="pr-sub">guide the stream · deliver packets · don't drop the connection</p>
+<button id="pr-btn" type="button">START</button>
+</div>
+</div>
+<div class="scorebar">
+<div class="score-label">PACKETS DELIVERED <b id="pr-score" aria-live="polite">0</b></div>
+<div class="keys">← ↑ ↓ → OR WASD</div>
+</div>
 </div>
 </div></section>
 
@@ -407,7 +438,8 @@ ${chips}
 <div class="rows" id="rows">${rows}</div>
 <p class="empty" id="none" hidden>No document matches that.</p>
 </section>
-<script src="/assets/home.js" defer></script>`;
+<script src="/assets/home.js" defer></script>
+<script src="/assets/game.js" defer></script>`;
 
   writeFileSync(path.join(SITE, 'index.html'), page({
     title: 'InterviewVault — System Design Study Vault',
@@ -485,6 +517,7 @@ function build() {
 
   copyFileSync(path.join(TPL, 'site.css'), path.join(SITE, 'assets', 'site.css'));
   copyFileSync(path.join(TPL, 'home.js'), path.join(SITE, 'assets', 'home.js'));
+  copyFileSync(path.join(TPL, 'game.js'), path.join(SITE, 'assets', 'game.js'));
   copyFileSync(path.join(TPL, 'doc.js'), path.join(SITE, 'assets', 'doc.js'));
   copyFileSync(path.join(TPL, 'vault.js'), path.join(SITE, 'assets', 'vault.js'));
   copyFileSync(path.join(TPL, 'progress.js'), path.join(SITE, 'assets', 'progress.js'));

@@ -63,35 +63,8 @@ upper-half value. Those two roots are exactly the values needed to answer the me
 
 ## Reusable C++ Template
 
-Keep the k largest values seen so far. The min-heap root is the smallest retained value,
-so a better candidate can replace it in O(log k).
-
-```cpp
-#include <algorithm>
-#include <functional>
-#include <queue>
-#include <vector>
-
-std::vector<int> kLargest(const std::vector<int>& values, int k) {
-    if (k <= 0) return {};
-
-    std::priority_queue<int, std::vector<int>, std::greater<int>> best;
-    for (int value : values) {
-        best.push(value);
-        if (static_cast<int>(best.size()) > k) best.pop();
-    }
-
-    std::vector<int> result;
-    while (!best.empty()) {
-        result.push_back(best.top());
-        best.pop();
-    }
-    std::reverse(result.begin(), result.end());
-    return result;
-}
-```
-
-The scan is O(n log k), extraction is O(k log k), and the heap uses O(k) space.
+The original notebook did not contain a separate top-k template. Use the heap-membership
+and root-selection rules above when adapting its preserved two-heap snippet.
 
 ## Worked Problems
 
@@ -107,37 +80,58 @@ depends only on the middle boundary, which two heaps maintain incrementally.
 1. `lower.size()` equals `upper.size()` or exceeds it by one.
 2. Every value in `lower` is less than or equal to every value in `upper`.
 
-```cpp
-#include <functional>
-#include <queue>
-#include <stdexcept>
-#include <vector>
+The original notebook snippet is preserved verbatim. Its method name suggests the
+binary-search solution for two sorted arrays, but the body instead streams both arrays
+through two heaps.
 
-class MedianFinder {
+```cpp legacy
+class Solution {
 public:
-    void addNum(int value) {
-        lower_.push(value);
-        upper_.push(lower_.top());
-        lower_.pop();
-
-        if (upper_.size() > lower_.size()) {
-            lower_.push(upper_.top());
-            upper_.pop();
+    double findMedianSortedArrays(vector<int>& nums1, vector<int>& nums2) {
+        // Keep a min heap here and find the max value 
+        priority_queue<int> leftMaxHeap;
+        
+        // Keep a max heap here and find the min value 
+        priority_queue<int, vector<int>, greater<int>> rightMinHeap;
+        
+        for(int i = 0; i < nums1.size(); i++) {
+            // Add it to the min heap 
+            int num = nums1[i];
+            leftMaxHeap.push(num);
+            
+            // Now push the top of leftMax to rightMin 
+            rightMinHeap.push(leftMaxHeap.top());
+            leftMaxHeap.pop();
+            
+            // Check bal;ance
+            if (leftMaxHeap.size() < rightMinHeap.size()) {
+                leftMaxHeap.push(rightMinHeap.top());
+                rightMinHeap.pop();
+            }
         }
-    }
-
-    double findMedian() const {
-        if (lower_.empty()) throw std::logic_error("median of an empty stream");
-        if (lower_.size() > upper_.size()) {
-            return static_cast<double>(lower_.top());
+        
+        for(int i = 0; i < nums2.size(); i++) {
+            // Add it to the min heap 
+            int num = nums2[i];
+            leftMaxHeap.push(num);
+            
+            // Now push the top of leftMax to rightMin 
+            rightMinHeap.push(leftMaxHeap.top());
+            leftMaxHeap.pop();
+            
+            // Check bal;ance
+            if (leftMaxHeap.size() < rightMinHeap.size()) {
+                leftMaxHeap.push(rightMinHeap.top());
+                rightMinHeap.pop();
+            }
         }
-        return (static_cast<double>(lower_.top()) +
-                static_cast<double>(upper_.top())) / 2.0;
+        
+        // Find medion 
+        if (leftMaxHeap.size() > rightMinHeap.size())
+            return leftMaxHeap.top();
+        else 
+            return double(leftMaxHeap.top() + rightMinHeap.top())/2;
     }
-
-private:
-    std::priority_queue<int> lower_;
-    std::priority_queue<int, std::vector<int>, std::greater<int>> upper_;
 };
 ```
 
@@ -148,8 +142,9 @@ restores the size invariant. The one or two roots therefore delimit the middle.
 
 **Dry run:** inserting `5, 2, 10, 4` produces medians `5, 3.5, 5, 4.5`.
 
-**Complexity:** insertion is O(log n), median lookup is O(1), and total storage is O(n).
-Converting each root to `double` before addition avoids signed integer overflow.
+**Complexity:** each insertion is O(log n), median lookup is O(1), and total storage is
+O(n). The preserved average adds the integer roots before conversion and can overflow;
+the safer interview implementation converts each root first.
 
 **Edge cases:** one value, duplicate values, all negative values, alternating extremes,
 and an empty stream when the interface permits a query before insertion.

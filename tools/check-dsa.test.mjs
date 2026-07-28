@@ -78,6 +78,19 @@ test('untagged fences and invalid C++ are reported', () => {
   }).some((issue) => issue.includes('C++ block 2')));
 });
 
+test('explicit legacy C++ fences preserve unchecked notebook snippets', () => {
+  const legacy = validSource
+    .replace(
+      '```cpp\n#include <vector>\nint sizeOf(const std::vector<int>& values) { return static_cast<int>(values.size()); }\n```',
+      'The original note did not include a reusable template.',
+    )
+    .replace('```cpp\n', '```cpp legacy\n')
+    .replace('int main() {', 'int main( {');
+  assert.deepEqual(validateDocument('DSA/Example.md', legacy, {
+    checkLinks: false,
+  }), []);
+});
+
 test('the exported section list is the approved contract', () => {
   assert.deepEqual(REQUIRED_DSA_SECTIONS, [
     'At a Glance', 'Interview Method', 'How It Works',

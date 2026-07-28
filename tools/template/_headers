@@ -4,6 +4,8 @@
   Cache-Control: public, max-age=3600
 /assets/home.js
   Cache-Control: public, max-age=3600
+/assets/game.js
+  Cache-Control: public, max-age=3600
 /assets/doc.js
   Cache-Control: public, max-age=3600
 /*

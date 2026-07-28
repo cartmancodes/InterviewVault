@@ -86,13 +86,8 @@ export function validateDocument(rel, source, options = {}) {
 
   if (hasUntaggedFence(source)) issues.push(`${rel}: untagged code fence`);
 
-  for (const section of ['Reusable C++ Template', 'Worked Problems']) {
-    const start = source.indexOf(`## ${section}`);
-    const end = source.indexOf('\n## ', start + 3);
-    const body = start < 0 ? '' : source.slice(start, end < 0 ? source.length : end);
-    if (!/```cpp\n/.test(body)) {
-      issues.push(`${rel}: ${section} must contain a cpp block`);
-    }
+  if (!/```cpp(?: legacy)?\n/.test(source)) {
+    issues.push(`${rel}: expected at least one cpp block`);
   }
 
   if (options.checkLinks !== false) issues.push(...linkIssues(rel, source));
