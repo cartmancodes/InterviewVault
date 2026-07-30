@@ -122,7 +122,10 @@ a:hover { text-decoration-color: var(--blue); }
 .hero-split { display: flex; gap: 48px; align-items: flex-start; }
 .hero-copy { flex: 1; min-width: 0; padding-top: 8px; }
 .hero-game { display: flex; flex-direction: column; align-items: center; flex: none; }
-.game-caption { font: 500 10.5px var(--mono); letter-spacing: 2.2px; color: var(--mut); }
+.game-caption {
+  font: 500 10.5px var(--mono); letter-spacing: 2.2px; color: var(--mut);
+  text-align: center; text-wrap: balance;
+}
 
 /* The board is the docs' own code-block navy, so the terminal reads as part of
    the family. 20 x 12 grid; --cell is measured by game.js so the board can be
@@ -161,15 +164,63 @@ a:hover { text-decoration-color: var(--blue); }
   background: var(--blue); border: 0; border-radius: 8px; padding: 10px 26px; cursor: pointer;
 }
 #pr-btn:hover { background: var(--blue-deep); }
-.scorebar { display: flex; gap: 36px; align-items: baseline; margin-top: 16px; font-family: var(--mono); }
+.scorebar {
+  display: flex; gap: 36px; align-items: baseline; justify-content: center;
+  flex-wrap: wrap; margin-top: 16px; font-family: var(--mono);
+}
 .score-label { font-size: 12px; letter-spacing: .04em; }
 .score-label b { font-size: 18px; font-weight: 700; color: var(--blue); margin-left: 4px; }
 .scorebar .keys { font-size: 10.5px; color: var(--mut); }
+/* the hint names the input the visitor actually has */
+.keys .k-touch { display: none; }
+
+/* ── on-screen steering ─────────────────────────────────────
+ * A phone has no arrow row, so the desktop hint becomes tappable: the same
+ * four glyphs, as keycaps in the terminal's own type. Hidden wherever a real
+ * keyboard is present, which is what pointer:coarse actually tells us —
+ * a narrow desktop window keeps the keys, a wide tablet gets the pad. */
+#pr-pad { display: none; }
+
+@media (hover: none) and (pointer: coarse) {
+  .keys .k-desk { display: none; }
+  .keys .k-touch { display: inline; }
+
+  #pr-pad {
+    display: grid; margin-top: 18px;
+    grid-template-columns: repeat(3, 52px); grid-template-rows: repeat(2, 52px);
+    gap: 6px; justify-content: center;
+  }
+  #pr-pad button {
+    display: grid; place-items: center;
+    font: 500 19px var(--mono); line-height: 1;
+    color: var(--ink-2); background: var(--paper);
+    border: 1px solid var(--rule); border-radius: 8px;
+    box-shadow: 0 2px 0 var(--rule);
+    touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
+  }
+  #pr-pad button:active {
+    color: #fff; background: var(--blue); border-color: var(--blue);
+    box-shadow: none; transform: translateY(2px);
+  }
+  /* the cross: up centred on the top row, left/down/right across the bottom */
+  #pr-pad [data-dir="up"]    { grid-area: 1 / 2; }
+  #pr-pad [data-dir="left"]  { grid-area: 2 / 1; }
+  #pr-pad [data-dir="down"]  { grid-area: 2 / 2; }
+  #pr-pad [data-dir="right"] { grid-area: 2 / 3; }
+}
 
 @media (max-width: 900px) {
   .hero-split { flex-direction: column; }
   .hero-game { align-self: center; width: 100%; max-width: 400px; }
   #pr-board { width: 100%; }
+  /* while a run is live the board keeps swipes instead of scrolling the page */
+  #pr-board.is-running { touch-action: none; }
+}
+
+@media (max-width: 360px) {
+  .game-caption { font-size: 9.5px; letter-spacing: 1.6px; }
+  .scorebar { gap: 8px 20px; margin-top: 13px; }
 }
 
 /* ── signature: architecture-diagram nav ───────────────── */

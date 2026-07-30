@@ -421,7 +421,13 @@ ${list.map((d) => `<a class="row" href="${d.url}" data-t="${esc((d.title + ' ' +
 </div>
 <div class="scorebar">
 <div class="score-label">PACKETS DELIVERED <b id="pr-score" aria-live="polite">0</b></div>
-<div class="keys">← ↑ ↓ → OR WASD</div>
+<div class="keys"><span class="k-desk">← ↑ ↓ → OR WASD</span><span class="k-touch">SWIPE OR TAP THE KEYS</span></div>
+</div>
+<div id="pr-pad" role="group" aria-label="Steering controls">
+<button type="button" data-dir="up" aria-label="Steer up">↑</button>
+<button type="button" data-dir="left" aria-label="Steer left">←</button>
+<button type="button" data-dir="right" aria-label="Steer right">→</button>
+<button type="button" data-dir="down" aria-label="Steer down">↓</button>
 </div>
 </div>
 </div></section>

@@ -65,6 +65,8 @@
     score = 0;
     running = true;
     overlay.style.display = 'none';
+    // the board only stops passing gestures through to the page while playing
+    board.classList.add('is-running');
     clearInterval(timer);
     timer = setInterval(tick, TICK_MS);
     draw();
@@ -72,6 +74,8 @@
 
   function gameOver() {
     running = false;
+    tracking = false;
+    board.classList.remove('is-running');
     clearInterval(timer);
     ovTitle.textContent = 'CONNECTION DROPPED';
     ovSub.textContent = 'connection dropped — ' + score + ' packet' + (score === 1 ? '' : 's') + ' delivered';
@@ -95,6 +99,15 @@
     draw();
   }
 
+  /* ── steering ──────────────────────────────────────────────
+   * Keys, the on-screen pad and swipes all funnel through steer(), so the
+   * "no reversing into yourself" rule has exactly one implementation. */
+  function steer(dx, dy) {
+    if (!running) return;
+    if (dx === -dir.x && dy === -dir.y) return;
+    pendingDir = { x: dx, y: dy };
+  }
+
   var KEYS = {
     ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
     w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
@@ -104,9 +117,42 @@
     // only capture keys while a run is live, so the page scrolls as normal
     if (!v || !running) return;
     e.preventDefault();
-    if (v[0] === -dir.x && v[1] === -dir.y) return; // no reversing into yourself
-    pendingDir = { x: v[0], y: v[1] };
+    steer(v[0], v[1]);
   });
+
+  // On-screen keys — a phone has no arrow row, so the hint becomes tappable.
+  var DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+  var pad = document.getElementById('pr-pad');
+  if (pad) {
+    // pointerdown fires once for both touch and mouse, and beats click to the
+    // punch by ~300ms on touch, which matters at a 150ms tick
+    pad.addEventListener('pointerdown', function (e) {
+      var btn = e.target.closest('[data-dir]');
+      if (!btn) return;
+      e.preventDefault();
+      var v = DIRS[btn.getAttribute('data-dir')];
+      if (v) steer(v[0], v[1]);
+    });
+  }
+
+  // Swipe anywhere on the board, for players who would rather not use the pad.
+  var SWIPE = 24, sx = 0, sy = 0, tracking = false;
+  board.addEventListener('touchstart', function (e) {
+    if (!running) return;
+    var t = e.changedTouches[0];
+    sx = t.clientX; sy = t.clientY; tracking = true;
+  }, { passive: true });
+  board.addEventListener('touchmove', function (e) {
+    if (!running || !tracking) return;
+    var t = e.changedTouches[0];
+    var dx = t.clientX - sx, dy = t.clientY - sy;
+    if (Math.abs(dx) < SWIPE && Math.abs(dy) < SWIPE) return;
+    e.preventDefault(); // the board only claims the gesture once it is a swipe
+    if (Math.abs(dx) > Math.abs(dy)) steer(dx > 0 ? 1 : -1, 0);
+    else steer(0, dy > 0 ? 1 : -1);
+    sx = t.clientX; sy = t.clientY; // re-origin, so one drag can turn twice
+  }, { passive: false });
+  board.addEventListener('touchend', function () { tracking = false; }, { passive: true });
 
   window.addEventListener('resize', function () {
     measure();
