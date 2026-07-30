@@ -120,27 +120,30 @@
     steer(v[0], v[1]);
   });
 
-  // On-screen keys — a phone has no arrow row, so the hint becomes tappable.
-  var DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
-  var pad = document.getElementById('pr-pad');
-  if (pad) {
-    // pointerdown fires once for both touch and mouse, and beats click to the
-    // punch by ~300ms on touch, which matters at a 150ms tick
-    pad.addEventListener('pointerdown', function (e) {
-      var btn = e.target.closest('[data-dir]');
-      if (!btn) return;
-      e.preventDefault();
-      var v = DIRS[btn.getAttribute('data-dir')];
-      if (v) steer(v[0], v[1]);
-    });
+  // Touch steering: tap where the stream should go. The board is the control —
+  // moving horizontally, a tap above or below the head turns that way; moving
+  // vertically, a tap to either side turns. The projection onto the free axis
+  // means every tap is a legal turn, never a refused reversal.
+  function steerToward(clientX, clientY) {
+    var r = board.getBoundingClientRect();
+    var headX = r.left + (snake[0].x + 0.5) * cell;
+    var headY = r.top + (snake[0].y + 0.5) * cell;
+    if (dir.x !== 0) {
+      var dy = clientY - headY;
+      if (Math.abs(dy) > cell / 2) steer(0, dy > 0 ? 1 : -1);
+    } else {
+      var dx = clientX - headX;
+      if (Math.abs(dx) > cell / 2) steer(dx > 0 ? 1 : -1, 0);
+    }
   }
 
-  // Swipe anywhere on the board, for players who would rather not use the pad.
-  var SWIPE = 24, sx = 0, sy = 0, tracking = false;
+  // Swipes still work for players who steer by flick. A touch that never
+  // travels past the threshold is a tap and steers toward its point instead.
+  var SWIPE = 24, sx = 0, sy = 0, tracking = false, swiped = false;
   board.addEventListener('touchstart', function (e) {
     if (!running) return;
     var t = e.changedTouches[0];
-    sx = t.clientX; sy = t.clientY; tracking = true;
+    sx = t.clientX; sy = t.clientY; tracking = true; swiped = false;
   }, { passive: true });
   board.addEventListener('touchmove', function (e) {
     if (!running || !tracking) return;
@@ -148,11 +151,18 @@
     var dx = t.clientX - sx, dy = t.clientY - sy;
     if (Math.abs(dx) < SWIPE && Math.abs(dy) < SWIPE) return;
     e.preventDefault(); // the board only claims the gesture once it is a swipe
+    swiped = true;
     if (Math.abs(dx) > Math.abs(dy)) steer(dx > 0 ? 1 : -1, 0);
     else steer(0, dy > 0 ? 1 : -1);
     sx = t.clientX; sy = t.clientY; // re-origin, so one drag can turn twice
   }, { passive: false });
-  board.addEventListener('touchend', function () { tracking = false; }, { passive: true });
+  board.addEventListener('touchend', function (e) {
+    if (running && tracking && !swiped) {
+      var t = e.changedTouches[0];
+      steerToward(t.clientX, t.clientY);
+    }
+    tracking = false;
+  }, { passive: true });
 
   window.addEventListener('resize', function () {
     measure();
