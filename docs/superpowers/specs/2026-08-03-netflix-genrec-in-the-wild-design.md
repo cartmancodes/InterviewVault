@@ -15,20 +15,21 @@ The primary audience is a system-design interview candidate. The note should emp
 
 ## Document Shape
 
-Create `LLD/SystemDesign/IntheWild/HowNetflixBuiltGenRecForLLMNativeRecommendation.md` using the conventions established by the existing In-the-Wild notes:
+Create `LLD/SystemDesign/IntheWild/HowNetflixBuiltGenRecForLlmNativeRecommendation.md` using the conventions established by the existing In-the-Wild notes. Using `LlmNative` in the filename preserves the intended `llm-native` URL under the repository's camel-case slugger:
 
 1. Title, publication attribution, and concise overview
-2. Table of contents
-3. Layman's explanation
-4. TLDR
-5. The problem
-6. The solution
-7. Serving and cost controls
-8. Evidence, limitations, and undisclosed details
-9. Conclusion
-10. Interview-ready key takeaways
-11. Related vault concepts
-12. Original source attribution
+2. Layman's explanation
+3. TLDR
+4. The problem
+5. The solution
+6. Serving and cost controls
+7. Evidence, limitations, and undisclosed details
+8. Conclusion
+9. Interview-ready key takeaways
+10. Related vault concepts
+11. Original source attribution
+
+Do not add a hand-written table of contents. The site build generates the right-rail TOC from the note's H2 and H3 headings.
 
 ## Content Design
 
