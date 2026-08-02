@@ -25,14 +25,14 @@ The reusable lesson is not that LLMs remove engineering constraints. Feature eng
 ```mermaid
 graph LR
     L["Member interaction logs<br/>plays, duration, feedback"]
-    M[Title metadata]
+    M["Title metadata"]
     R["Request context<br/>surface, device, locale, time"]
     C["Context engineering<br/>filter, compress, verbalize"]
     G["GenRec on vLLM<br/>one prefill pass"]
-    P[Pooled member state]
-    H[Catalog-aware ranking head]
-    E[Learned catalog item embeddings]
-    O[Ranked in-catalog titles]
+    P["Pooled member state"]
+    H["Catalog-aware ranking head"]
+    E["Learned catalog item embeddings"]
+    O["Ranked in-catalog titles"]
 
     L --> C
     M --> C
@@ -47,7 +47,7 @@ graph LR
     style M fill:#e1f5ff
     style R fill:#f3e5f5
     style C fill:#FFE4B5
-    style G fill:#FFE4B5
+    style G fill:#90EE90
     style P fill:#FFE4B5
     style H fill:#90EE90
     style E fill:#e1f5ff
@@ -104,10 +104,10 @@ Netflix reports that its experiments reduced context to roughly one-third of the
 
 ```mermaid
 graph LR
-    R[Raw verbose history]
-    K[Keep high-value and recent events]
-    D[Drop or compress weak and repetitive events]
-    P[Prompt at about one-third tokens]
+    R["Raw verbose history"]
+    K["Keep high-value and recent events"]
+    D["Drop or compress weak and repetitive events"]
+    P["Prompt at about one-third tokens"]
     Q["Reported similar offline quality<br/>and lower cost"]
 
     R --> K
@@ -131,12 +131,12 @@ graph LR
 
 ```mermaid
 graph TB
-    O[Open-source LLM]
+    O["Open-source LLM"]
     N["Netflix corpora<br/>content, behavior, language"]
     P1["Phase 1 Netflix-adapted foundation model<br/>infrequent refresh"]
     C["Recent ranking conversations<br/>engagement and reward"]
     P2["Phase 2 ranking post-training<br/>frequent refresh"]
-    R[Current catalog-aware ranker]
+    R["Current catalog-aware ranker"]
 
     O --> P1
     N --> P1
