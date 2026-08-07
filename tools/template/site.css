@@ -272,11 +272,11 @@ body.portfolio a { text-decoration-color: currentColor; text-decoration-thicknes
 .lib-bar {
   display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
   padding: 14px 0 12px; border-bottom: 1px solid var(--rule);
-  position: sticky; top: 49px; background: var(--blue-wash); z-index: 20;
+  position: sticky; top: 49px; background: var(--sky-wash); z-index: 20;
 }
 .search {
   flex: 1 1 260px; min-width: 200px; display: flex; align-items: center; gap: 8px;
-  background: var(--paper); border: 1px solid var(--rule); border-radius: var(--radius);
+  background: var(--paper); border: var(--cut); border-radius: 100px;
   padding: 8px 11px;
 }
 .search input { border: 0; outline: 0; width: 100%; font: 400 14px var(--sans); color: var(--ink); background: none; }
@@ -284,24 +284,30 @@ body.portfolio a { text-decoration-color: currentColor; text-decoration-thicknes
   font-family: var(--mono); font-size: 11px; color: var(--mut);
   border: 1px solid var(--rule); border-radius: 4px; padding: 1px 5px; flex: none;
 }
-.chip {
+/* scoped to .lib-bar — .chip is also a practice-mechanic class */
+.lib-bar .chip {
   font: 500 12.5px var(--sans); padding: 6px 11px; border-radius: 100px; cursor: pointer;
-  border: 1px solid var(--rule); background: var(--paper); color: var(--ink-2);
+  border: var(--cut); background: var(--paper); color: var(--ink);
+  transition: background-color .12s ease;
 }
-.chip[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
-.chip .c-n { font-family: var(--mono); opacity: .65; margin-left: 5px; font-size: 11px; }
+.lib-bar .chip:hover { background: var(--acc-wash); }
+.lib-bar .chip[aria-pressed="true"] { background: var(--acc); color: var(--ink); }
+/* opacity .65 over yellow would drop below AA, so the count is a real colour */
+.lib-bar .chip .c-n { font-family: var(--mono); color: var(--mut); margin-left: 5px; font-size: 11px; }
+.lib-bar .chip[aria-pressed="true"] .c-n { color: var(--ink-2); }
 
 .rows { margin-top: 4px; }
 .row {
   display: grid; grid-template-columns: 1fr auto auto; gap: 14px; align-items: baseline;
   padding: 11px 4px; border-bottom: 1px solid var(--rule); text-decoration: none; color: inherit;
 }
-.row:hover { background: var(--paper); }
+/* rows keep their hairline — 123 cutout cards would be unreadable */
+.row:hover { background: var(--acc-wash); }
 .row-t { font-weight: 500; font-size: 15px; letter-spacing: -.01em; }
-.row:hover .row-t { color: var(--blue-deep); }
+.row:hover .row-t { color: var(--ink); }
 .row-s { font-family: var(--mono); font-size: 11.5px; color: var(--mut); }
 .row-m { font-family: var(--mono); font-size: 11.5px; color: var(--mut); white-space: nowrap; }
-.row-m i { font-style: normal; color: var(--blue); }
+.row-m i { font-style: normal; color: var(--ink); font-weight: 600; }
 .sec-h {
   font-family: var(--mono); font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase;
   color: var(--mut); padding: 26px 4px 8px; border-bottom: 1px solid var(--ink);
