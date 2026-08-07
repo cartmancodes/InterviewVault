@@ -88,12 +88,12 @@ body.portfolio a { text-decoration-color: currentColor; text-decoration-thicknes
 .pf-hero :focus-visible,
 .pf-footer :focus-visible { outline-color: var(--ink); }
 
-/* ── blueprint surface ─────────────────────────────────── */
+/* ── the sky band, with the drafting grid drawn inside it ─ */
 .blueprint {
-  background-color: var(--blue-wash);
+  background-color: var(--sky);
   background-image:
-    linear-gradient(var(--grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    linear-gradient(var(--sky-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--sky-grid) 1px, transparent 1px);
   background-size: 28px 28px;
   background-position: -1px -1px;
 }
@@ -138,32 +138,35 @@ body.portfolio a { text-decoration-color: currentColor; text-decoration-thicknes
 .socials a:hover { background: var(--acc); }
 
 /* ── hero ──────────────────────────────────────────────── */
-.hero { border-bottom: 1px solid var(--rule); }
+.hero { border-bottom: var(--cut); }
 .hero-in { max-width: var(--shell); margin: 0 auto; padding: 56px 20px 40px; }
+/* every muted role on this band steps up to ink-2: mut is 2.20:1 on sky */
 .eyebrow {
   font-family: var(--mono); font-size: 11.5px; letter-spacing: .14em;
-  text-transform: uppercase; color: var(--mut); margin-bottom: 14px;
+  text-transform: uppercase; color: var(--ink-2); margin-bottom: 14px;
 }
 .hero h1 {
   font-size: clamp(34px, 5.2vw, 56px); line-height: 1.04; letter-spacing: -.033em;
-  font-weight: 600; max-width: 20ch;
+  font-weight: 600; max-width: 20ch; color: var(--ink);
 }
-.hero h1 em { font-style: normal; color: var(--blue); }
+/* the landing page sets its headline white only because a 3px ink
+   text-shadow manufactures the edge; there is no such device here */
+.hero h1 em { font-style: normal; background: var(--acc); padding: 0 .12em; }
 .hero-sub {
   margin-top: 16px; max-width: 62ch; color: var(--ink-2); font-size: 16.5px;
   font-family: var(--serif);
 }
 .stats { display: flex; flex-wrap: wrap; gap: 26px; margin-top: 24px; font-family: var(--mono); }
-.stat b { display: block; font-size: 21px; font-weight: 600; letter-spacing: -.02em; }
-.stat span { font-size: 11.5px; color: var(--mut); letter-spacing: .06em; text-transform: uppercase; }
-.story { font: 400 11.5px/1.8 var(--mono); color: var(--mut); margin-top: 30px; }
+.stat b { display: block; font-size: 21px; font-weight: 600; letter-spacing: -.02em; color: var(--ink); }
+.stat span { font-size: 11.5px; color: var(--ink-2); letter-spacing: .06em; text-transform: uppercase; }
+.story { font: 400 11.5px/1.8 var(--mono); color: var(--ink-2); margin-top: 30px; }
 
 /* ── packet runner: the hero splits copy | game ─────────── */
 .hero-split { display: flex; gap: 48px; align-items: flex-start; }
 .hero-copy { flex: 1; min-width: 0; padding-top: 8px; }
 .hero-game { display: flex; flex-direction: column; align-items: center; flex: none; }
 .game-caption {
-  font: 500 10.5px var(--mono); letter-spacing: 2.2px; color: var(--mut);
+  font: 500 10.5px var(--mono); letter-spacing: 2.2px; color: var(--ink-2);
   text-align: center; text-wrap: balance;
 }
 
@@ -181,7 +184,7 @@ body.portfolio a { text-decoration-color: currentColor; text-decoration-thicknes
 }
 .pr-seg {
   position: absolute; width: calc(var(--cell) * .9); height: calc(var(--cell) * .9);
-  border-radius: 4px; background: var(--blue);
+  border-radius: 4px; background: var(--acc);
 }
 .pr-seg.head { background: var(--good); }
 #pr-food {
@@ -200,17 +203,19 @@ body.portfolio a { text-decoration-color: currentColor; text-decoration-thicknes
 #pr-overlay h2 { font: 700 15px var(--mono); letter-spacing: 3px; color: #fff; }
 #pr-overlay p { font: 400 10.5px var(--mono); color: #9FB3DD; }
 #pr-btn {
-  margin-top: 8px; font: 700 12px var(--mono); letter-spacing: 2px; color: #fff;
-  background: var(--blue); border: 0; border-radius: 8px; padding: 10px 26px; cursor: pointer;
+  margin-top: 8px; font: 700 12px var(--mono); letter-spacing: 2px; color: var(--ink);
+  background: var(--acc); border: 0; border-radius: 8px; padding: 10px 26px; cursor: pointer;
 }
-#pr-btn:hover { background: var(--blue-deep); }
+#pr-btn:hover { background: #FFE455; }
 .scorebar {
   display: flex; gap: 36px; align-items: baseline; justify-content: center;
   flex-wrap: wrap; margin-top: 16px; font-family: var(--mono);
 }
 .score-label { font-size: 12px; letter-spacing: .04em; }
-.score-label b { font-size: 18px; font-weight: 700; color: var(--blue); margin-left: 4px; }
-.scorebar .keys { font-size: 10.5px; color: var(--mut); }
+/* .scorebar sits inside .hero-game, i.e. on the sky band — not on the navy
+   board. Yellow there is 1.39:1, so the score number is ink at 9.05:1. */
+.score-label b { font-size: 18px; font-weight: 700; color: var(--ink); margin-left: 4px; }
+.scorebar .keys { font-size: 10.5px; color: var(--ink-2); }
 /* the hint names the input the visitor actually has: on coarse pointers the
    board itself is the control (tap where the stream should go), so there is
    no separate widget to point at — a narrow desktop window keeps its keys */
