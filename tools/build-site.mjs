@@ -478,25 +478,25 @@ const PF_STOPS = [
     when: '2019–21', side: 'r', top: '26.3%',
     role: 'Arcesium — Software Engineer, Regulatory ETL',
     founding: false,
-    body: 'MiFID/EMIR regulatory ETL in Python (pandas, SQLAlchemy) on SQL Server: ingestion, transformation, validation, plus deterministic and fuzzy-matching reconciliation utilities for high-volume trade data.',
+    body: 'MiFID/EMIR regulatory ETL in Python (pandas, SQLAlchemy) on SQL Server: ingestion, transformation, validation, plus deterministic and fuzzy-matching reconciliation utilities for high-volume trade data, monitored with Datadog and Grafana.',
   },
   {
     when: '2021–23', side: 'l', top: '43.3%',
     role: 'Arcesium — Senior Software Engineer, ARMOR',
     founding: true,
-    body: 'Automatic post-trade reporting for TICB/TIC SLT; led the web layer, data-quality checker, authorisation module and core ETL. The Java/Spring Boot application ran on EKS backed by PostgreSQL, with files uploaded to S3; ETL was orchestrated through Argo Workflows on EC2 Spot with retry and checkpoint logic, using ZooKeeper for distributed locking.',
+    body: 'Automatic post-trade reporting for TICB/TIC SLT; led the web layer, data-quality checker, authorisation module and core ETL. The Java/Spring Boot application ran on EKS backed by PostgreSQL, with files uploaded to S3; ETL was orchestrated through Argo Workflows on EC2 Spot with retry and checkpoint logic, using ZooKeeper for distributed locking and Datadog and Grafana for observability.',
   },
   {
     when: '2023–25', side: 'r', top: '60.3%',
     role: 'Arcesium — Technical Lead, TRACS',
     founding: true,
-    body: 'MiFID/MAS trade-reporting platform for hedge-fund clients. Spark ETL orchestrated with Argo Workflows — checkpointed, idempotent, high-throughput; client-facing web modules on AWS EKS, batch compute on EC2 Spot.',
+    body: 'MiFID/MAS trade-reporting platform for hedge-fund clients. Spark ETL orchestrated with Argo Workflows — checkpointed, idempotent, high-throughput; client-facing web modules on AWS EKS, batch compute on EC2 Spot, with Datadog and Grafana for observability.',
   },
   {
     when: '2025— · you are here', side: 'end',
     role: 'Arcesium — Technical Lead, AI/ML — Arcesium Intelligence (formerly Maelstrom)',
     founding: true,
-    body: 'AI agents for CI/CD, DevOps and financial-analysis workflows across the firm. Built the LiteLLM proxy layer that powers Arcesium-grade AI infrastructure — the central gateway with per-user/team rate limits and budget caps, routing across OpenAI, Anthropic and AWS Bedrock, and full spend audit trails. On Arcesium Intelligence, agents run on the Claude Agent SDK in sandboxed environments — AWS Lambda, PostgreSQL, S3, and EKS + Fargate, with EKS for long-running servers.',
+    body: 'AI agents for CI/CD, DevOps and financial-analysis workflows across the firm. Built the LiteLLM proxy layer that powers Arcesium-grade AI infrastructure — the central gateway with per-user/team rate limits and budget caps, routing across OpenAI, Anthropic and AWS Bedrock, and full spend audit trails. On Arcesium Intelligence, agents run on the Claude Agent SDK in sandboxed environments — AWS Lambda, PostgreSQL, S3, and EKS + Fargate, with EKS for long-running servers and Datadog and Grafana providing observability.',
   },
 ];
 
