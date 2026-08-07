@@ -569,7 +569,7 @@ function careerDiagram() {
 
   return `<div class="pf-diagram">
 <svg viewBox="0 0 1000 150" role="img" aria-label="Career diagram: Samsung Research flows into regulatory ETL at Arcesium, then ARMOR, then TRACS, then Arcesium Intelligence, the AI/ML agent team.">
-<defs><marker id="pf-ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L8 4 L0 8 z" fill="#0E1A2B"></path></marker></defs>
+<defs><marker id="pf-ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L8 4 L0 8 z" fill="var(--ink)"></path></marker></defs>
 <line class="pf-bracket" x1="210" y1="22" x2="790" y2="22"></line>
 <text class="pf-bracket-label" x="500" y="16" text-anchor="middle">regulated scale</text>
 ${arrows}
@@ -723,7 +723,7 @@ function buildProgressPage() {
 </div>
 
 <div class="vm-danger">
-<button id="vm-reset" class="chip" type="button">Reset all progress</button>
+<button id="vm-reset" class="vm-reset" type="button">Reset all progress</button>
 <span class="row-m">Clears the blob for every doc. Cannot be undone.</span>
 </div>
 </section>

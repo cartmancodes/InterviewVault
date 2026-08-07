@@ -39,13 +39,18 @@ jobs:
 
       # Diagrams are content-hashed, so an exact hit skips rendering entirely and
       # a partial hit re-renders only the diagrams that actually changed.
+      # The on-disk cache key is sha1(mermaid source) ALONE — it does not see the
+      # theme. So the workflow key must also cover everything else that decides
+      # what an SVG looks like: the renderer (theme variables, themeCSS, the
+      # post-render rewrites) and the pinned mermaid version. Without them a
+      # re-theme would restore stale SVGs and silently undo itself.
       - name: Restore rendered diagrams
         uses: actions/cache@v4
         with:
           path: site/assets/diagrams
-          key: diagrams-${{ hashFiles('LLD/**/*.md', 'DSA/**/*.md') }}
+          key: diagrams-${{ hashFiles('tools/render-diagrams.mjs', 'tools/package-lock.json') }}-${{ hashFiles('LLD/**/*.md', 'DSA/**/*.md') }}
           restore-keys: |
-            diagrams-
+            diagrams-${{ hashFiles('tools/render-diagrams.mjs', 'tools/package-lock.json') }}-
 
       - name: Check DSA chapters and C++ samples
         run: node tools/check-dsa.mjs

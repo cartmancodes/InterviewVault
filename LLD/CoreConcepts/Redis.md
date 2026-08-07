@@ -56,7 +56,7 @@ graph LR
     APP -->|Fallback<br/>~50ms| DB
     R -.->|persist| DB
 
-    style R fill:#F0F4FF,stroke:#2563EB
+    style R fill:#EAF5FD,stroke:#0E1A2B
     style DB fill:#FFFFFF,stroke:#6B7C96
 ```
 
@@ -125,7 +125,7 @@ graph TB
     C2[Client 2] -->|GET k2| Q
     C3[Client 3] -->|LPUSH q1 v| Q
 
-    style EL fill:#F0F4FF,stroke:#2563EB
+    style EL fill:#EAF5FD,stroke:#0E1A2B
     style EX fill:#E7F8F1,stroke:#10B981
 ```
 
@@ -287,7 +287,7 @@ graph TB
     P -->|async stream| R2
     P -->|async stream| R3
 
-    style P fill:#F0F4FF,stroke:#2563EB
+    style P fill:#EAF5FD,stroke:#0E1A2B
     style R1 fill:#FFFFFF,stroke:#6B7C96
     style R2 fill:#FFFFFF,stroke:#6B7C96
     style R3 fill:#FFFFFF,stroke:#6B7C96
@@ -344,9 +344,9 @@ graph LR
     N2 -.replica.-> R2[(Replica 2)]
     N3 -.replica.-> R3[(Replica 3)]
 
-    style N1 fill:#F0F4FF,stroke:#2563EB
-    style N2 fill:#F0F4FF,stroke:#2563EB
-    style N3 fill:#F0F4FF,stroke:#2563EB
+    style N1 fill:#EAF5FD,stroke:#0E1A2B
+    style N2 fill:#EAF5FD,stroke:#0E1A2B
+    style N3 fill:#EAF5FD,stroke:#0E1A2B
 ```
 
 ### Hash Tags
@@ -478,7 +478,7 @@ config:
     actorLineColor: "#6B7C96"
     signalColor: "#0E1A2B"
     signalTextColor: "#0E1A2B"
-    noteBkgColor: "#F0F4FF"
+    noteBkgColor: "#EAF5FD"
     noteBorderColor: "#0E1A2B"
     noteTextColor: "#0E1A2B"
 ---
@@ -604,7 +604,7 @@ config:
     actorLineColor: "#6B7C96"
     signalColor: "#0E1A2B"
     signalTextColor: "#0E1A2B"
-    noteBkgColor: "#F0F4FF"
+    noteBkgColor: "#EAF5FD"
     noteBorderColor: "#0E1A2B"
     noteTextColor: "#0E1A2B"
 ---
@@ -679,7 +679,7 @@ graph LR
     R -->|hello, world| S2[Subscriber B<br/>SUBSCRIBE news]
     R -->|hello, world| S3[Subscriber C<br/>SUBSCRIBE news]
 
-    style R fill:#F0F4FF,stroke:#2563EB
+    style R fill:#EAF5FD,stroke:#0E1A2B
 ```
 
 - `PUBLISH channel msg` — pushes to all currently subscribed clients.
@@ -756,7 +756,7 @@ config:
     actorLineColor: "#6B7C96"
     signalColor: "#0E1A2B"
     signalTextColor: "#0E1A2B"
-    noteBkgColor: "#F0F4FF"
+    noteBkgColor: "#EAF5FD"
     noteBorderColor: "#0E1A2B"
     noteTextColor: "#0E1A2B"
 ---
@@ -851,7 +851,7 @@ config:
     actorLineColor: "#6B7C96"
     signalColor: "#0E1A2B"
     signalTextColor: "#0E1A2B"
-    noteBkgColor: "#F0F4FF"
+    noteBkgColor: "#EAF5FD"
     noteBorderColor: "#0E1A2B"
     noteTextColor: "#0E1A2B"
 ---
@@ -965,7 +965,7 @@ config:
     actorLineColor: "#6B7C96"
     signalColor: "#0E1A2B"
     signalTextColor: "#0E1A2B"
-    noteBkgColor: "#F0F4FF"
+    noteBkgColor: "#EAF5FD"
     noteBorderColor: "#0E1A2B"
     noteTextColor: "#0E1A2B"
 ---

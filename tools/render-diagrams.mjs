@@ -62,16 +62,35 @@ async function main() {
       securityLevel: 'loose',
       theme: 'base',
       fontFamily: '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
+      // Construction paper, matching site.css: pale-yellow cutouts with 2px ink
+      // outlines and ink connectors. Diagrams sit on the WHITE article surface
+      // (.diagram is #FCFDFF inside .art), never on a sky band, so every label
+      // is ink: 16.05:1 on the --acc-wash node fill, 17.48:1 on --paper,
+      // 15.80:1 on the --sky-wash cluster fill, 17.18:1 on the .diagram inset.
       themeVariables: {
         background: 'transparent',
-        primaryColor: '#EEF3FF',
-        primaryTextColor: '#0E1A2B',
-        primaryBorderColor: '#2563EB',
-        lineColor: '#5B7BB4',
-        secondaryColor: '#F0F4FF',
-        tertiaryColor: '#FFFFFF',
+        primaryColor: '#FFF6C9',        // --acc-wash — the node fill
+        primaryTextColor: '#0E1A2B',    // --ink
+        primaryBorderColor: '#0E1A2B',  // --ink
+        secondaryColor: '#FFFFFF',      // --paper
+        secondaryTextColor: '#0E1A2B',
+        secondaryBorderColor: '#0E1A2B',
+        tertiaryColor: '#EAF5FD',       // --sky-wash — subgraph / cluster fill
+        tertiaryTextColor: '#0E1A2B',
+        tertiaryBorderColor: '#0E1A2B',
+        lineColor: '#0E1A2B',
+        textColor: '#0E1A2B',
         fontSize: '14px',
       },
+      // Mermaid has no theme variable for stroke width, and a 1px hairline is
+      // not the cutout look. themeCSS is emitted scoped to the diagram's own
+      // `#m<hash>` id, so it cannot leak onto the vault map's .node rect.
+      themeCSS: `
+        .node rect, .node circle, .node ellipse, .node polygon, .node path,
+        .cluster rect, .actor, .labelBox, .er.entityBox, .note { stroke-width: 2px; }
+        .edgePath .path, .flowchart-link, .messageLine0, .messageLine1,
+        .transition, .relationshipLine, .er.relationshipLine { stroke-width: 1.5px; }
+      `,
     });
   });
 

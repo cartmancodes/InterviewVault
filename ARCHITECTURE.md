@@ -140,13 +140,28 @@ The **content hash is the cache key**, which gives three useful behaviours:
 - Editing a diagram renders exactly that one.
 - Identical diagrams reused across docs render once and share an SVG.
 
+…and one sharp edge: **the hash covers the diagram source only, never the theme.**
+Changing `themeVariables` or `themeCSS` invalidates nothing, so a re-theme must
+`rm -rf site/assets/diagrams` and re-render all of them. The CI cache key in
+`deploy.yml` therefore hashes `tools/render-diagrams.mjs` and
+`tools/package-lock.json` alongside the markdown, and its `restore-keys` fallback
+is scoped to the same renderer hash — otherwise a partial-hit restore would put
+the pre-theme SVGs back and silently revert the change on the next deploy.
+
 Each SVG is post-processed to add `preserveAspectRatio` and to rewrite mermaid's
 `max-width` into `max-width:Npx;width:100%;height:auto`, so diagrams keep their
 intrinsic size but scale down responsively.
 
-Mermaid's theme is pinned to the site's palette (`primaryColor #EEF3FF`,
-`primaryBorderColor #2563EB`, `lineColor #5B7BB4`, IBM Plex Sans), so diagrams
-match the page rather than looking pasted in.
+Mermaid's theme is pinned to the site's construction-paper palette so diagrams
+match the page rather than looking pasted in: `--acc-wash #FFF6C9` node fills,
+`--paper` secondary fills, `--sky-wash #EAF5FD` subgraph clusters, `--ink
+#0E1A2B` for every border, connector and label, and IBM Plex Sans. Mermaid has no
+theme variable for stroke width, so a small `themeCSS` block takes node and
+cluster outlines to the 2px cutout weight; mermaid emits it scoped to the
+diagram's own `#m<hash>` id, so it cannot leak onto the vault map's `.node rect`.
+Diagrams sit on the white article surface, never on a sky band, so labels stay
+ink: 16.05:1 on the node fill, 15.80:1 on a cluster, 17.18:1 on the `.diagram`
+inset.
 
 **A diagram that fails to parse sets a non-zero exit code.** That is deliberate —
 mermaid is stricter than it looks, and the two rules that cover nearly every
@@ -501,8 +516,9 @@ switches to `--ink` on sky bands (9.05:1) and keeps `--blue` only on `--paper` /
 
 ```css
 --ink #0E1A2B       --ink-2 #3A4A61      --mut #4F5F79       --paper #FFFFFF
+--soft #F2F5FB      --prose #16233A      --rule #CFE0EE
 --acc #FFD808       --acc-wash #FFF6C9   --sky #79C3F0       --sky-wash #EAF5FD
---sky-grid #5AAFE0  --rule #CFE0EE       --blue #2563EB      (focus ring only)
+--sky-grid #5AAFE0  --blue #2563EB       (focus ring only)
 --cut 2px solid var(--ink)     --lift 4px 4px 0 var(--ink)
 --lift-hi 6px 6px 0 var(--ink) (hover)
 --amber #F59E0B     --good #10B981
@@ -516,9 +532,23 @@ nowhere else — every color is shared with the vault; only these layout constan
 are page-specific:
 
 ```css
---prose #16233A      serif hobby copy color
 --pf-shell 1180px    content column      --pf-pad 32px   side padding
 ```
+
+Two token notes from the 2026-08-07 re-theme:
+
+- `--rule` darkened `#E4EAF5` → `#CFE0EE`. The old hairline was tuned against a
+  white page; on the new `--sky-wash` background it measured 1.09:1 and every
+  divider, table rule and inset border would have all but disappeared. The
+  darker value reaches 1.22:1 on `--sky-wash` and 1.35:1 on `--paper` — still a
+  hairline on white, but visible on the band, so one token serves both surfaces.
+- `--prose` (`#16233A`, 15.72:1 on `--paper`) moved out of `body.portfolio` and
+  into `:root`. The vault's `.prose` had been hard-coding the same hex; both
+  long-form serif surfaces now read the one token.
+
+`--soft` (`#F2F5FB`) is the inset-surface fill — inline code, metadata pills,
+table zebra. It is the one neutral that is *not* a sky tint, which is why it
+survived the re-theme unchanged.
 
 ### The doc frame
 

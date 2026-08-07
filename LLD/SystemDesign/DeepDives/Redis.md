@@ -137,7 +137,7 @@ config:
     actorLineColor: "#6B7C96"
     signalColor: "#0E1A2B"
     signalTextColor: "#0E1A2B"
-    noteBkgColor: "#F0F4FF"
+    noteBkgColor: "#EAF5FD"
     noteBorderColor: "#0E1A2B"
     noteTextColor: "#0E1A2B"
 ---
@@ -221,7 +221,7 @@ config:
     lineColor: "#0E1A2B"
     labelTextColor: "#0E1A2B"
     labelBackgroundColor: "#FFFFFF"
-    noteBkgColor: "#F0F4FF"
+    noteBkgColor: "#EAF5FD"
     noteBorderColor: "#0E1A2B"
     noteTextColor: "#0E1A2B"
 ---
