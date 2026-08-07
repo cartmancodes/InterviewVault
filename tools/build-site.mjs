@@ -507,16 +507,16 @@ const PF_STACK = [
 
 const PF_PROJECTS = [
   {
-    name: 'litellm-rust',
-    href: 'https://github.com/cartmancodes/litellm-rust',
-    blurb: 'A minimal Rust gateway built for coding agents, LiteLLM-compatible.',
-    meta: 'Rust · github ↗',
+    name: 'music-decoder',
+    href: 'https://github.com/cartmancodes/music-decoder',
+    blurb: 'Analyze audio for chord progressions and guitar tabs, or compose music from a scale and progression.',
+    meta: 'Python · github ↗',
   },
   {
-    name: 'kafka-poc',
-    href: 'https://github.com/cartmancodes/kafka-poc',
-    blurb: "Proof-of-concept Kafka pipeline; the notes behind the vault's Kafka deep dive.",
-    meta: 'Java · github ↗',
+    name: 'YTRecommender',
+    href: 'https://github.com/cartmancodes/YTRecommender',
+    blurb: 'Find, filter, and rank quality YouTube videos by views, reactions, and engagement.',
+    meta: 'Python · github ↗',
   },
 ];
 
