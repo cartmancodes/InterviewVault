@@ -967,44 +967,53 @@ html:has(body.portfolio) { scroll-padding-top: 16px; }
   padding: 6px 14px; border-radius: 100px; margin-top: 26px;
 }
 
-/* career diagram — the arrows draw themselves in, left to right */
-@keyframes pf-draw { to { stroke-dashoffset: 0; } }
-.pf-diagram { margin-top: 18px; }
-.pf-diagram svg { width: 100%; height: auto; display: block; overflow: visible; }
-.pf-arrow {
-  stroke: var(--ink); stroke-width: 2; fill: none;
-  stroke-dasharray: 48; stroke-dashoffset: 48;
-  animation: pf-draw .9s ease forwards calc(var(--i) * .12s);
+/* experience — the career as a bus route down one road. The wrapper holds the
+   SVG's aspect ratio so the stop cards can be placed in percentages and stay
+   pinned to their kerb at any width. */
+.pf-exp { position: relative; }
+.pf-exp-label {
+  position: absolute; left: var(--pf-pad); top: 20px; z-index: 2; margin-top: 0;
 }
-.pf-bracket { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 4 5; opacity: .4; }
-.pf-bracket-label { font: 400 10.5px var(--mono); fill: var(--mut); }
-.pf-node { fill: var(--paper); stroke: var(--ink); stroke-width: 2; }
-.pf-node-now { fill: var(--acc); }
-.pf-node-label { font-family: var(--sans); font-weight: 600; fill: var(--ink); }
-.pf-node-years { font: 400 11px var(--mono); fill: var(--mut); }
-.pf-node-years-now { fill: var(--ink-2); }
-.pf-node-under { font: 400 11px var(--mono); fill: var(--mut); }
+.pf-road { position: relative; margin: 0 auto; max-width: 960px; aspect-ratio: 1000 / 1600; }
+.pf-roadsvg { display: block; width: 100%; height: 100%; overflow: visible; }
 
-/* timeline */
-.pf-timeline { list-style: none; margin-top: 6px; }
-.pf-entry {
-  display: grid; grid-template-columns: clamp(84px, 12vw, 140px) 1fr; gap: 0 18px;
+/* the road, drawn twice: fat translucent asphalt, thin dashed centreline */
+.pf-asphalt { fill: none; stroke: var(--ink); stroke-width: 26; stroke-linecap: round; opacity: .12; }
+.pf-lane { fill: none; stroke: var(--ink); stroke-width: 3; stroke-dasharray: 14 12; }
+.pf-mark { fill: var(--acc); stroke: var(--ink); stroke-width: 3; }
+.pf-terminus { fill: var(--ink); }
+.pf-terminus-in { fill: var(--acc); }
+
+.pf-stop {
+  position: absolute; width: min(400px, 39%);
+  background: var(--paper); border: var(--cut); border-radius: 10px;
+  box-shadow: var(--lift); padding: 14px 16px;
 }
-.pf-when {
-  font: 400 11.5px/1.55 var(--mono); color: var(--mut);
-  padding: 18px 4px; white-space: nowrap;
+.pf-stop-l { left: 59%; top: var(--top); }
+.pf-stop-r { right: 59%; top: var(--top); }
+/* the terminus card is the current job: centred on the road, wider, and filled
+   accent instead of white, so the route reads as arriving somewhere */
+.pf-stop-end {
+  left: 50%; bottom: -12px; transform: translateX(-50%);
+  width: min(540px, 64%); background: var(--acc);
 }
-.pf-entry-copy { padding: 18px 4px; border-bottom: 1px solid var(--rule); }
-.pf-entry:last-child .pf-entry-copy { border-bottom: 0; }
-.pf-entry-copy h3 { font-size: 15.5px; font-weight: 600; letter-spacing: -.01em; }
-.pf-entry-copy p { margin-top: 6px; font-size: 14px; color: var(--ink-2); max-width: 66ch; }
+.pf-stop-when {
+  display: inline-block; padding: 3px 9px; border: var(--cut); border-radius: 100px;
+  font: 700 10.5px var(--mono); background: var(--acc);
+}
+/* on the accent card the pills invert so they stay legible against the fill */
+.pf-stop-end .pf-stop-when, .pf-stop-end .pf-founding { background: var(--paper); }
+.pf-stop h3 { margin-top: 8px; font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+.pf-stop p { margin-top: 6px; font-size: 13.5px; color: var(--ink-2); }
+.pf-stop-end p { color: var(--prose); }
+
 .pf-founding {
   display: inline-block; padding: 3px 8px; border: var(--cut); border-radius: 100px;
   font: 600 10.5px var(--mono); color: var(--ink); background: var(--acc);
   vertical-align: 2px; margin-left: 6px;
 }
 
-.pf-stack { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; margin-top: 6px; }
+.pf-stack { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; margin-top: 36px; }
 .pf-stack-label { font: 400 11px/1.55 var(--mono); color: var(--mut); margin-right: 3px; }
 .pf-pill {
   padding: 4px 9px; border: var(--cut); border-radius: 100px;
@@ -1059,9 +1068,13 @@ html:has(body.portfolio) { scroll-padding-top: 16px; }
 }
 .pf-footer a { color: var(--ink); }
 
-@media (max-width: 680px) {
-  /* the timeline carries the same story, and the diagram cannot shrink further */
-  .pf-diagram { display: none; }
+@media (max-width: 720px) {
+  /* below this the road cannot hold two shoulders, so it goes and the stops
+     stack in road order — they are ordinary DOM text and carry the whole story */
+  .pf-roadsvg { display: none; }
+  .pf-road { aspect-ratio: auto; }
+  .pf-stop { position: static; width: 100%; margin: 12px 0; transform: none; }
+  .pf-exp-label { position: static; margin-top: 26px; }
 }
 
 @media (max-width: 420px) {

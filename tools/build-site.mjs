@@ -463,36 +463,40 @@ ${chips}
 // offset shadows over the vault's IBM Plex identity. Design source of truth is
 // docs/superpowers "InterviewVault Design System" → portfolio-reference.html.
 
-const PF_EXPERIENCE = [
+// The career as a bus route: five stops down one road, oldest first, because a
+// road is read in the direction it is travelled. `top` is how far down the road
+// wrapper the card parks and `side` is which shoulder it parks on; the last stop
+// is the terminus, so it sits centred and filled rather than on a shoulder.
+const PF_STOPS = [
   {
-    when: '2025—',
-    role: 'Arcesium — Technical Lead, AI/ML — Arcesium Intelligence (formerly Maelstrom)',
-    founding: true,
-    body: 'AI agents for CI/CD, DevOps and financial-analysis workflows across the firm. Built the LiteLLM proxy layer that powers Arcesium-grade AI infrastructure — the central gateway with per-user/team rate limits and budget caps, routing across OpenAI, Anthropic and AWS Bedrock, and full spend audit trails. On Arcesium Intelligence, agents run on the Claude Agent SDK in sandboxed environments — AWS Lambda, PostgreSQL, S3, and EKS + Fargate, with EKS for long-running servers.',
+    when: '2017–19 · first stop', side: 'l', top: '7.2%',
+    role: 'Samsung Research — Software Engineer, Advanced Software',
+    founding: false,
+    body: 'GPU-accelerated image/video effects in OpenGL ES at 60fps; native Tizen C++. On the Advanced Software team, built C# applications in Xamarin for mobile and TV.',
   },
   {
-    when: '2023–25',
-    role: 'Arcesium — Technical Lead, TRACS',
-    founding: true,
-    body: 'MiFID/MAS trade-reporting platform for hedge-fund clients. Spark ETL orchestrated with Argo Workflows — checkpointed, idempotent, high-throughput; client-facing web modules on AWS EKS, batch compute on EC2 Spot.',
+    when: '2019–21', side: 'r', top: '26.3%',
+    role: 'Arcesium — Software Engineer, Regulatory ETL',
+    founding: false,
+    body: 'MiFID/EMIR regulatory ETL in Python (pandas, SQLAlchemy) on SQL Server: ingestion, transformation, validation, plus deterministic and fuzzy-matching reconciliation utilities for high-volume trade data.',
   },
   {
-    when: '2021–23',
+    when: '2021–23', side: 'l', top: '43.3%',
     role: 'Arcesium — Senior Software Engineer, ARMOR',
     founding: true,
     body: 'Automatic post-trade reporting for TICB/TIC SLT; led the web layer, data-quality checker, authorisation module and core ETL — Java/Spring Boot orchestrated with Argo Workflows on EC2 Spot, with retry and checkpoint logic.',
   },
   {
-    when: '2019–21',
-    role: 'Arcesium — Software Engineer',
-    founding: false,
-    body: 'MiFID/EMIR regulatory ETL in Python (pandas, SQLAlchemy) on SQL Server: ingestion, transformation, validation, plus deterministic and fuzzy-matching reconciliation utilities for high-volume trade data.',
+    when: '2023–25', side: 'r', top: '60.3%',
+    role: 'Arcesium — Technical Lead, TRACS',
+    founding: true,
+    body: 'MiFID/MAS trade-reporting platform for hedge-fund clients. Spark ETL orchestrated with Argo Workflows — checkpointed, idempotent, high-throughput; client-facing web modules on AWS EKS, batch compute on EC2 Spot.',
   },
   {
-    when: '2017–19',
-    role: 'Samsung Research — Software Engineer, Advanced Software',
-    founding: false,
-    body: 'GPU-accelerated image/video effects in OpenGL ES at 60fps; native Tizen C++. On the Advanced Software team, built C# applications in Xamarin for mobile and TV.',
+    when: '2025— · you are here', side: 'end',
+    role: 'Arcesium — Technical Lead, AI/ML — Arcesium Intelligence (formerly Maelstrom)',
+    founding: true,
+    body: 'AI agents for CI/CD, DevOps and financial-analysis workflows across the firm. Built the LiteLLM proxy layer that powers Arcesium-grade AI infrastructure — the central gateway with per-user/team rate limits and budget caps, routing across OpenAI, Anthropic and AWS Bedrock, and full spend audit trails. On Arcesium Intelligence, agents run on the Claude Agent SDK in sandboxed environments — AWS Lambda, PostgreSQL, S3, and EKS + Fargate, with EKS for long-running servers.',
   },
 ];
 
@@ -527,16 +531,6 @@ const PF_HOBBIES = [
   },
 ];
 
-// Career-as-system-diagram. Node geometry is fixed by the design (viewBox
-// 0 0 1000 150); arrows sit in the 44px gutter between adjacent nodes.
-const PF_CAREER = [
-  { x: 10,  w: 152, label: 'Samsung · Advanced Software', years: '2017–19', under: 'OpenGL ES · 60fps',        size: 11 },
-  { x: 210, w: 172, label: 'Arcesium · Regulatory ETL',   years: '2019–21', under: 'MiFID / EMIR',             size: 12 },
-  { x: 430, w: 152, label: 'Arcesium · ARMOR',            years: '2021–23', under: 'TICB / TIC SLT',           size: 12 },
-  { x: 630, w: 152, label: 'Arcesium · TRACS',            years: '2023–25', under: 'MiFID / MAS',              size: 12 },
-  { x: 830, w: 160, label: 'Arcesium Intelligence',       years: '2025—',   under: 'LiteLLM · Claude Agent SDK', size: 12, accent: true },
-];
-
 const PF_SOCIALS = [
   {
     href: 'https://github.com/cartmancodes', label: 'GitHub', me: true,
@@ -552,29 +546,37 @@ const PF_SOCIALS = [
   },
 ];
 
-function careerDiagram() {
-  const nodes = PF_CAREER.map((n) => {
-    const mid = n.x + n.w / 2;
-    return `<rect class="pf-node${n.accent ? ' pf-node-now' : ''}" x="${n.x}" y="40" width="${n.w}" height="54" rx="8"></rect>
-<text class="pf-node-label" x="${mid}" y="63" text-anchor="middle" font-size="${n.size}">${esc(n.label)}</text>
-<text class="pf-node-years${n.accent ? ' pf-node-years-now' : ''}" x="${mid}" y="82" text-anchor="middle">${esc(n.years)}</text>
-<text class="pf-node-under" x="${mid}" y="118" text-anchor="middle">${esc(n.under)}</text>`;
-  }).join('\n');
+// The road is drawn twice: a fat translucent stroke for the asphalt and a thin
+// dashed stroke over it for the centreline. Both paths carry the same `d`, and
+// the lane keeps an id because portfolio.js samples it to drive the bus.
+const PF_ROAD = 'M 500 0 C 590 100 590 320 500 400 C 410 480 410 592 500 672 C 590 752 590 864 500 944 C 410 1024 410 1136 500 1216 C 560 1280 540 1310 500 1340';
 
-  // one arrow per adjacent pair, drawn in left to right
-  const arrows = PF_CAREER.slice(0, -1).map((n, i) => {
-    const from = n.x + n.w, to = PF_CAREER[i + 1].x;
-    return `<path class="pf-arrow" style="--i:${i}" d="M${from} 67 H ${to - 4}" marker-end="url(#pf-ah)"></path>`;
-  }).join('\n');
+function busRoute() {
+  const marks = [[566, 218], [434, 536], [566, 808], [434, 1080]]
+    .map(([cx, cy]) => `<circle class="pf-mark" cx="${cx}" cy="${cy}" r="10"></circle>`).join('');
 
-  return `<div class="pf-diagram">
-<svg viewBox="0 0 1000 150" role="img" aria-label="Career diagram: Samsung Research flows into regulatory ETL at Arcesium, then ARMOR, then TRACS, then Arcesium Intelligence, the AI/ML agent team.">
-<defs><marker id="pf-ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L8 4 L0 8 z" fill="var(--ink)"></path></marker></defs>
-<line class="pf-bracket" x1="210" y1="22" x2="790" y2="22"></line>
-<text class="pf-bracket-label" x="500" y="16" text-anchor="middle">regulated scale</text>
-${arrows}
-${nodes}
+  const stops = PF_STOPS.map((s) => `<div class="pf-stop pf-stop-${s.side}"${s.top ? ` style="--top:${s.top}"` : ''}>
+<span class="pf-stop-when">${esc(s.when)}</span>
+<h3>${esc(s.role)}${s.founding ? ' <span class="pf-founding">founding engineer</span>' : ''}</h3>
+<p>${esc(s.body)}</p>
+</div>`).join('\n');
+
+  return `<div class="pf-road">
+<svg class="pf-roadsvg" viewBox="0 0 1000 1600" role="img" aria-label="Career road descending from the mountains: Samsung Research, then Arcesium Regulatory ETL, ARMOR, TRACS, and Arcesium Intelligence, the AI/ML agent team.">
+<path class="pf-asphalt" d="${PF_ROAD}"></path>
+<path class="pf-lane" id="pf-lane" d="${PF_ROAD}"></path>
+${marks}
+<circle class="pf-terminus" cx="500" cy="1340" r="13"></circle>
+<circle class="pf-terminus-in" cx="500" cy="1340" r="5.5"></circle>
+<g id="pf-bus"><g transform="translate(-27,-15)">
+<rect x="0" y="0" width="54" height="26" rx="6" fill="#FFD808" stroke="#0E1A2B" stroke-width="3"></rect>
+<rect x="7" y="5" width="11" height="10" rx="2" fill="#BEE3F8" stroke="#0E1A2B" stroke-width="2.5"></rect>
+<rect x="23" y="5" width="11" height="10" rx="2" fill="#BEE3F8" stroke="#0E1A2B" stroke-width="2.5"></rect>
+<circle cx="14" cy="28" r="6.5" fill="#0E1A2B"></circle><circle cx="41" cy="28" r="6.5" fill="#0E1A2B"></circle>
+<circle cx="14" cy="28" r="2.5" fill="#fff"></circle><circle cx="41" cy="28" r="2.5" fill="#fff"></circle>
+</g></g>
 </svg>
+${stops}
 </div>`;
 }
 
@@ -614,20 +616,9 @@ ${landscape}
 </div>
 </header>`;
 
-  const timeline = PF_EXPERIENCE.map((e) => `<li class="pf-entry">
-<span class="pf-when">${esc(e.when)}</span>
-<div class="pf-entry-copy">
-<h3>${esc(e.role)}${e.founding ? ' <span class="pf-founding">founding engineer</span>' : ''}</h3>
-<p>${esc(e.body)}</p>
-</div>
-</li>`).join('\n');
-
-  const experience = `<section id="experience" class="pf-section">
-<h2 class="pf-label">Experience</h2>
-${careerDiagram()}
-<ol class="pf-timeline">
-${timeline}
-</ol>
+  const experience = `<section id="experience" class="pf-section pf-exp">
+<h2 class="pf-label pf-exp-label">Experience</h2>
+${busRoute()}
 <div class="pf-stack"><span class="pf-stack-label">stack</span>${
     PF_STACK.map((s) => `<span class="pf-pill">${esc(s)}</span>`).join('')}</div>
 <p class="pf-creds">ACM ICPC regionals 2017 · national rank 57 in prelims — Codeforces Expert (1775) — Codechef 5★</p>
