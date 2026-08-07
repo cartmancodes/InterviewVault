@@ -584,18 +584,34 @@ function buildPortfolio() {
   const totalDiagrams = docs.reduce((a, d) => a + d.diagrams, 0);
 
   const landscape = `<svg class="pf-landscape" viewBox="0 0 1280 300" preserveAspectRatio="none" aria-hidden="true">
-<polygon points="60,300 330,60 600,300" fill="#8C97AB"></polygon><polygon points="330,60 268,136 392,136" fill="#FFFFFF"></polygon>
-<polygon points="420,300 740,20 1060,300" fill="#A6B0C2"></polygon><polygon points="740,20 664,116 816,116" fill="#FFFFFF"></polygon>
-<polygon points="900,300 1140,90 1280,240 1280,300" fill="#8C97AB"></polygon><polygon points="1140,90 1088,152 1192,152" fill="#FFFFFF"></polygon>
+<polygon points="60,300 330,60 600,300" fill="#8C97AB" stroke="#0E1A2B" stroke-width="3"></polygon><polygon points="330,60 268,136 392,136" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="3"></polygon>
+<polygon points="420,300 740,20 1060,300" fill="#A6B0C2" stroke="#0E1A2B" stroke-width="3"></polygon><polygon points="740,20 664,116 816,116" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="3"></polygon>
+<polygon points="900,300 1140,90 1280,240 1280,300" fill="#8C97AB" stroke="#0E1A2B" stroke-width="3"></polygon><polygon points="1140,90 1088,152 1192,152" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="3"></polygon>
 <rect x="0" y="252" width="1280" height="48" fill="#FFFFFF"></rect>
-<polygon points="80,252 110,196 140,252" fill="#2E7D46"></polygon><polygon points="150,252 180,204 210,252" fill="#3C9159"></polygon>
-<polygon points="1060,252 1090,198 1120,252" fill="#2E7D46"></polygon><polygon points="1130,252 1160,206 1190,252" fill="#3C9159"></polygon>
+<path class="pf-hero-asphalt" d="M 980 231 C 990 260 920 274 820 279 C 720 284 640 274 640 300"></path>
+<path class="pf-hero-lane" d="M 980 231 C 990 260 920 274 820 279 C 720 284 640 274 640 300"></path>
+<g class="pf-pines"><polygon points="80,252 110,196 140,252" fill="#2E7D46" stroke="#0E1A2B" stroke-width="3"></polygon><polygon points="150,252 180,204 210,252" fill="#3C9159" stroke="#0E1A2B" stroke-width="3"></polygon></g>
+<g class="pf-pines pf-pines-b"><polygon points="1060,252 1090,198 1120,252" fill="#2E7D46" stroke="#0E1A2B" stroke-width="3"></polygon><polygon points="1130,252 1160,206 1190,252" fill="#3C9159" stroke="#0E1A2B" stroke-width="3"></polygon></g>
 </svg>`;
+
+  // Ambient sky furniture. The sun is a disc with eight rays turning once every
+  // 40s; the clouds are pills with a half-disc puff, styled in site.css.
+  const sky = `<svg class="pf-sun" viewBox="0 0 100 100" aria-hidden="true"><g stroke="#0E1A2B" stroke-width="3">
+<circle cx="50" cy="50" r="20" fill="#FFD808"></circle>
+<line x1="50" y1="6" x2="50" y2="22"></line><line x1="50" y1="78" x2="50" y2="94"></line>
+<line x1="6" y1="50" x2="22" y2="50"></line><line x1="78" y1="50" x2="94" y2="50"></line>
+<line x1="19" y1="19" x2="30" y2="30"></line><line x1="70" y1="70" x2="81" y2="81"></line>
+<line x1="19" y1="81" x2="30" y2="70"></line><line x1="70" y1="30" x2="81" y2="19"></line>
+</g></svg>
+<div class="pf-cloud pf-cloud-a"></div>
+<div class="pf-cloud pf-cloud-b"></div>
+<div class="pf-cloud pf-cloud-c"></div>`;
 
   const socials = PF_SOCIALS.map((s) =>
     `<a class="pf-icon-link" href="${s.href}" title="${s.label}" aria-label="${s.label}"${s.me ? ' rel="me"' : ''}>${s.svg}</a>`).join('\n');
 
   const hero = `<header class="pf-hero">
+${sky}
 ${landscape}
 <div class="pf-shell pf-hero-shell">
 <nav class="pf-nav" aria-label="Sections">

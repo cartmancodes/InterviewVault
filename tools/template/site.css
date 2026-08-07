@@ -905,6 +905,47 @@ html:has(body.portfolio) { scroll-padding-top: 16px; }
 .pf-landscape { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 300px; }
 .pf-hero-shell { position: relative; z-index: 2; padding-top: 26px; padding-bottom: 40px; }
 
+/* hero ambience — the scene is alive: the sun turning, clouds crossing, pines
+   swaying, the polaroid hanging off its top corner. All of it stops under the
+   global prefers-reduced-motion rule near the top of this file. */
+@keyframes pf-sunspin { to { transform: rotate(360deg); } }
+@keyframes pf-drift { from { transform: translateX(-180px); } to { transform: translateX(112vw); } }
+@keyframes pf-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@keyframes pf-sway { 0%, 100% { transform: rotate(-2.6deg); } 50% { transform: rotate(-1.1deg); } }
+
+.pf-sun {
+  position: absolute; top: 78px; right: 44px; width: 86px; height: 86px; z-index: 1;
+  transform-origin: center; animation: pf-sunspin 40s linear infinite;
+}
+
+/* a cloud is a pill plus a half-disc puff; the puff drops its bottom border and
+   paints over the pill's top edge, so the two shapes read as one silhouette.
+   .pf-hero already clips, so they simply leave at the right edge. */
+.pf-cloud {
+  position: absolute; left: 0; z-index: 1;
+  background: var(--paper); border: var(--cut); border-radius: 100px;
+  animation: pf-drift linear infinite;
+}
+.pf-cloud::before {
+  content: ''; position: absolute;
+  background: var(--paper); border: var(--cut); border-bottom: none; border-radius: 50%;
+}
+/* negative delays so the sky is already mid-crossing on first paint */
+.pf-cloud-a { top: 36px; width: 92px; height: 26px; animation-duration: 46s; }
+.pf-cloud-a::before { left: 22px; top: -15px; width: 44px; height: 32px; }
+.pf-cloud-b { top: 96px; width: 64px; height: 18px; animation-duration: 60s; animation-delay: -32s; }
+.pf-cloud-b::before { left: 15px; top: -11px; width: 32px; height: 24px; }
+.pf-cloud-c { top: 64px; width: 80px; height: 22px; animation-duration: 52s; animation-delay: -14s; }
+.pf-cloud-c::before { left: 19px; top: -13px; width: 38px; height: 28px; }
+
+/* the road leaves the right mountain and runs off the bottom edge, where the
+   experience road picks it up */
+.pf-hero-asphalt { fill: none; stroke: var(--ink); stroke-width: 22; stroke-linecap: round; opacity: .12; }
+.pf-hero-lane { fill: none; stroke: var(--ink); stroke-width: 3; stroke-dasharray: 12 10; }
+
+.pf-pines { animation: pf-bob 3.6s ease-in-out infinite; }
+.pf-pines-b { animation-duration: 4.2s; animation-delay: -1.6s; }
+
 .pf-nav { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 30px; }
 .pf-wordmark {
   font: 700 16px/1.55 var(--mono); color: var(--paper); margin-right: auto;
@@ -942,7 +983,8 @@ html:has(body.portfolio) { scroll-padding-top: 16px; }
 .pf-polaroid {
   flex: 0 1 400px; min-width: 280px; margin-bottom: 8px;
   background: var(--paper); border: var(--cut); border-radius: 6px;
-  box-shadow: 5px 5px 0 var(--ink); transform: rotate(-2deg);
+  box-shadow: 5px 5px 0 var(--ink);
+  transform-origin: top center; animation: pf-sway 6s ease-in-out infinite;
   padding: 10px 10px 14px;
 }
 .pf-polaroid img {
