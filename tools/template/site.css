@@ -101,37 +101,41 @@ body.portfolio a { text-decoration-color: currentColor; text-decoration-thicknes
 /* ── header ────────────────────────────────────────────── */
 .hdr {
   position: sticky; top: 0; z-index: 50;
-  background: rgba(255,255,255,.88);
+  background: rgba(255,255,255,.92);
   backdrop-filter: saturate(1.4) blur(8px);
-  border-bottom: 1px solid var(--rule);
+  border-bottom: var(--cut);
 }
 .hdr-in {
   max-width: var(--shell); margin: 0 auto; padding: 10px 20px;
   display: flex; align-items: center; gap: 16px;
 }
 .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); flex: none; }
+.brand:hover { background: none; }
+/* the same ink IV square the landing page uses on its Notes banner */
 .brand-mark {
-  width: 28px; height: 28px; border-radius: var(--radius); background: var(--blue);
+  width: 28px; height: 28px; border-radius: var(--radius); background: var(--ink);
   color: #fff; font-family: var(--mono); font-weight: 600; font-size: 13px;
   display: grid; place-items: center; letter-spacing: -.02em;
 }
 .brand-name { font-weight: 600; font-size: 15px; letter-spacing: -.01em; }
 .brand-name span { color: var(--mut); font-weight: 400; }
 .hdr-nav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+/* nine outlined pills would read as a picket fence, so the pill only
+   appears on hover and on the current page */
 .hdr-nav a {
-  font-size: 13px; padding: 6px 10px; border-radius: var(--radius);
+  font-size: 13px; padding: 6px 10px; border-radius: 100px;
   text-decoration: none; color: var(--ink-2);
 }
-.hdr-nav a:hover { background: var(--blue-wash); color: var(--blue-deep); }
-.hdr-nav a[aria-current="page"] { background: var(--blue-wash); color: var(--blue-deep); font-weight: 500; }
+.hdr-nav a:hover { background: var(--acc-wash); color: var(--ink); }
+.hdr-nav a[aria-current="page"] { background: var(--acc); color: var(--ink); font-weight: 500; }
 .socials { display: flex; gap: 10px; flex: none; }
 .socials a {
-  width: 32px; height: 32px; color: var(--blue); border-radius: 8px;
-  border: 1.5px solid color-mix(in srgb, var(--blue) 45%, transparent);
+  width: 32px; height: 32px; color: var(--ink); border-radius: 8px;
+  border: var(--cut); background: var(--paper);
   display: flex; align-items: center; justify-content: center;
-  transition: background .15s, border-color .15s;
+  transition: background-color .12s ease;
 }
-.socials a:hover { background: color-mix(in srgb, var(--blue) 12%, transparent); border-color: var(--blue); }
+.socials a:hover { background: var(--acc); }
 
 /* ── hero ──────────────────────────────────────────────── */
 .hero { border-bottom: 1px solid var(--rule); }
@@ -419,11 +423,12 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
 .pager b { font-weight: 500; font-size: 14.5px; color: var(--ink); }
 .pager .nx { text-align: right; }
 
-.foot { border-top: 1px solid var(--rule); background: var(--paper); }
+.foot { border-top: var(--cut); background: var(--sky); }
 .foot-in {
   max-width: var(--shell); margin: 0 auto; padding: 22px 20px; display: flex;
   justify-content: space-between; gap: 14px; flex-wrap: wrap;
-  font-family: var(--mono); font-size: 12px; color: var(--mut);
+  /* mut is 2.20:1 on sky — muted text on a sky band steps up to ink-2 */
+  font-family: var(--mono); font-size: 12px; color: var(--ink-2);
 }
 
 /* ── responsive ────────────────────────────────────────── */
