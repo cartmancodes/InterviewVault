@@ -493,7 +493,7 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
 .rail > * + * { margin-top: 22px; }
 
 .sidecar {
-  border: 1px solid var(--rule); border-radius: 10px; background: var(--paper);
+  border: var(--cut); border-radius: 10px; box-shadow: var(--lift); background: var(--paper);
   padding: 17px 18px 15px;
 }
 .sc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -502,17 +502,17 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
   text-transform: uppercase; color: var(--mut);
 }
 .sc-timed { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--mut); cursor: pointer; }
-.sc-timed input { accent-color: var(--blue); }
+.sc-timed input { accent-color: var(--ink); }
 
 .sc-level { display: flex; align-items: center; gap: 12px; margin-top: 14px; }
 .sc-lv {
-  width: 42px; height: 42px; flex: none; border-radius: 9px; background: var(--blue-wash);
-  color: var(--blue-deep); font-family: var(--mono); font-weight: 600; font-size: 15px;
+  width: 42px; height: 42px; flex: none; border-radius: 9px; background: var(--acc);
+  color: var(--ink); font-family: var(--mono); font-weight: 600; font-size: 15px;
   display: grid; place-items: center;
 }
 .sc-meta { flex: 1; min-width: 0; }
 .sc-bar { height: 6px; background: var(--soft); border-radius: 3px; overflow: hidden; }
-.sc-bar i { display: block; height: 100%; background: var(--blue); transition: width .4s ease; }
+.sc-bar i { display: block; height: 100%; background: var(--acc); transition: width .4s ease; }
 .sc-xp { font-family: var(--mono); font-size: 12px; color: var(--mut); display: block; margin-top: 5px; }
 
 .sc-tabs { display: flex; gap: 3px; margin-top: 16px; background: var(--soft); padding: 4px; border-radius: 8px; }
@@ -531,8 +531,8 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
   width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 12px;
   background: none; border: 0; cursor: pointer; text-align: left;
 }
-.sc-cp-head:hover { background: var(--blue-wash); }
-.sc-dot { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--bd, #C6D3EC); flex: none; }
+.sc-cp-head:hover { background: var(--acc-wash); }
+.sc-dot { width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--bd, var(--rule)); flex: none; }
 .sc-cp.done .sc-dot { background: var(--good); border-color: var(--good); }
 /* the title column has to be able to shrink, or a long checkpoint name pushes
    the START pill off the row instead of wrapping inside it */
@@ -541,8 +541,8 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
 .sc-cp-sub { font-family: var(--mono); font-size: 11.5px; color: var(--mut); white-space: nowrap; }
 .sc-go {
   flex: none; font-family: var(--mono); font-size: 10.5px;
-  letter-spacing: .06em; text-transform: uppercase; color: var(--blue-deep);
-  background: var(--blue-wash); padding: 4px 9px; border-radius: 100px;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--ink);
+  background: var(--acc); padding: 4px 9px; border-radius: 100px;
 }
 .sc-cp.done .sc-go { color: var(--mut); background: var(--soft); }
 
@@ -563,12 +563,12 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
 .mech-note { font-size: 11.5px; color: var(--mut); line-height: 1.5; }
 .mech-verdict {
   font-size: 11.5px; line-height: 1.55; color: var(--ink-2);
-  background: var(--blue-wash); border-left: 2px solid var(--blue);
+  background: var(--acc-wash); border-left: 2px solid var(--ink);
   padding: 8px 10px; border-radius: 0 5px 5px 0;
 }
 .mech-go {
-  width: 100%; padding: 7px; border-radius: 6px; border: 1px solid var(--blue);
-  background: var(--blue); color: #fff; font: 500 12px var(--sans); cursor: pointer;
+  width: 100%; padding: 7px; border-radius: 6px; border: var(--cut);
+  background: var(--acc); color: var(--ink); font: 500 12px var(--sans); cursor: pointer;
 }
 .mech-go:disabled { background: var(--soft); border-color: var(--rule); color: var(--mut); cursor: default; }
 .mech-timer { height: 3px; background: var(--soft); border-radius: 2px; overflow: hidden; }
@@ -586,7 +586,7 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
   font: 500 10px var(--mono); padding: 3px 6px; border-radius: 4px;
   border: 1px solid var(--rule); background: var(--paper); color: var(--mut); cursor: pointer;
 }
-.tg.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+.tg.on { background: var(--acc); border-color: var(--ink); color: var(--ink); }
 .tg.truth { box-shadow: inset 0 0 0 1.5px var(--good); }
 .tg:disabled { cursor: default; }
 .triage-row.ok { background: color-mix(in srgb, var(--good) 12%, transparent); }
@@ -600,7 +600,7 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
   border-radius: 5px; font-size: 11.5px; line-height: 1.45; cursor: pointer;
 }
 .recall-row:hover { background: var(--soft); }
-.recall-row input { margin-top: 2px; accent-color: var(--blue); flex: none; }
+.recall-row input { margin-top: 2px; accent-color: var(--ink); flex: none; }
 .recall-row.on { color: var(--ink); }
 .recall-row.ok { background: color-mix(in srgb, var(--good) 12%, transparent); }
 .recall-row.no { background: color-mix(in srgb, #EF4444 10%, transparent); }
@@ -611,12 +611,12 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
   display: flex; flex-direction: column; gap: 2px; padding: 9px 8px; cursor: pointer;
   border: 1px solid var(--rule); border-radius: 7px; background: var(--paper); text-align: left;
 }
-.duel-opt:hover { border-color: var(--blue); }
+.duel-opt:hover { border-color: var(--ink); }
 .duel-opt b { font-size: 12px; font-weight: 600; }
 .duel-sub { font-family: var(--mono); font-size: 10px; color: var(--mut); }
 .duel-opt.right { border-color: var(--good); background: color-mix(in srgb, var(--good) 10%, transparent); }
 .duel-opt.wrong { opacity: .55; }
-.duel-opt.picked { box-shadow: 0 0 0 2px var(--blue) inset; }
+.duel-opt.picked { box-shadow: 0 0 0 2px var(--ink) inset; }
 .defend { margin-top: 10px; padding-top: 9px; border-top: 1px dashed var(--rule); }
 .defend > * + * { margin-top: 6px; }
 
@@ -629,10 +629,10 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
   font: 500 11px var(--mono); padding: 4px 9px; border-radius: 5px;
   border: 1px solid var(--rule); background: var(--paper); cursor: pointer;
 }
-.rung-c:hover:not(:disabled) { border-color: var(--blue); }
+.rung-c:hover:not(:disabled) { border-color: var(--ink); }
 .rung-c.right { border-color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
 .rung-c.wrong { border-color: #EF4444; opacity: .6; }
-.rung-c.picked { box-shadow: 0 0 0 1.5px var(--blue) inset; }
+.rung-c.picked { box-shadow: 0 0 0 1.5px var(--ink) inset; }
 .rung-note { font-size: 11px; color: var(--mut); margin-top: 6px; line-height: 1.45; }
 
 /* ── 1e architecture builder ────────────────────────────── */
@@ -642,7 +642,7 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
   border: 1.5px dashed var(--rule); background: var(--soft);
   font: 500 10.5px var(--sans); color: var(--ink); padding: 4px;
 }
-.slot.filled { border-style: solid; border-color: var(--blue); background: var(--blue-wash); }
+.slot.filled { border-style: solid; border-color: var(--ink); background: var(--acc-wash); }
 .slot.ok { border-color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
 .slot.no { border-color: #EF4444; background: color-mix(in srgb, #EF4444 10%, transparent); }
 .build-arrow { color: var(--mut); font-size: 11px; flex: none; }
@@ -651,8 +651,8 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
   font: 500 10.5px var(--sans); padding: 4px 8px; border-radius: 100px; cursor: pointer;
   border: 1px solid var(--rule); background: var(--paper); color: var(--ink-2);
 }
-.chip:hover:not(:disabled) { border-color: var(--blue); }
-.chip.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+.chip:hover:not(:disabled) { border-color: var(--ink); }
+.chip.on { background: var(--acc); border-color: var(--ink); color: var(--ink); }
 .chip.used { opacity: .4; }
 
 /* ── 1f spot the bottleneck ─────────────────────────────── */
@@ -661,7 +661,7 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
   text-align: left; padding: 8px; border-radius: 7px; cursor: pointer;
   border: 1px solid var(--rule); background: var(--paper);
 }
-.dash-card:hover:not(:disabled) { border-color: var(--blue); }
+.dash-card:hover:not(:disabled) { border-color: var(--ink); }
 .dash-name { font-size: 11px; font-weight: 600; }
 .dash-metric { font-family: var(--mono); font-size: 10.5px; color: var(--mut); margin-top: 2px; }
 .dash-delta { font-family: var(--mono); font-size: 10px; margin-top: 2px; color: var(--mut); }
@@ -676,8 +676,8 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
 .sheet-open-btn {
   display: none; position: fixed; right: 14px; bottom: 14px; z-index: 60;
   border: 0; border-radius: 100px; padding: 11px 17px; cursor: pointer;
-  background: var(--blue); color: #fff; font: 500 13px var(--sans);
-  box-shadow: 0 6px 20px rgba(37,99,235,.35);
+  background: var(--acc); color: var(--ink); font: 500 13px var(--sans);
+  box-shadow: var(--lift);
 }
 
 @media (max-width: 1180px) {
@@ -826,10 +826,10 @@ body.mech-open { overflow: hidden; }
 }
 .mp-hint { font-family: var(--mono); font-size: 11.5px; color: var(--mut); }
 .mp-done {
-  border: 1px solid var(--blue); background: var(--blue); color: #fff;
+  border: var(--cut); background: var(--acc); color: var(--ink);
   font: 500 13px var(--sans); padding: 7px 18px; border-radius: 7px; cursor: pointer;
 }
-.mp-done:hover { background: var(--blue-deep); }
+.mp-done:hover { background: #FFE455; }
 
 @media (max-width: 720px) {
   .mech-overlay { padding: 0; place-items: end stretch; }
@@ -854,7 +854,7 @@ body.mech-open { overflow: hidden; }
   display: grid; place-items: center;
   font-family: var(--mono); font-size: 13px; color: #A9BAD8;
 }
-.slot:not(.filled):hover::after { color: var(--blue); }
+.slot:not(.filled):hover::after { color: var(--ink); }
 .mech-panel.wide .slot:not(.filled)::after { font-size: 17px; }
 
 /* ── portfolio landing page ─────────────────────────────── */
