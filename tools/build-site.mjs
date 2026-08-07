@@ -484,7 +484,7 @@ const PF_STOPS = [
     when: '2021–23', side: 'l', top: '43.3%',
     role: 'Arcesium — Senior Software Engineer, ARMOR',
     founding: true,
-    body: 'Automatic post-trade reporting for TICB/TIC SLT; led the web layer, data-quality checker, authorisation module and core ETL — Java/Spring Boot orchestrated with Argo Workflows on EC2 Spot, with retry and checkpoint logic.',
+    body: 'Automatic post-trade reporting for TICB/TIC SLT; led the web layer, data-quality checker, authorisation module and core ETL. The Java/Spring Boot application ran on EKS backed by PostgreSQL, with files uploaded to S3; ETL was orchestrated through Argo Workflows on EC2 Spot with retry and checkpoint logic, using ZooKeeper for distributed locking.',
   },
   {
     when: '2023–25', side: 'r', top: '60.3%',
