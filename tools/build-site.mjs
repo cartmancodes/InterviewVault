@@ -670,7 +670,8 @@ ${PF_HOBBIES.map((h) => `<article class="pf-card">
   writeFileSync(path.join(SITE, 'index.html'), page({
     title: 'Shubhojeet Chakraborty — Technical Lead, AI/ML',
     desc: 'Shubhojeet Chakraborty builds systems at scale at Arcesium — AI infrastructure, regulatory data platforms, and InterviewVault.',
-    body: `${hero}\n<main>\n${experience}\n${projects}\n${notes}\n${hobbies}\n</main>\n${foot}`,
+    body: `${hero}\n<main>\n${experience}\n${projects}\n${notes}\n${hobbies}\n</main>\n${foot}
+<script src="/assets/portfolio.js" defer></script>`,
     cls: 'portfolio',
     chrome: false,
   }));
@@ -750,6 +751,7 @@ function build() {
   copyFileSync(path.join(TPL, 'doc.js'), path.join(SITE, 'assets', 'doc.js'));
   copyFileSync(path.join(TPL, 'vault.js'), path.join(SITE, 'assets', 'vault.js'));
   copyFileSync(path.join(TPL, 'progress.js'), path.join(SITE, 'assets', 'progress.js'));
+  copyFileSync(path.join(TPL, 'portfolio.js'), path.join(SITE, 'assets', 'portfolio.js'));
   copyFileSync(path.join(TPL, 'favicon.svg'), path.join(SITE, 'assets', 'favicon.svg'));
   copyFileSync(path.join(TPL, 'cartman.png'), path.join(SITE, 'assets', 'cartman.png'));
   for (const f of ['_headers', '_redirects', 'robots.txt']) {
