@@ -45,7 +45,11 @@ Every value below is measured, not estimated. Tasks refer back to this table.
 | `--blue` | `#2563EB` | retained **only** as the focus ring on light surfaces |
 | `--soft`, `--amber`, `--good`, `--danger` | unchanged | semantic, not brand |
 
-`--blue-deep`, `--blue-wash` and `--grid` are retired. They must have zero references by Task 8.
+`--blue-deep`, `--blue-wash` and `--grid` are retired, but **Task 1 keeps them as
+deprecated aliases**: 27 references survive until Tasks 5–8 convert them, and deleting
+the tokens early would resolve those to nothing and render the site broken for six
+consecutive commits. Task 8 proves the reference count is zero and only then deletes
+the aliases.
 
 ---
 
@@ -128,6 +132,10 @@ export const TOKEN_PAIRS = [
 // Later tasks append here.
 export const RENDER_CHECKS = [];
 
+// Tokens that must be absent from :root. Task 8 fills this in once every
+// reference has been converted.
+export const RETIRED = [];
+
 /* ── runner ───────────────────────────────────────────── */
 let failed = 0;
 const ok = (pass, label, detail) => {
@@ -138,8 +146,9 @@ const ok = (pass, label, detail) => {
 function partA() {
   const t = tokens();
   console.log('Part A — token contrast');
-  const retired = ['--blue-deep', '--blue-wash', '--grid'];
-  for (const r of retired) ok(!(r in t), `${r} is retired from :root`);
+  // The retired aliases are deleted in Task 8, not here — 27 references to them
+  // survive until then. RETIRED starts empty and Task 8 fills it in.
+  for (const r of RETIRED) ok(!(r in t), `${r} is gone from :root`);
   for (const [fg, bg, min, label] of TOKEN_PAIRS) {
     if (!t[fg] || !t[bg]) { ok(false, label, `missing token ${!t[fg] ? fg : bg}`); continue; }
     const r = ratio(t[fg], t[bg]);
@@ -189,7 +198,7 @@ process.exit(failed ? 1 : 0);
 node <scratchpad>/theme-check.mjs --tokens
 ```
 
-Expected: FAIL. `--blue-wash is retired from :root` fails (it is still defined), and every pair naming `--acc`, `--sky`, `--sky-wash`, `--acc-wash` fails with `missing token`. `--mut on --acc` would be 3.05:1 even once tokens exist.
+Expected: FAIL. Every pair naming `--acc`, `--sky`, `--sky-wash` or `--acc-wash` fails with `missing token`, and `--mut on --paper` fails at 4.24:1 against the 4.5 threshold. (`RETIRED` is empty at this point, so no alias check runs yet — Task 8 owns that.)
 
 - [ ] **Step 3: Replace the `:root` block**
 
@@ -216,6 +225,13 @@ In `tools/template/site.css`, replace the whole `:root { … }` block at lines 4
 
   /* blue survives as the focus ring on light surfaces and nothing else */
   --blue: #2563EB;
+
+  /* Deprecated aliases. 27 references still point here; Tasks 5-8 convert them
+     and Task 8 deletes these three once the reference count is zero. Defining
+     them as aliases keeps every intermediate commit renderable. */
+  --blue-wash: var(--sky-wash);
+  --blue-deep: var(--ink);
+  --grid: var(--sky-grid);
 
   --amber: #F59E0B;
   --good: #10B981;
@@ -248,10 +264,16 @@ body {
   line-height: 1.55;
 }
 
-/* Links are ink with a yellow underline; hover paints a highlighter fill.
-   Yellow is 1.39:1 on white, so it can never be the text colour itself. */
+/* Links are ink with a yellow underline. Yellow is 1.39:1 on white, so it can
+   never be the text colour itself. */
 a { color: var(--ink); text-decoration-color: var(--acc); text-decoration-thickness: 3px; text-underline-offset: 2px; }
-a:hover { background: var(--acc-wash); }
+/* The highlighter fill is a prose affordance, scoped to article bodies. A global
+   a:hover background would paint every nav pill, row and card on both halves of
+   the site. */
+.art a:hover { background: var(--acc-wash); }
+/* The landing page keeps its own link treatment: a yellow underline on its sky
+   footer would be 1.39:1, i.e. invisible. */
+body.portfolio a { text-decoration-color: currentColor; text-decoration-thickness: auto; }
 
 :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 3px; }
 /* Blue is 2.68:1 on sky — below the 3:1 WCAG asks of a focus indicator. On sky
@@ -321,14 +343,14 @@ RENDER_CHECKS.push(
   { url: '/vault/', sel: '.hdr', prop: 'borderBottomWidth', expect: '2px', label: 'header has a 2px ink rule' },
   { url: '/vault/', sel: '.hdr', prop: 'borderBottomColor', expect: 'rgb(14, 26, 43)', label: 'header rule is ink' },
   { url: '/vault/', sel: '.brand-mark', prop: 'backgroundColor', expect: 'rgb(14, 26, 43)', label: 'brand mark is an ink square' },
-  { url: '/vault/', sel: '.hdr-nav a[aria-current="page"]', prop: 'backgroundColor', expect: 'rgb(255, 216, 8)', label: 'active nav link is a yellow fill' },
+  { url: '/answers/bitly/', sel: '.hdr-nav a[aria-current="page"]', prop: 'backgroundColor', expect: 'rgb(255, 216, 8)', label: 'active nav link is a yellow fill' },
   { url: '/vault/', sel: '.foot', prop: 'backgroundColor', expect: 'rgb(121, 195, 240)', label: 'footer is a sky band' },
   { url: '/vault/', sel: '.foot', prop: 'borderTopWidth', expect: '2px', label: 'footer has a 2px ink rule' },
   { url: '/vault/', sel: '.foot-in', prop: 'color', expect: 'rgb(58, 74, 97)', label: 'footer text is ink-2, never mut, on sky' },
 );
 ```
 
-Note: `/vault/` is the vault home. The header nav marks the active collection with `aria-current="page"` only on doc pages, so this check uses the doc page for that one row instead — replace that row's `url` with `/answers/bitly/`.
+The nav marks the active collection with `aria-current="page"` only on doc pages, which is why that one row targets `/answers/bitly/` rather than the vault home.
 
 - [ ] **Step 2: Run to verify the new checks fail**
 
@@ -980,7 +1002,17 @@ RENDER_CHECKS.push(
 
 Keep the existing `.vault-card` layout declarations — only its border, radius and shadow change.
 
-- [ ] **Step 4: Prove the retired tokens are gone**
+- [ ] **Step 4: Delete the deprecated aliases and prove nothing referenced them**
+
+First confirm the reference count is zero, then delete the three alias
+declarations from `:root` (`--blue-wash`, `--blue-deep`, `--grid`), then add them
+to the harness's `RETIRED` array so the check is enforced from now on:
+
+```js
+RETIRED.push('--blue-wash', '--blue-deep', '--grid');
+```
+
+- [ ] **Step 5: Prove the retired tokens are gone**
 
 ```bash
 grep -n "var(--blue-deep)\|var(--blue-wash)\|var(--grid)\|#6B7C96\|#E4EAF5\|#8FA6CE\|#C6D3EC" tools/template/site.css tools/build-site.mjs
@@ -992,7 +1024,7 @@ Expected: **no output.** Any hit is an unconverted reference — convert it befo
 grep -c "var(--blue)" tools/template/site.css   # expect 1
 ```
 
-- [ ] **Step 5: Update ARCHITECTURE.md §7**
+- [ ] **Step 6: Update ARCHITECTURE.md §7**
 
 In the `### Tokens` block, replace the vault token list with the shared set from the Global Constraints table above. In the `### The portfolio theme` section, change the opening sentence so it no longer says the theme is portfolio-only:
 
@@ -1000,7 +1032,7 @@ In the `### Tokens` block, replace the vault token list with the shared set from
 
 Add a short paragraph recording the four accessibility rules and why blue retired, citing the measured ratios: yellow is 1.39:1 on white so it can never be text; mut on sky is 2.20:1 so muted text steps to ink-2 on bands; white on sky is 1.93:1 so the vault headline is ink; blue on sky is 2.68:1 so the focus ring is ink on bands.
 
-- [ ] **Step 6: Full responsive and interaction sweep**
+- [ ] **Step 7: Full responsive and interaction sweep**
 
 ```bash
 node <scratchpad>/theme-check.mjs
@@ -1010,7 +1042,7 @@ node <scratchpad>/vault-shot.mjs  # vault home, doc page, DSA page
 
 Read every screenshot. Confirm: no horizontal overflow at any width, no unstyled or invisible text, hairlines still visible on the new page background, and the landing page unchanged apart from its focus ring.
 
-- [ ] **Step 7: Confirm reduced motion still holds**
+- [ ] **Step 8: Confirm reduced motion still holds**
 
 ```bash
 node -e "
@@ -1020,7 +1052,7 @@ console.log(m ? 'PASS reduced motion zeroes delay as well as duration' : 'FAIL')
 "
 ```
 
-- [ ] **Step 8: Run the five gates and commit**
+- [ ] **Step 9: Run the five gates and commit**
 
 ```bash
 node tools/check-dsa.mjs && python3 tools/check-python.py
