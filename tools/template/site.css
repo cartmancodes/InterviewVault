@@ -114,13 +114,15 @@ body.portfolio a { text-decoration-color: currentColor; text-decoration-thicknes
   display: flex; align-items: center; gap: 16px;
 }
 .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); flex: none; }
-/* the same ink IV square the landing page uses on its Notes banner */
+/* the same ink CC square the landing page uses on its Notes banner */
 .brand-mark {
   width: 28px; height: 28px; border-radius: var(--radius); background: var(--ink);
   color: #fff; font-family: var(--mono); font-weight: 600; font-size: 13px;
   display: grid; place-items: center; letter-spacing: -.02em;
 }
-.brand-name { font-weight: 600; font-size: 15px; letter-spacing: -.01em; }
+/* the wordmark reads as a path — mono, like the landing page's wordmark,
+   with the /vault segment muted */
+.brand-name { font: 600 14px var(--mono); letter-spacing: -.02em; }
 .brand-name span { color: var(--mut); font-weight: 400; }
 .hdr-nav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
 /* nine outlined pills would read as a picket fence, so the pill only

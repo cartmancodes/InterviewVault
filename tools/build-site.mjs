@@ -224,14 +224,14 @@ const SOCIALS = `<div class="socials">
 </div>`;
 
 const header = (active) => `<header class="hdr"><div class="hdr-in">
-<a class="brand" href="${VAULT}"><span class="brand-mark">IV</span><span class="brand-name">Interview<span>Vault</span></span></a>
+<a class="brand" href="${VAULT}"><span class="brand-mark">CC</span><span class="brand-name">cartmancodes<span>/vault</span></span></a>
 <nav class="hdr-nav">${COLLECTIONS.filter((c) => c.key !== 'quickref')
   .map((c) => `<a href="${VAULT}#${c.key}"${active === c.key ? ' aria-current="page"' : ''}>${c.label}</a>`).join('')}</nav>
 ${SOCIALS}
 </div></header>`;
 
 const footer = () => `<footer class="foot"><div class="foot-in">
-<span>InterviewVault — system design study vault</span>
+<span>cartmancodes/vault — system design study vault</span>
 <span>${docs.length} documents · ${docs.reduce((a, d) => a + d.diagrams, 0)} diagrams</span>
 </div></footer>`;
 
@@ -321,7 +321,7 @@ ${sheetBtn}
 
   mkdirSync(path.dirname(doc.out), { recursive: true });
   writeFileSync(doc.out, page({
-    title: `${doc.title} — InterviewVault`,
+    title: `${doc.title} — cartmancodes/vault`,
     desc: `${doc.title}: ${doc.col.blurb}`,
     body, active: doc.col.key, cls: doc.dsa ? 'doc dsa-doc' : 'doc',
   }));
@@ -452,7 +452,7 @@ ${chips}
   const out = path.join(SITE, 'vault', 'index.html');
   mkdirSync(path.dirname(out), { recursive: true });
   writeFileSync(out, page({
-    title: 'InterviewVault — System Design Study Vault',
+    title: 'cartmancodes/vault — System Design Study Vault',
     desc: `${docs.length} worked system-design documents: patterns, deep dives, problem breakdowns and interview answers.`,
     body, cls: '',
   }));
@@ -656,9 +656,9 @@ ${PF_PROJECTS.map((p) => `<a class="pf-card pf-project" href="${p.href}">
   const notes = `<section id="notes" class="pf-section">
 <h2 class="pf-label">Notes</h2>
 <a class="pf-notes" href="${VAULT}">
-<span class="pf-iv">IV</span>
+<span class="pf-iv">CC</span>
 <span class="pf-notes-copy">
-<strong>The notes section is a whole website — InterviewVault</strong>
+<strong>The notes section is a whole website — cartmancodes/vault</strong>
 <span>${docs.length} worked system-design documents · ${totalDiagrams} diagrams · 5 CI gates · a practice layer with XP · a snake game. Enter the vault →</span>
 </span>
 <span class="pf-notes-domain">cartmancodes.com/vault →</span>
@@ -685,7 +685,7 @@ ${PF_HOBBIES.map((h) => `<article class="pf-card">
 
   writeFileSync(path.join(SITE, 'index.html'), page({
     title: 'Shubhojeet Chakraborty — Technical Lead, AI/ML',
-    desc: 'Shubhojeet Chakraborty builds systems at scale at Arcesium — AI infrastructure, regulatory data platforms, and InterviewVault.',
+    desc: 'Shubhojeet Chakraborty builds systems at scale at Arcesium — AI infrastructure, regulatory data platforms, and a full system-design study vault.',
     body: `${hero}\n<main>\n${experience}\n${projects}\n${notes}\n${hobbies}\n</main>\n${foot}
 <script src="/assets/portfolio.js" defer></script>`,
     cls: 'portfolio',
@@ -740,7 +740,7 @@ function buildProgressPage() {
   const out = path.join(SITE, 'progress', 'index.html');
   mkdirSync(path.dirname(out), { recursive: true });
   writeFileSync(out, page({
-    title: 'Vault map — InterviewVault',
+    title: 'Vault map — cartmancodes/vault',
     desc: 'Your practice coverage across the interview-answer docs, stored on this device.',
     body,
   }));
