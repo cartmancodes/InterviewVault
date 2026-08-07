@@ -4,16 +4,33 @@
 :root {
   --ink: #0E1A2B;
   --ink-2: #3A4A61;
-  --mut: #6B7C96;
-  --blue: #2563EB;
-  --blue-deep: #1D4ED8;
-  --blue-wash: #F0F4FF;
-  --grid: #DCE4F7;
-  --rule: #E4EAF5;
+  --mut: #4F5F79;
   --paper: #FFFFFF;
+  --soft: #F2F5FB;
+  --rule: #CFE0EE;
+
+  /* construction paper — shared by the landing page and the vault */
+  --acc: #FFD808;
+  --acc-wash: #FFF6C9;
+  --sky: #79C3F0;
+  --sky-wash: #EAF5FD;
+  --sky-grid: #5AAFE0;
+  --cut: 2px solid var(--ink);
+  --lift: 4px 4px 0 var(--ink);
+  --lift-hi: 6px 6px 0 var(--ink);
+
+  /* blue survives as the focus ring on light surfaces and nothing else */
+  --blue: #2563EB;
+
+  /* Deprecated aliases. 27 references still point here; Tasks 5-8 convert them
+     and Task 8 deletes these three once the reference count is zero. Defining
+     them as aliases keeps every intermediate commit renderable. */
+  --blue-wash: var(--sky-wash);
+  --blue-deep: var(--ink);
+  --grid: var(--sky-grid);
+
   --amber: #F59E0B;
   --good: #10B981;
-  --soft: #F2F5FB;
 
   --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --serif: "IBM Plex Serif", Georgia, "Times New Roman", serif;
@@ -47,14 +64,29 @@ html { scroll-behavior: smooth; scroll-padding-top: 84px; }
 body {
   font-family: var(--sans);
   color: var(--ink);
-  background: var(--blue-wash);
+  background: var(--sky-wash);
   -webkit-font-smoothing: antialiased;
   line-height: 1.55;
 }
 
-a { color: var(--blue-deep); text-decoration-color: color-mix(in srgb, var(--blue) 35%, transparent); text-underline-offset: 2px; }
-a:hover { text-decoration-color: var(--blue); }
+/* Links are ink with a yellow underline. Yellow is 1.39:1 on white, so it can
+   never be the text colour itself. */
+a { color: var(--ink); text-decoration-color: var(--acc); text-decoration-thickness: 3px; text-underline-offset: 2px; }
+/* The highlighter fill is a prose affordance, scoped to article bodies. A global
+   a:hover background would paint every nav pill, row and card on both halves of
+   the site. */
+.art a:hover { background: var(--acc-wash); }
+/* The landing page keeps its own link treatment: a yellow underline on its sky
+   footer would be 1.39:1, i.e. invisible. */
+body.portfolio a { text-decoration-color: currentColor; text-decoration-thickness: auto; }
+
 :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 3px; }
+/* Blue is 2.68:1 on sky — below the 3:1 WCAG asks of a focus indicator. On sky
+   bands the ring becomes ink (9.05:1). This also fixes the landing page hero. */
+.hero :focus-visible,
+.foot :focus-visible,
+.pf-hero :focus-visible,
+.pf-footer :focus-visible { outline-color: var(--ink); }
 
 /* ── blueprint surface ─────────────────────────────────── */
 .blueprint {
@@ -812,12 +844,7 @@ body.mech-open { overflow: hidden; }
    System" → portfolio-reference.html. Every accent reads --acc, so the whole
    page re-themes from one property (#FFD808 / #4FC3D9 / #E23D3D). */
 body.portfolio {
-  --acc: #FFD808;
-  --sky: #79C3F0;
   --prose: #16233A;
-  --cut: 2px solid var(--ink);
-  --lift: 4px 4px 0 var(--ink);
-  --lift-hi: 6px 6px 0 var(--ink);
   --pf-shell: 1180px;
   --pf-pad: 32px;
   background: var(--paper);
