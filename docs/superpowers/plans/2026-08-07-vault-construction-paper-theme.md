@@ -1040,7 +1040,16 @@ node <scratchpad>/shot.mjs        # landing page at 1440 / 700 / 320
 node <scratchpad>/vault-shot.mjs  # vault home, doc page, DSA page
 ```
 
-Read every screenshot. Confirm: no horizontal overflow at any width, no unstyled or invisible text, hairlines still visible on the new page background, and the landing page unchanged apart from its focus ring.
+Read every screenshot. Confirm: no horizontal overflow at any width, no unstyled or
+invisible text, and hairlines still visible on the new page background.
+
+The landing page changes in exactly two ways, both ruled correct by the human partner
+on 2026-08-07: its focus ring becomes ink on sky, and its eight `.pf-*` rules that read
+the shared `--mut` / `--rule` tokens darken with them (career-diagram year labels and
+captions, timeline date column and row dividers, stack label, creds line, project meta).
+That drift is accepted deliberately — the reference prototype's `#6B7C96` is 4.24:1 on
+white, below AA, so one shared token set was preferred over pixel-matching the handoff
+on those rules. Anything else changing on the landing page is a defect.
 
 - [ ] **Step 8: Confirm reduced motion still holds**
 
