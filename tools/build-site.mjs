@@ -30,6 +30,10 @@ const COLLECTIONS = [
 
 const SKIP = new Set(['LLD/SystemDesign/README.md']);
 
+// `/` is the portfolio landing page; the vault's own home lives one level in.
+// Everything that links "back to the library" goes through this constant.
+const VAULT = '/vault/';
+
 /* ── helpers ───────────────────────────────────────────── */
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 // marked has already entity-encoded its output; decode before re-escaping so we
@@ -204,8 +208,10 @@ function renderDoc(doc) {
 }
 
 /* ── page shell ────────────────────────────────────────── */
+// 700 is here for the portfolio landing page only — its wordmark and headline
+// are the one place on the site that goes heavier than 600.
 const FONTS = `<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@400;600&display=swap" rel="stylesheet">`;
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;600&display=swap" rel="stylesheet">`;
 
 // GitHub / LinkedIn brand marks, inlined so there are no icon assets to fetch.
 const SOCIALS = `<div class="socials">
@@ -218,9 +224,9 @@ const SOCIALS = `<div class="socials">
 </div>`;
 
 const header = (active) => `<header class="hdr"><div class="hdr-in">
-<a class="brand" href="/"><span class="brand-mark">IV</span><span class="brand-name">Interview<span>Vault</span></span></a>
+<a class="brand" href="${VAULT}"><span class="brand-mark">IV</span><span class="brand-name">Interview<span>Vault</span></span></a>
 <nav class="hdr-nav">${COLLECTIONS.filter((c) => c.key !== 'quickref')
-  .map((c) => `<a href="/#${c.key}"${active === c.key ? ' aria-current="page"' : ''}>${c.label}</a>`).join('')}</nav>
+  .map((c) => `<a href="${VAULT}#${c.key}"${active === c.key ? ' aria-current="page"' : ''}>${c.label}</a>`).join('')}</nav>
 ${SOCIALS}
 </div></header>`;
 
@@ -229,7 +235,9 @@ const footer = () => `<footer class="foot"><div class="foot-in">
 <span>${docs.length} documents · ${docs.reduce((a, d) => a + d.diagrams, 0)} diagrams</span>
 </div></footer>`;
 
-function page({ title, desc, body, active, cls = '' }) {
+// `chrome: false` drops the vault header and footer — the portfolio landing page
+// carries its own nav and footer and shares nothing but the shell and the fonts.
+function page({ title, desc, body, active, cls = '', chrome = true }) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -245,9 +253,9 @@ ${FONTS}
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 </head>
 <body class="${cls}">
-${header(active)}
+${chrome ? header(active) : ''}
 ${body}
-${footer()}
+${chrome ? footer() : ''}
 </body>
 </html>`;
 }
@@ -323,7 +331,7 @@ ${sheetBtn}
 function archMap(counts) {
   const N = (x, y, w, h, key, label, count) => {
     const c = counts[key] || 0;
-    return `<a class="node" href="/#${key}" role="link" aria-label="${label}, ${c} documents">
+    return `<a class="node" href="${VAULT}#${key}" role="link" aria-label="${label}, ${c} documents">
       <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7"></rect>
       <text class="n-label" x="${x + w / 2}" y="${y + h / 2 - 3}" text-anchor="middle">${label}</text>
       <text class="n-count" x="${x + w / 2}" y="${y + h / 2 + 16}" text-anchor="middle">${c} docs</text>
@@ -367,7 +375,7 @@ ${N(898, 172, 88, 56, 'dsa', 'DSA')}
 </section>`;
 }
 
-/* ── index page ────────────────────────────────────────── */
+/* ── vault home ────────────────────────────────────────── */
 function buildIndex() {
   const counts = Object.fromEntries(COLLECTIONS.map((c) => [c.key, docs.filter((d) => d.col.key === c.key).length]));
   const totalDiagrams = docs.reduce((a, d) => a + d.diagrams, 0);
@@ -441,10 +449,239 @@ ${chips}
 <script src="/assets/home.js" defer></script>
 <script src="/assets/game.js" defer></script>`;
 
-  writeFileSync(path.join(SITE, 'index.html'), page({
+  const out = path.join(SITE, 'vault', 'index.html');
+  mkdirSync(path.dirname(out), { recursive: true });
+  writeFileSync(out, page({
     title: 'InterviewVault — System Design Study Vault',
     desc: `${docs.length} worked system-design documents: patterns, deep dives, problem breakdowns and interview answers.`,
     body, cls: '',
+  }));
+}
+
+/* ── portfolio landing page ────────────────────────────── */
+// The construction-paper theme: flat cutout shapes, 2px ink outlines and hard
+// offset shadows over the vault's IBM Plex identity. Design source of truth is
+// docs/superpowers "InterviewVault Design System" → portfolio-reference.html.
+
+const PF_EXPERIENCE = [
+  {
+    when: '2025—',
+    role: 'Arcesium — Technical Lead, AI/ML — Arcesium Intelligence (formerly Maelstrom)',
+    founding: true,
+    body: 'AI agents for CI/CD, DevOps and financial-analysis workflows across the firm. Built the LiteLLM proxy layer that powers Arcesium-grade AI infrastructure — the central gateway with per-user/team rate limits and budget caps, routing across OpenAI, Anthropic and AWS Bedrock, and full spend audit trails. On Arcesium Intelligence, agents run on the Claude Agent SDK in sandboxed environments — AWS Lambda, PostgreSQL, S3, and EKS + Fargate, with EKS for long-running servers.',
+  },
+  {
+    when: '2023–25',
+    role: 'Arcesium — Technical Lead, TRACS',
+    founding: true,
+    body: 'MiFID/MAS trade-reporting platform for hedge-fund clients. Spark ETL orchestrated with Argo Workflows — checkpointed, idempotent, high-throughput; client-facing web modules on AWS EKS, batch compute on EC2 Spot.',
+  },
+  {
+    when: '2021–23',
+    role: 'Arcesium — Senior Software Engineer, ARMOR',
+    founding: true,
+    body: 'Automatic post-trade reporting for TICB/TIC SLT; led the web layer, data-quality checker, authorisation module and core ETL — Java/Spring Boot orchestrated with Argo Workflows on EC2 Spot, with retry and checkpoint logic.',
+  },
+  {
+    when: '2019–21',
+    role: 'Arcesium — Software Engineer',
+    founding: false,
+    body: 'MiFID/EMIR regulatory ETL in Python (pandas, SQLAlchemy) on SQL Server: ingestion, transformation, validation, plus deterministic and fuzzy-matching reconciliation utilities for high-volume trade data.',
+  },
+  {
+    when: '2017–19',
+    role: 'Samsung Research — Software Engineer, Advanced Software',
+    founding: false,
+    body: 'GPU-accelerated image/video effects in OpenGL ES at 60fps; native Tizen C++. On the Advanced Software team, built C# applications in Xamarin for mobile and TV.',
+  },
+];
+
+const PF_STACK = [
+  'Java / Spring Boot', 'Python / FastAPI', 'Spark', 'LiteLLM', 'LangGraph', 'C++',
+  'Postgres + pgvector', 'Redis', 'AWS EKS', 'Azure VMSS', 'Argo Workflows', 'React / TypeScript',
+];
+
+const PF_PROJECTS = [
+  {
+    name: 'litellm-rust',
+    href: 'https://github.com/cartmancodes/litellm-rust',
+    blurb: 'A minimal Rust gateway built for coding agents, LiteLLM-compatible.',
+    meta: 'Rust · github ↗',
+  },
+  {
+    name: 'kafka-poc',
+    href: 'https://github.com/cartmancodes/kafka-poc',
+    blurb: "Proof-of-concept Kafka pipeline; the notes behind the vault's Kafka deep dive.",
+    meta: 'Java · github ↗',
+  },
+];
+
+const PF_HOBBIES = [
+  {
+    name: 'Music theory',
+    body: 'I study harmony the way I read codebases: chord functions as interfaces, voice leading as data flow. Most evenings this means working out why a borrowed iv resolves the way it does, then writing it down like a postmortem.',
+  },
+  {
+    name: 'Football',
+    body: 'I play, and I watch tactics more than matches. A pressing scheme is an architecture diagram — triggers are event handlers, the double pivot is redundancy, a low block is graceful degradation.',
+  },
+];
+
+// Career-as-system-diagram. Node geometry is fixed by the design (viewBox
+// 0 0 1000 150); arrows sit in the 44px gutter between adjacent nodes.
+const PF_CAREER = [
+  { x: 10,  w: 152, label: 'Samsung · Advanced Software', years: '2017–19', under: 'OpenGL ES · 60fps',        size: 11 },
+  { x: 210, w: 172, label: 'Arcesium · Regulatory ETL',   years: '2019–21', under: 'MiFID / EMIR',             size: 12 },
+  { x: 430, w: 152, label: 'Arcesium · ARMOR',            years: '2021–23', under: 'TICB / TIC SLT',           size: 12 },
+  { x: 630, w: 152, label: 'Arcesium · TRACS',            years: '2023–25', under: 'MiFID / MAS',              size: 12 },
+  { x: 830, w: 160, label: 'Arcesium Intelligence',       years: '2025—',   under: 'LiteLLM · Claude Agent SDK', size: 12, accent: true },
+];
+
+const PF_SOCIALS = [
+  {
+    href: 'https://github.com/cartmancodes', label: 'GitHub', me: true,
+    svg: `<svg width="17" height="17" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>`,
+  },
+  {
+    href: 'https://in.linkedin.com/in/shubhojeet-chakraborty-540570b0', label: 'LinkedIn', me: true,
+    svg: `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.45 20.45h-3.55v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.36V9h3.41v1.56h.05c.47-.9 1.63-1.85 3.36-1.85 3.6 0 4.27 2.37 4.27 5.45v6.29zM5.34 7.43a2.06 2.06 0 1 1 0-4.12 2.06 2.06 0 0 1 0 4.12zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.72v20.55C0 23.22.79 24 1.77 24h20.45c.98 0 1.78-.78 1.78-1.73V1.72C24 .77 23.2 0 22.22 0z"/></svg>`,
+  },
+  {
+    href: 'mailto:shubhchak@gmail.com', label: 'Email', me: false,
+    svg: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>`,
+  },
+];
+
+function careerDiagram() {
+  const nodes = PF_CAREER.map((n) => {
+    const mid = n.x + n.w / 2;
+    return `<rect class="pf-node${n.accent ? ' pf-node-now' : ''}" x="${n.x}" y="40" width="${n.w}" height="54" rx="8"></rect>
+<text class="pf-node-label" x="${mid}" y="63" text-anchor="middle" font-size="${n.size}">${esc(n.label)}</text>
+<text class="pf-node-years${n.accent ? ' pf-node-years-now' : ''}" x="${mid}" y="82" text-anchor="middle">${esc(n.years)}</text>
+<text class="pf-node-under" x="${mid}" y="118" text-anchor="middle">${esc(n.under)}</text>`;
+  }).join('\n');
+
+  // one arrow per adjacent pair, drawn in left to right
+  const arrows = PF_CAREER.slice(0, -1).map((n, i) => {
+    const from = n.x + n.w, to = PF_CAREER[i + 1].x;
+    return `<path class="pf-arrow" style="--i:${i}" d="M${from} 67 H ${to - 4}" marker-end="url(#pf-ah)"></path>`;
+  }).join('\n');
+
+  return `<div class="pf-diagram">
+<svg viewBox="0 0 1000 150" role="img" aria-label="Career diagram: Samsung Research flows into regulatory ETL at Arcesium, then ARMOR, then TRACS, then Arcesium Intelligence, the AI/ML agent team.">
+<defs><marker id="pf-ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L8 4 L0 8 z" fill="#0E1A2B"></path></marker></defs>
+<line class="pf-bracket" x1="210" y1="22" x2="790" y2="22"></line>
+<text class="pf-bracket-label" x="500" y="16" text-anchor="middle">regulated scale</text>
+${arrows}
+${nodes}
+</svg>
+</div>`;
+}
+
+function buildPortfolio() {
+  const totalDiagrams = docs.reduce((a, d) => a + d.diagrams, 0);
+
+  const landscape = `<svg class="pf-landscape" viewBox="0 0 1280 300" preserveAspectRatio="none" aria-hidden="true">
+<polygon points="60,300 330,60 600,300" fill="#8C97AB"></polygon><polygon points="330,60 268,136 392,136" fill="#FFFFFF"></polygon>
+<polygon points="420,300 740,20 1060,300" fill="#A6B0C2"></polygon><polygon points="740,20 664,116 816,116" fill="#FFFFFF"></polygon>
+<polygon points="900,300 1140,90 1280,240 1280,300" fill="#8C97AB"></polygon><polygon points="1140,90 1088,152 1192,152" fill="#FFFFFF"></polygon>
+<rect x="0" y="252" width="1280" height="48" fill="#FFFFFF"></rect>
+<polygon points="80,252 110,196 140,252" fill="#2E7D46"></polygon><polygon points="150,252 180,204 210,252" fill="#3C9159"></polygon>
+<polygon points="1060,252 1090,198 1120,252" fill="#2E7D46"></polygon><polygon points="1130,252 1160,206 1190,252" fill="#3C9159"></polygon>
+</svg>`;
+
+  const socials = PF_SOCIALS.map((s) =>
+    `<a class="pf-icon-link" href="${s.href}" title="${s.label}" aria-label="${s.label}"${s.me ? ' rel="me"' : ''}>${s.svg}</a>`).join('\n');
+
+  const hero = `<header class="pf-hero">
+${landscape}
+<div class="pf-shell pf-hero-shell">
+<nav class="pf-nav" aria-label="Sections">
+<span class="pf-wordmark">cartmancodes</span>
+<a href="#experience">Experience</a><a href="#projects">Projects</a><a href="#notes">Notes</a><a href="#hobbies">Hobbies</a>
+</nav>
+<div class="pf-hero-content">
+<div class="pf-hero-copy">
+<p class="pf-badge">Shubhojeet Chakraborty · Technical Lead, AI/ML · Arcesium</p>
+<h1>Building systems at scale by day. Crafting ambitious side projects by night.</h1>
+<div class="pf-socials">${socials}</div>
+</div>
+<figure class="pf-polaroid">
+<img src="/assets/cartman.png" width="728" height="563" alt="Staff photo: a cartoon character in a red jacket and blue hat" loading="eager">
+<figcaption>STAFF PHOTO — “I'M NOT LAZY, I'M ASYNC.”</figcaption>
+</figure>
+</div>
+</div>
+</header>`;
+
+  const timeline = PF_EXPERIENCE.map((e) => `<li class="pf-entry">
+<span class="pf-when">${esc(e.when)}</span>
+<div class="pf-entry-copy">
+<h3>${esc(e.role)}${e.founding ? ' <span class="pf-founding">founding engineer</span>' : ''}</h3>
+<p>${esc(e.body)}</p>
+</div>
+</li>`).join('\n');
+
+  const experience = `<section id="experience" class="pf-section">
+<h2 class="pf-label">Experience</h2>
+${careerDiagram()}
+<ol class="pf-timeline">
+${timeline}
+</ol>
+<div class="pf-stack"><span class="pf-stack-label">stack</span>${
+    PF_STACK.map((s) => `<span class="pf-pill">${esc(s)}</span>`).join('')}</div>
+<p class="pf-creds">ACM ICPC regionals 2017 · national rank 57 in prelims — Codeforces Expert (1775) — Codechef 5★</p>
+</section>`;
+
+  const projects = `<section id="projects" class="pf-section">
+<h2 class="pf-label">Projects</h2>
+<div class="pf-cards">
+${PF_PROJECTS.map((p) => `<a class="pf-card pf-project" href="${p.href}">
+<h3>${esc(p.name)}</h3>
+<span>${esc(p.blurb)}</span>
+<small>${esc(p.meta)}</small>
+</a>`).join('\n')}
+</div>
+</section>`;
+
+  // The funnel into the vault. Counts come from the build, not the copy deck, so
+  // they cannot drift from what the vault actually holds.
+  const notes = `<section id="notes" class="pf-section">
+<h2 class="pf-label">Notes</h2>
+<a class="pf-notes" href="${VAULT}">
+<span class="pf-iv">IV</span>
+<span class="pf-notes-copy">
+<strong>The notes section is a whole website — InterviewVault</strong>
+<span>${docs.length} worked system-design documents · ${totalDiagrams} diagrams · 5 CI gates · a practice layer with XP · a snake game. Enter the vault →</span>
+</span>
+<span class="pf-notes-domain">cartmancodes.com/vault →</span>
+</a>
+<nav class="pf-notes-links" aria-label="Vault shortcuts">
+<a href="${VAULT}#dsa">dsa track →</a><a href="${VAULT}#deep-dives">deep dives →</a><a href="${VAULT}">play packet runner →</a>
+</nav>
+</section>`;
+
+  const hobbies = `<section id="hobbies" class="pf-section pf-last">
+<h2 class="pf-label">Hobbies</h2>
+<div class="pf-cards pf-cards-wide">
+${PF_HOBBIES.map((h) => `<article class="pf-card">
+<h3>${esc(h.name)}</h3>
+<p class="pf-prose">${esc(h.body)}</p>
+</article>`).join('\n')}
+</div>
+</section>`;
+
+  const foot = `<footer class="pf-footer"><div class="pf-shell">
+<span>Shubhojeet Chakraborty · <a href="mailto:shubhchak@gmail.com">shubhchak@gmail.com</a> · <a href="https://github.com/cartmancodes" rel="me">github</a> · <a href="https://in.linkedin.com/in/shubhojeet-chakraborty-540570b0" rel="me">linkedin</a></span>
+<span>$ exit 0</span>
+</div></footer>`;
+
+  writeFileSync(path.join(SITE, 'index.html'), page({
+    title: 'Shubhojeet Chakraborty — Technical Lead, AI/ML',
+    desc: 'Shubhojeet Chakraborty builds systems at scale at Arcesium — AI infrastructure, regulatory data platforms, and InterviewVault.',
+    body: `${hero}\n<main>\n${experience}\n${projects}\n${notes}\n${hobbies}\n</main>\n${foot}`,
+    cls: 'portfolio',
+    chrome: false,
   }));
 }
 
@@ -503,7 +740,7 @@ function buildProgressPage() {
 
 /* ── build ─────────────────────────────────────────────── */
 function build() {
-  for (const d of ['answers', 'notes', 'concepts', 'patterns', 'deep-dives', 'breakdowns', 'in-the-wild', 'in-a-hurry', 'dsa', 'progress']) {
+  for (const d of ['answers', 'notes', 'concepts', 'patterns', 'deep-dives', 'breakdowns', 'in-the-wild', 'in-a-hurry', 'dsa', 'progress', 'vault']) {
     rmSync(path.join(SITE, d), { recursive: true, force: true });
   }
   mkdirSync(path.join(SITE, 'assets'), { recursive: true });
@@ -512,6 +749,7 @@ function build() {
     const sibs = docsForCollection(c);
     sibs.forEach((d, i) => buildDocPage(d, sibs, i));
   }
+  buildPortfolio();
   buildIndex();
   buildProgressPage();
 
@@ -522,12 +760,13 @@ function build() {
   copyFileSync(path.join(TPL, 'vault.js'), path.join(SITE, 'assets', 'vault.js'));
   copyFileSync(path.join(TPL, 'progress.js'), path.join(SITE, 'assets', 'progress.js'));
   copyFileSync(path.join(TPL, 'favicon.svg'), path.join(SITE, 'assets', 'favicon.svg'));
+  copyFileSync(path.join(TPL, 'cartman.png'), path.join(SITE, 'assets', 'cartman.png'));
   for (const f of ['_headers', '_redirects', 'robots.txt']) {
     if (existsSync(path.join(TPL, f))) copyFileSync(path.join(TPL, f), path.join(SITE, f));
   }
   // sitemap
   const origin = process.env.SITE_ORIGIN || 'https://interviewvault.pages.dev';
-  const urls = ['/', ...docs.map((d) => d.url)];
+  const urls = ['/', VAULT, ...docs.map((d) => d.url)];
   writeFileSync(path.join(SITE, 'sitemap.xml'),
     `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
     urls.map((u) => `  <url><loc>${origin}${u}</loc></url>`).join('\n') + `\n</urlset>\n`);

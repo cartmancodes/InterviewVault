@@ -80,7 +80,7 @@ tools/
                               contract, DSA page assertions
   template/                   design system + client runtime, copied verbatim
     site.css  vault.js  progress.js  home.js  doc.js  game.js
-    favicon.svg  _headers  _redirects  robots.txt
+    favicon.svg  cartman.png  _headers  _redirects  robots.txt
 
 site/                         build output — never hand-edit, never committed
 .github/workflows/            build → validate → deploy
@@ -187,8 +187,9 @@ Heading text is emoji-stripped and entity-decoded before slugifying, so
 `## 🏗️ High-Level Design` becomes `#high-level-design` and the TOC shows clean
 text.
 
-**Emit.** Per-doc pages, the index, the vault map, then the template assets are
-copied verbatim and `sitemap.xml` is written from `SITE_ORIGIN`.
+**Emit.** Per-doc pages, the portfolio landing page, the vault home, the vault map,
+then the template assets are copied verbatim and `sitemap.xml` is written from
+`SITE_ORIGIN`.
 
 ### Stage 3 — `check-site.mjs`
 
@@ -232,6 +233,19 @@ The folder decides everything — URL, section nav, and whether a sidecar is bui
 | `LLD/SystemDesign/IntheWild/` | `in-the-wild` | `/in-the-wild/<slug>/` | — |
 | **`LLD/questions/`** | `answers` | `/answers/<slug>/` | **yes** |
 | `DSA/` | `dsa` | `/dsa/<slug>/` | — |
+
+Three pages come from no folder at all:
+
+| URL | Built by | What it is |
+|---|---|---|
+| `/` | `buildPortfolio()` | The portfolio landing page — `body.portfolio`, its own nav and footer, no vault chrome |
+| `/vault/` | `buildIndex()` | The vault home: hero, Packet Runner, architecture map, searchable library |
+| `/progress/` | `buildProgressPage()` | The vault map — practice coverage, read from `localStorage` |
+
+`/` is the front door and `/vault/` is the library, so **every "back to the library"
+link routes through the `VAULT` constant** in `build-site.mjs` — the header brand,
+the header nav, and the architecture-map nodes. Hard-coding `/` in any of them sends
+the visitor to the portfolio instead.
 
 `quickref` is deliberately excluded from the header nav — it is reachable from the
 library and from Patterns, and listing it twice would clutter a nav that is already
@@ -431,12 +445,34 @@ Mono (data, labels, counts), a single blue accent, and a faint drafting grid on 
 surfaces. All of it is one hand-written stylesheet — no framework, no build step for
 CSS.
 
-The front page opens on a split hero: copy and stats on the left, **Packet Runner**
+The vault home opens on a split hero: copy and stats on the left, **Packet Runner**
 on the right — a playable board in the same navy as the docs' code blocks, under the
 theme "every doc travels as a packet". GitHub and LinkedIn icon buttons sit in the
 shared header. DSA chapters add their own layer on top of the doc frame: a numbered
 study-track side nav, a metadata strip, and the four decorated contract sections
 from §4.
+
+### The portfolio theme
+
+`/` runs a second, self-contained identity on the same stylesheet: **construction
+paper** — a flat-cutout look of bright sky, snow-capped peaks, 2px ink outlines and
+hard offset shadows with no blur, built on the same IBM Plex type and `--ink`
+discipline. Everything is prefixed `pf-` and scoped under `body.portfolio`, so it
+shares tokens with the vault but collides with nothing.
+
+Every accent reads `var(--acc)`, declared once on `body.portfolio`, so the page
+re-themes from a single property (`#FFD808` pom yellow, or the `#4FC3D9` /
+`#E23D3D` alternates). The career diagram's arrows draw themselves in on load via
+`stroke-dashoffset`, staggered `.12s` apart by a `--i` custom property, and the
+global reduced-motion block zeroes both duration *and* delay so the animation lands
+finished rather than late.
+
+Design source of truth: `docs/superpowers/InterviewVault Design System.zip` →
+`portfolio-reference.html`. Two deliberate departures from it, both because that
+prototype has no `box-sizing: border-box` reset and this stylesheet does: the shell
+is `calc(1180px + 2 * 32px)` so the *content column* still measures the design's
+1180px, and the hero icon buttons are 42px so the 38px inner square plus its 2px
+cutout border renders at the reference's size.
 
 ### Tokens
 
@@ -448,6 +484,16 @@ from §4.
 
 --shell 1240px          site frame
 --side-w / --rail-w / --doc-gap    doc-page columns
+```
+
+The portfolio adds its own, scoped to `body.portfolio` and used nowhere else:
+
+```css
+--acc #FFD808   the one accent; swap it and the whole page re-themes
+--sky #79C3F0   hero + footer     --prose #16233A   serif hobby copy
+--cut 2px solid var(--ink)        the paper-cutout outline
+--lift 4px 4px 0 var(--ink)       --lift-hi 6px 6px 0 (hover)
+--pf-shell 1180px   content column      --pf-pad 32px   side padding
 ```
 
 ### The doc frame
