@@ -438,7 +438,7 @@ ${map}
 
 <section class="lib">
 <div class="lib-bar">
-<label class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6B7C96" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+<label class="search"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--mut)" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
 <input id="q" type="search" placeholder="Search ${docs.length} documents…" autocomplete="off" aria-label="Search documents">
 <kbd>/</kbd></label>
 ${chips}

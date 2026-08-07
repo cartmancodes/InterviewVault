@@ -440,9 +440,9 @@ button, and the mechanics' own responsive rules take over inside it.
 
 ## 7. The design system
 
-An engineering-blueprint identity: IBM Plex Sans (UI) / Serif (long-form prose) /
-Mono (data, labels, counts), a single blue accent, and a faint drafting grid on hero
-surfaces. All of it is one hand-written stylesheet — no framework, no build step for
+A construction-paper identity: IBM Plex Sans (UI) / Serif (long-form prose) / Mono
+(data, labels, counts), a single yellow accent, and a faint drafting grid on sky
+bands. All of it is one hand-written stylesheet — no framework, no build step for
 CSS.
 
 The vault home opens on a split hero: copy and stats on the left, **Packet Runner**
@@ -454,18 +454,20 @@ from §4.
 
 ### The portfolio theme
 
-`/` runs a second, self-contained identity on the same stylesheet: **construction
-paper** — a flat-cutout look of bright sky, snow-capped peaks, 2px ink outlines and
-hard offset shadows with no blur, built on the same IBM Plex type and `--ink`
-discipline. Everything is prefixed `pf-` and scoped under `body.portfolio`, so it
-shares tokens with the vault but collides with nothing.
+`/` and the vault now run one identity: **construction paper** — a flat-cutout look
+of bright sky, snow-capped peaks, 2px ink outlines and hard offset shadows with no
+blur, on IBM Plex type and the `--ink` scale. The landing page keeps the mountain
+landscape; the vault keeps the drafting grid, drawn inside its own sky band.
+Everything specific to the landing page is still prefixed `pf-` and scoped under
+`body.portfolio`, so its layout and motion rules collide with nothing — but the
+color tokens are the same shared set the vault reads, defined once in `:root`.
 
-Every accent reads `var(--acc)`, declared once on `body.portfolio`, so the page
-re-themes from a single property (`#FFD808` pom yellow, or the `#4FC3D9` /
-`#E23D3D` alternates). The career diagram's arrows draw themselves in on load via
-`stroke-dashoffset`, staggered `.12s` apart by a `--i` custom property, and the
-global reduced-motion block zeroes both duration *and* delay so the animation lands
-finished rather than late.
+Every accent reads `var(--acc)`, defined once in `:root`, so the page re-themes from
+a single property (`#FFD808` pom yellow, or the `#4FC3D9` / `#E23D3D` alternates).
+The career diagram's arrows draw themselves in on load via `stroke-dashoffset`,
+staggered `.12s` apart by a `--i` custom property, and the global reduced-motion
+block zeroes both duration *and* delay so the animation lands finished rather than
+late.
 
 Design source of truth: `docs/superpowers/InterviewVault Design System.zip` →
 `portfolio-reference.html`. Two deliberate departures from it, both because that
@@ -474,26 +476,48 @@ is `calc(1180px + 2 * 32px)` so the *content column* still measures the design's
 1180px, and the hero icon buttons are 42px so the 38px inner square plus its 2px
 cutout border renders at the reference's size.
 
+A third departure is deliberate, not a size fix: the reference prototype colors its
+meta text `#6B7C96`, measured at 4.24:1 on white — under the 4.5:1 AA floor for body
+text. Rather than pixel-match that on the landing page alone, the 2026-08-07
+re-theme gave the whole site one shared `--mut` / `--rule` pair that clears AA
+everywhere it is used, and let the landing page's eight `.pf-*` rules that read
+those tokens — the career-diagram year labels and captions, the timeline date column
+and row dividers, the stack label, the creds line, and the project meta — darken
+along with them. Its focus ring drifts the same way: on sky bands it is `--ink`, not
+`--blue` (see rule 4 below). Both drifts were ruled correct by the human partner on
+2026-08-07 — a later pass should not "fix" the landing page back toward the
+handoff's lower-contrast values.
+
+Four accessibility rules, each pinned by a measured contrast ratio, are why blue
+survives only as a focus ring and nowhere else: yellow (`--acc`) on white is
+1.39:1, so it is never text, only a fill behind ink; `--mut` on a sky band is
+2.20:1, so muted text steps up to `--ink-2` on bands; white on a sky band is 1.93:1,
+so the vault headline reads `--ink`, not white; and `--blue` on a sky band is
+2.68:1 — under the 3:1 WCAG floor for a non-text indicator — so `:focus-visible`
+switches to `--ink` on sky bands (9.05:1) and keeps `--blue` only on `--paper` /
+`--sky-wash`, where it clears 3:1.
+
 ### Tokens
 
 ```css
---ink #0E1A2B   --ink-2 #3A4A61   --mut #6B7C96
---blue #2563EB  --blue-deep #1D4ED8  --blue-wash #F0F4FF
---grid #DCE4F7  --rule #E4EAF5  --soft #F2F5FB  --paper #FFFFFF
---amber #F59E0B --good #10B981
+--ink #0E1A2B       --ink-2 #3A4A61      --mut #4F5F79       --paper #FFFFFF
+--acc #FFD808       --acc-wash #FFF6C9   --sky #79C3F0       --sky-wash #EAF5FD
+--sky-grid #5AAFE0  --rule #CFE0EE       --blue #2563EB      (focus ring only)
+--cut 2px solid var(--ink)     --lift 4px 4px 0 var(--ink)
+--lift-hi 6px 6px 0 var(--ink) (hover)
+--amber #F59E0B     --good #10B981
 
 --shell 1240px          site frame
 --side-w / --rail-w / --doc-gap    doc-page columns
 ```
 
-The portfolio adds its own, scoped to `body.portfolio` and used nowhere else:
+The portfolio adds its own structural tokens, scoped to `body.portfolio` and used
+nowhere else — every color is shared with the vault; only these layout constants
+are page-specific:
 
 ```css
---acc #FFD808   the one accent; swap it and the whole page re-themes
---sky #79C3F0   hero + footer     --prose #16233A   serif hobby copy
---cut 2px solid var(--ink)        the paper-cutout outline
---lift 4px 4px 0 var(--ink)       --lift-hi 6px 6px 0 (hover)
---pf-shell 1180px   content column      --pf-pad 32px   side padding
+--prose #16233A      serif hobby copy color
+--pf-shell 1180px    content column      --pf-pad 32px   side padding
 ```
 
 ### The doc frame
