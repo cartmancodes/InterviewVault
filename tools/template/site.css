@@ -333,10 +333,12 @@ body.portfolio a { text-decoration-color: currentColor; text-decoration-thicknes
   display: block; padding: 4px 9px; font-size: 13px; color: var(--ink-2);
   text-decoration: none; border-left: 2px solid transparent; line-height: 1.4;
 }
-.side a:hover, .toc a:hover { color: var(--blue-deep); }
-.side a[aria-current="page"] { color: var(--blue-deep); font-weight: 500; border-left-color: var(--blue); background: var(--blue-wash); }
+.side a:hover, .toc a:hover { background: var(--acc-wash); color: var(--ink); }
+.side a[aria-current="page"] {
+  color: var(--ink); font-weight: 500; border-left-color: var(--ink); background: var(--acc);
+}
 .toc a.h3 { padding-left: 20px; font-size: 12.5px; color: var(--mut); }
-.toc a.active { color: var(--blue-deep); border-left-color: var(--blue); font-weight: 500; }
+.toc a.active { color: var(--ink); border-left-color: var(--ink); font-weight: 500; background: var(--acc-wash); }
 
 .art { background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; padding: 40px 46px 56px; margin: 22px 0 60px; min-width: 0; }
 .art-head { border-bottom: 1px solid var(--rule); padding-bottom: 20px; margin-bottom: 28px; }
@@ -362,7 +364,7 @@ body.portfolio a { text-decoration-color: currentColor; text-decoration-thicknes
 .prose li + li { margin-top: .35em; }
 .prose strong { font-weight: 600; color: var(--ink); }
 .prose blockquote {
-  border-left: 3px solid var(--blue); background: var(--blue-wash);
+  border-left: 3px solid var(--ink); background: var(--acc-wash);
   padding: 13px 18px; border-radius: 0 var(--radius) var(--radius) 0;
   font-family: var(--sans); font-size: 15px; color: var(--ink-2);
 }
@@ -402,8 +404,8 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
 .dsa-section > h2:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
 .dsa-summary { background: #F7F9FE; }
 .dsa-method {
-  border-color: color-mix(in srgb, var(--blue) 35%, var(--rule));
-  background: var(--blue-wash);
+  border-color: var(--ink);
+  background: var(--acc-wash);
 }
 .dsa-method ol {
   list-style: none; padding: 0; counter-reset: dsa-step;
@@ -420,7 +422,7 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
 .dsa-method ol > li::before {
   content: counter(dsa-step, decimal-leading-zero);
   position: absolute; left: 0; top: 4px;
-  font: 600 11px var(--mono); color: var(--blue-deep);
+  font: 600 11px var(--mono); color: var(--ink);
 }
 .dsa-warning { border-left: 4px solid var(--amber); background: #FFFBEB; }
 .dsa-recall { border-style: dashed; background: var(--paper); }
@@ -430,7 +432,7 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
   flex: 1; border: 1px solid var(--rule); background: var(--paper); border-radius: 8px;
   padding: 13px 16px; text-decoration: none; color: inherit;
 }
-.pager a:hover { border-color: var(--blue); }
+.pager a:hover { border-color: var(--ink); background: var(--acc-wash); }
 .pager span { display: block; font-family: var(--mono); font-size: 11px; color: var(--mut); text-transform: uppercase; letter-spacing: .08em; }
 .pager b { font-weight: 500; font-size: 14.5px; color: var(--ink); }
 .pager .nx { text-align: right; }
