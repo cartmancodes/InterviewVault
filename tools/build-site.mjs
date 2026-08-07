@@ -332,7 +332,7 @@ function archMap(counts) {
   const N = (x, y, w, h, key, label, count) => {
     const c = counts[key] || 0;
     return `<a class="node" href="${VAULT}#${key}" role="link" aria-label="${label}, ${c} documents">
-      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="7"></rect>
+      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8"></rect>
       <text class="n-label" x="${x + w / 2}" y="${y + h / 2 - 3}" text-anchor="middle">${label}</text>
       <text class="n-count" x="${x + w / 2}" y="${y + h / 2 + 16}" text-anchor="middle">${c} docs</text>
     </a>`;
@@ -368,7 +368,7 @@ ${N(110, 172, 165, 56, 'patterns', 'Patterns')}
 ${N(325, 172, 255, 56, 'breakdowns', 'Problem Breakdowns')}
 ${N(630, 172, 225, 56, 'answers', 'Interview Answers')}
 
-<line x1="878" y1="150" x2="878" y2="266" stroke="#C6D3EC" stroke-width="1" stroke-dasharray="4 5"></line>
+<line x1="878" y1="150" x2="878" y2="266" stroke="var(--ink)" stroke-width="1" stroke-dasharray="4 5" opacity=".4"></line>
 <text x="940" y="164" class="n-count" style="font-size:10.5px" text-anchor="middle">separate track</text>
 ${N(898, 172, 88, 56, 'dsa', 'DSA')}
 </svg>

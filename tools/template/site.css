@@ -247,16 +247,17 @@ body.portfolio a { text-decoration-color: currentColor; text-decoration-thicknes
 }
 .map svg { width: 100%; height: auto; display: block; overflow: visible; }
 .node rect {
-  fill: var(--paper); stroke: var(--blue); stroke-width: 1.5;
-  transition: fill .15s ease, stroke-width .15s ease;
+  fill: var(--paper); stroke: var(--ink); stroke-width: 2;
+  transition: fill .15s ease;
 }
 .node .n-label { font-family: var(--sans); font-size: 15px; font-weight: 600; fill: var(--ink); }
 .node .n-count { font-family: var(--mono); font-size: 12px; fill: var(--mut); }
 .node { cursor: pointer; }
-.node:hover rect, .node:focus-visible rect { fill: var(--blue-wash); stroke-width: 2.5; }
-.node:hover .n-label, .node:focus-visible .n-label { fill: var(--blue-deep); }
+.node:hover rect, .node:focus-visible rect { fill: var(--acc); }
+.node:hover .n-label, .node:focus-visible .n-label { fill: var(--ink); }
+.node:hover .n-count, .node:focus-visible .n-count { fill: var(--ink-2); }
 .edge {
-  stroke: #8FA6CE; stroke-width: 1.5; fill: none;
+  stroke: var(--ink); stroke-width: 2; fill: none;
   stroke-dasharray: var(--len, 400); stroke-dashoffset: var(--len, 400);
   animation: draw .9s ease forwards;
 }
@@ -264,7 +265,7 @@ body.portfolio a { text-decoration-color: currentColor; text-decoration-thicknes
 .edge.d3 { animation-delay: .24s; }
 @keyframes draw { to { stroke-dashoffset: 0; } }
 @media (prefers-reduced-motion: reduce) { .edge { stroke-dashoffset: 0; animation: none; } }
-.edge-head { fill: #8FA6CE; }
+.edge-head { fill: var(--ink); }
 
 /* ── library table ─────────────────────────────────────── */
 .lib { max-width: var(--shell); margin: 0 auto; padding: 0 20px 80px; }
