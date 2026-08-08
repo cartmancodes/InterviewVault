@@ -1,3 +1,15 @@
+// Below 800px the sibling-doc list collapses to one horizontally scrolling row.
+// The doc you are reading can sit well off the right edge of it, so bring it
+// into view — otherwise the row looks like it starts at an unrelated document.
+(function () {
+  var current = document.querySelector('.side a[aria-current="page"]');
+  if (!current) return;
+  var row = current.closest('ol');
+  if (!row || row.scrollWidth <= row.clientWidth) return;
+  // centre it without scrolling the page itself
+  row.scrollLeft = current.offsetLeft - (row.clientWidth - current.offsetWidth) / 2;
+})();
+
 // Doc page: highlight the in-page TOC entry for the section currently on screen.
 (function () {
   var links = Array.prototype.slice.call(document.querySelectorAll('.toc a'));

@@ -479,8 +479,22 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
 
   .doc-shell { grid-template-columns: 1fr; gap: 0; }
   .side { position: static; max-height: none; padding: 16px 0 0; }
-  .side ol { display: flex; flex-wrap: wrap; gap: 4px; }
-  .side a { border-left: 0; border: 1px solid var(--rule); border-radius: 100px; padding: 5px 11px; font-size: 12.5px; }
+  /* A collection can hold 28 siblings. Wrapped, those pills built a ~600px cloud
+     above the article, so the doc a reader actually opened started below the
+     fold. One swipeable row is the affordance .dsa-track already uses, and it
+     costs 44px. doc.js scrolls the current doc into view inside it. */
+  .side ol {
+    display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto;
+    padding-bottom: 6px; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .side ol::-webkit-scrollbar { display: none; }
+  .side li { flex: 0 0 auto; }
+  /* 1px of --rule is 1.22:1 on the page background — at pill scale that read as
+     no border at all, so these take the same cutout the library chips use. */
+  .side a {
+    border-left: 0; border: var(--cut); border-radius: 100px;
+    padding: 8px 13px; font-size: 12.5px; white-space: nowrap;
+  }
   .dsa-track ol {
     flex-wrap: nowrap; overflow-x: auto; padding-bottom: 6px;
     scrollbar-width: thin; -webkit-overflow-scrolling: touch;
@@ -494,6 +508,34 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
   .row-s { display: none; }
   .hero-in { padding: 38px 20px 30px; }
   .lib-bar { position: static; }
+}
+
+@media (max-width: 760px) {
+  /* The map is a 1000-unit-wide diagram. Scaled to a phone it renders its node
+     labels at roughly 4px — decoration that cannot be read. The library right
+     below it is the same navigation, spelled out and tappable. */
+  .map { display: none; }
+}
+
+@media (max-width: 420px) {
+  /* `white-space: nowrap` on the meta column is what pushed /vault/ to 335px and
+     /progress/ to 351px inside a 320px viewport. Below this width the row stops
+     competing for a single line and stacks instead. */
+  .row { grid-template-columns: 1fr; gap: 2px; padding: 12px 4px; }
+  .row-m { white-space: normal; }
+  .lib { padding: 0 14px 60px; }
+  .hero-in { padding: 30px 14px 26px; }
+  .art { padding: 22px 15px 32px; }
+  .doc-shell { padding: 0 14px; }
+}
+
+/* Coarse pointers get real targets. Inline prose links are exempt — they are
+   part of a sentence and cannot be padded without wrecking the line box. */
+@media (hover: none) and (pointer: coarse) {
+  .side a, .lib-bar .chip, .hdr-nav a, .pager a { min-height: 40px; }
+  .side a, .lib-bar .chip, .hdr-nav a { display: inline-flex; align-items: center; }
+  /* the landing page's vault shortcuts sat at 30px — just under a thumb */
+  .pf-notes-links a, .pf-nav a { min-height: 40px; display: inline-flex; align-items: center; }
 }
 
 /* ══ practice sidecar (1a) ═══════════════════════════════ */
