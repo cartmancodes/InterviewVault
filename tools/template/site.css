@@ -1112,9 +1112,10 @@ html:has(body.portfolio) { scroll-padding-top: 16px; }
 }
 .pf-footer a { color: var(--ink); }
 
-@media (max-width: 720px) {
-  /* below this the road cannot hold two shoulders, so it goes and the stops
-     stack in road order — they are ordinary DOM text and carry the whole story */
+@media (max-width: 900px) {
+  /* Once the cards start reflowing, their production copy is too tall for the
+     route's fixed stop geometry. Switch before they collide: the stops remain
+     in road order and carry the whole story without the decorative SVG. */
   .pf-roadsvg { display: none; }
   .pf-road { aspect-ratio: auto; }
   .pf-stop { position: static; width: 100%; margin: 12px 0; transform: none; }
