@@ -18,6 +18,7 @@ request to `master`:
 | Stage | What it does | Fails the build when |
 |---|---|---|
 | Check Python samples | `tools/check-python.py` | a ` ```python ` block does not parse |
+| Check motion is pausable | `tools/check-motion.mjs` | a looping landing-page animation does not bind `--amb` |
 | Render diagrams | `tools/render-diagrams.mjs` | a mermaid block cannot be rendered |
 | Build site | `tools/build-site.mjs` | the build throws |
 | Check links | `tools/check-site.mjs` | a broken link, missing asset or dead anchor |

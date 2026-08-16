@@ -931,10 +931,23 @@ body.portfolio {
   --pf-shell: 1180px;
   --pf-pad: 32px;
   background: var(--paper);
+  /* The page's ambient motion is infinite, so WCAG 2.2.2 requires a way to stop
+     it. Every looping animation reads this property; portfolio.js flips it. */
+  --amb: running;
 }
 
 /* no sticky header here, so the vault's scroll offset would read as a gap */
 html:has(body.portfolio) { scroll-padding-top: 16px; }
+
+.pf-motion {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  font: 600 12px var(--mono); letter-spacing: .06em; text-transform: uppercase;
+  padding: 8px 14px; border-radius: 100px;
+  color: var(--ink); background: var(--paper); border: var(--cut);
+  transition: background-color .12s ease;
+}
+.pf-motion:hover { background: var(--acc); }
+.pf-motion-icon { font-size: 11px; line-height: 1; }
 
 /* --pf-shell is the content column the design measures from (1180px). This site
    is border-box, so the side padding has to be added back onto max-width to land
@@ -951,15 +964,28 @@ html:has(body.portfolio) { scroll-padding-top: 16px; }
 
 /* hero ambience — the scene is alive: the sun turning, clouds crossing, pines
    swaying, the polaroid hanging off its top corner. All of it stops under the
-   global prefers-reduced-motion rule near the top of this file. */
+   global prefers-reduced-motion rule near the top of this file.
+
+   Every looping `animation` shorthand below ends in `var(--amb, running)` — the
+   shorthand's optional <single-animation-play-state> slot. Binding the pause
+   INSIDE the shorthand is deliberate: a bare `animation-play-state: var(--amb)`
+   longhand is silently wiped by any later `animation:` shorthand at equal
+   specificity (the shorthand resets every longhand it does not name), which is
+   exactly how six of these animations shipped un-pausable. tools/check-motion.mjs
+   fails the build if an infinite animation here loses its binding. */
 @keyframes pf-sunspin { to { transform: rotate(360deg); } }
 @keyframes pf-drift { from { transform: translateX(-180px); } to { transform: translateX(112vw); } }
 @keyframes pf-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 @keyframes pf-sway { 0%, 100% { transform: rotate(-2.6deg); } 50% { transform: rotate(-1.1deg); } }
+@keyframes pf-snow {
+  0%   { transform: translate(0, -24px); }
+  50%  { transform: translate(16px, 270px); }
+  100% { transform: translate(-8px, 560px); }
+}
 
 .pf-sun {
   position: absolute; top: 78px; right: 44px; width: 86px; height: 86px; z-index: 1;
-  transform-origin: center; animation: pf-sunspin 40s linear infinite;
+  transform-origin: center; animation: pf-sunspin 40s linear infinite var(--amb, running);
 }
 
 /* a cloud is a pill plus a half-disc puff; the puff drops its bottom border and
@@ -968,7 +994,7 @@ html:has(body.portfolio) { scroll-padding-top: 16px; }
 .pf-cloud {
   position: absolute; left: 0; z-index: 1;
   background: var(--paper); border: var(--cut); border-radius: 100px;
-  animation: pf-drift linear infinite;
+  animation: pf-drift linear infinite var(--amb, running);
 }
 .pf-cloud::before {
   content: ''; position: absolute;
@@ -982,12 +1008,31 @@ html:has(body.portfolio) { scroll-padding-top: 16px; }
 .pf-cloud-c { top: 64px; width: 80px; height: 22px; animation-duration: 52s; animation-delay: -14s; }
 .pf-cloud-c::before { left: 19px; top: -13px; width: 38px; height: 28px; }
 
+.pf-snow { position: absolute; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; }
+.pf-snow i {
+  position: absolute; top: -20px; display: block; border-radius: 50%;
+  background: var(--paper); border: 2px solid var(--ink);
+  animation: pf-snow 10s linear infinite var(--amb, running);
+}
+.pf-snow i:nth-child(1) { left:  8%; width:  9px; height:  9px; animation-duration:  9s; }
+.pf-snow i:nth-child(2) { left: 22%; width:  7px; height:  7px; animation-duration: 12s;   animation-delay:  -4s; }
+.pf-snow i:nth-child(3) { left: 38%; width: 10px; height: 10px; animation-duration: 10s;   animation-delay:  -7s; }
+.pf-snow i:nth-child(4) { left: 55%; width:  7px; height:  7px; animation-duration: 13s;   animation-delay:  -2s; }
+.pf-snow i:nth-child(5) { left: 70%; width:  9px; height:  9px; animation-duration: 11s;   animation-delay:  -9s; }
+.pf-snow i:nth-child(6) { left: 84%; width:  8px; height:  8px; animation-duration: 10.5s; animation-delay:  -5s; }
+.pf-snow i:nth-child(7) { left: 93%; width:  7px; height:  7px; animation-duration: 12.5s; animation-delay: -11s; }
+
+.pf-kite {
+  position: absolute; top: 64px; right: 6%; width: 74px; height: 120px; z-index: 1;
+  animation: pf-bob 4.4s ease-in-out infinite var(--amb, running);
+}
+
 /* the road leaves the right mountain and runs off the bottom edge, where the
    experience road picks it up */
 .pf-hero-asphalt { fill: none; stroke: var(--ink); stroke-width: 22; stroke-linecap: round; opacity: .12; }
 .pf-hero-lane { fill: none; stroke: var(--ink); stroke-width: 3; stroke-dasharray: 12 10; }
 
-.pf-pines { animation: pf-bob 3.6s ease-in-out infinite; }
+.pf-pines { animation: pf-bob 3.6s ease-in-out infinite var(--amb, running); }
 .pf-pines-b { animation-duration: 4.2s; animation-delay: -1.6s; }
 
 .pf-nav { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 30px; }
@@ -1028,7 +1073,7 @@ html:has(body.portfolio) { scroll-padding-top: 16px; }
   flex: 0 1 400px; min-width: 280px; margin-bottom: 8px;
   background: var(--paper); border: var(--cut); border-radius: 6px;
   box-shadow: 5px 5px 0 var(--ink);
-  transform-origin: top center; animation: pf-sway 6s ease-in-out infinite;
+  transform-origin: top center; animation: pf-sway 6s ease-in-out infinite var(--amb, running);
   padding: 10px 10px 14px;
 }
 .pf-polaroid img {
@@ -1039,6 +1084,24 @@ html:has(body.portfolio) { scroll-padding-top: 16px; }
   font: 600 11px/1.55 var(--mono); text-align: center;
   margin-top: 9px; letter-spacing: .08em;
 }
+
+/* terminal strip — a full-bleed ink band under the hero. The line types
+   itself in portfolio.js; the static text in build-site.mjs is what a
+   reader without JavaScript sees. */
+.pf-term { background: var(--ink); }
+.pf-term-in {
+  display: flex; gap: 10px; align-items: baseline;
+  padding: 11px var(--pf-pad); overflow: hidden; white-space: nowrap;
+  font: 600 12.5px var(--mono);
+}
+/* 9.05:1 on ink */
+.pf-term-host { color: var(--sky); flex: none; }
+.pf-term-line { color: var(--paper); overflow: hidden; text-overflow: ellipsis; }
+
+/* section reveal — the class is added by JS, so a reader without
+   JavaScript never gets opacity: 0. */
+.pf-reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s cubic-bezier(.2,.7,.3,1); }
+.pf-shown { opacity: 1; transform: none; }
 
 /* sections */
 .pf-section {
@@ -1053,6 +1116,28 @@ html:has(body.portfolio) { scroll-padding-top: 16px; }
   padding: 6px 14px; border-radius: 100px; margin-top: 26px;
 }
 
+/* education — the campus drawn as a second polaroid, a pennant, and the
+   degree card. Sits between the hero and the road: the road Task 5 builds
+   runs up to this section's campus gate. */
+.pf-edu-grid { display: flex; gap: 40px; align-items: flex-start; flex-wrap: wrap; margin-top: 18px; }
+/* the campus sketch is framed exactly like the staff photo, one notch slower */
+.pf-campus {
+  flex: 0 1 360px; min-width: 280px; margin: 0;
+  background: var(--paper); border: var(--cut); border-radius: 6px;
+  box-shadow: 5px 5px 0 var(--ink); padding: 10px 10px 14px;
+  transform: rotate(-2deg); transform-origin: top center;
+  animation: pf-sway 7s ease-in-out infinite var(--amb, running);
+}
+.pf-campus svg { display: block; width: 100%; height: auto; border: var(--cut); border-radius: 4px; background: var(--sky); }
+.pf-campus figcaption { font: 600 11px/1.55 var(--mono); text-align: center; margin-top: 9px; letter-spacing: .08em; }
+.pf-edu-copy { flex: 1 1 420px; min-width: 300px; }
+.pf-pennant { display: block; }
+.pf-edu-card { margin-top: 14px; padding: 16px 18px; }
+.pf-edu-card h3 { font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+.pf-edu-degree { font-size: 13.5px; color: var(--ink-2); margin-top: 2px; }
+.pf-edu-card .pf-prose { margin-top: 10px; }
+.pf-edu-pills { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+
 /* experience — the career as a bus route down one road. The wrapper holds the
    SVG's aspect ratio so the stop cards can be placed in percentages and stay
    pinned to their kerb at any width. */
@@ -1060,7 +1145,7 @@ html:has(body.portfolio) { scroll-padding-top: 16px; }
 .pf-exp-label {
   position: absolute; left: var(--pf-pad); top: 20px; z-index: 2; margin-top: 0;
 }
-.pf-road { position: relative; margin: 0 auto; max-width: 960px; aspect-ratio: 1000 / 1600; }
+.pf-road { position: relative; margin: 0 auto; max-width: 960px; aspect-ratio: 1000 / 1810; }
 .pf-roadsvg { display: block; width: 100%; height: 100%; overflow: visible; }
 
 /* the road, drawn twice: fat translucent asphalt, thin dashed centreline */
@@ -1069,6 +1154,29 @@ html:has(body.portfolio) { scroll-padding-top: 16px; }
 .pf-mark { fill: var(--acc); stroke: var(--ink); stroke-width: 3; }
 .pf-terminus { fill: var(--ink); }
 .pf-terminus-in { fill: var(--acc); }
+
+@keyframes pf-swayg { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+@keyframes pf-hop { 0%, 100% { transform: translateY(0); } 45% { transform: translateY(-9px); } }
+
+/* SVG children rotate about their own box rather than the viewBox origin.
+   The pause rides inside each shorthand for the reason spelled out above the
+   hero keyframes: this rule used to carry a lone `animation-play-state`
+   longhand, and every shorthand below quietly reset it. */
+.pf-tree, .pf-reed, .pf-board, .pf-sails, .pf-hop, .pf-lamp { transform-box: fill-box; }
+.pf-tree, .pf-reed { transform-origin: bottom center; animation: pf-swayg 6s ease-in-out infinite var(--amb, running); }
+.pf-tree-b { animation-duration: 7.4s; animation-delay: -2s; }
+.pf-tree-c { animation-duration: 7.8s; animation-delay: -2.4s; }
+.pf-tree-d { animation-duration: 7.2s; animation-delay: -1.6s; }
+.pf-reed   { animation-duration: 5.6s; animation-delay: -1s; }
+.pf-reed-b { animation-duration: 6.8s; animation-delay: -3s; }
+.pf-sails  { transform-origin: center; animation: pf-sunspin 9s linear infinite var(--amb, running); }
+.pf-hop    { transform-origin: center; animation: pf-hop 1.1s ease-in-out infinite var(--amb, running); }
+.pf-board  { transform-origin: top center; animation: pf-swayg 4.6s ease-in-out infinite var(--amb, running); }
+.pf-lamp   { transform-origin: center; animation: pf-bob 3.4s ease-in-out infinite var(--amb, running); }
+/* .pf-rabbit, .pf-pond and .pf-gondola have no CSS animation at all — they ride
+   <animateMotion>, which is SMIL and deaf to animation-play-state. The pause
+   reaches them through pauseAnimations() on the <svg> root in portfolio.js, so
+   there is deliberately no declaration for them here. */
 
 .pf-stop {
   position: absolute; width: min(400px, 39%);
@@ -1153,6 +1261,19 @@ html:has(body.portfolio) { scroll-padding-top: 16px; }
   gap: 14px; flex-wrap: wrap; font: 600 12px/1.55 var(--mono); color: var(--ink);
 }
 .pf-footer a { color: var(--ink); }
+
+/* Above ~1120px the road (max 960px) is narrower than the content column, so it
+   is inset far enough that the absolutely-placed EXPERIENCE pill sits in clear
+   whitespace beside it. Below that the road grows out to the full column and its
+   gate — the tree, then the MESRA GATE sign — slides left underneath the pill.
+   Drop the road until the gate clears: the pill's bottom edge lands 41px below
+   the road's top and the gate's topmost ink about 4px below it, so 48px buys the
+   difference plus a gap, with slack for a wider mono fallback font.
+   margin, not padding: .pf-road is border-box with an aspect-ratio, so padding
+   would squash the SVG and drag every absolutely-positioned stop card with it. */
+@media (min-width: 901px) and (max-width: 1120px) {
+  .pf-road { margin-top: 48px; }
+}
 
 @media (max-width: 900px) {
   /* Once the cards start reflowing, their production copy is too tall for the

@@ -469,25 +469,25 @@ ${chips}
 // is the terminus, so it sits centred and filled rather than on a shoulder.
 const PF_STOPS = [
   {
-    when: '2017–19 · first stop', side: 'l', top: '7.2%',
+    when: '2017–19 · first stop', side: 'l', top: '17.97%',
     role: 'Samsung Research — Software Engineer, Advanced Software',
     founding: false,
     body: 'GPU-accelerated image/video effects in OpenGL ES at 60fps; native Tizen C++. On the Advanced Software team, built C# applications in Xamarin for mobile and TV.',
   },
   {
-    when: '2019–21', side: 'r', top: '26.3%',
+    when: '2019–21', side: 'r', top: '34.85%',
     role: 'Arcesium — Software Engineer, Regulatory ETL',
     founding: false,
     body: 'MiFID/EMIR regulatory ETL in Python (pandas, SQLAlchemy) on SQL Server: ingestion, transformation, validation, plus deterministic and fuzzy-matching reconciliation utilities for high-volume trade data, monitored with Datadog and Grafana.',
   },
   {
-    when: '2021–23', side: 'l', top: '43.3%',
+    when: '2021–23', side: 'l', top: '49.88%',
     role: 'Arcesium — Senior Software Engineer, ARMOR',
     founding: true,
     body: 'Automatic post-trade reporting for TICB/TIC SLT; led the web layer, data-quality checker, authorisation module and core ETL. The Java/Spring Boot application ran on EKS backed by PostgreSQL, with files uploaded to S3; ETL was orchestrated through Argo Workflows on EC2 Spot with retry and checkpoint logic, using ZooKeeper for distributed locking and Datadog and Grafana for observability.',
   },
   {
-    when: '2023–25', side: 'r', top: '60.3%',
+    when: '2023–25', side: 'r', top: '64.91%',
     role: 'Arcesium — Technical Lead, TRACS',
     founding: true,
     body: 'MiFID/MAS trade-reporting platform for hedge-fund clients. Spark ETL orchestrated with Argo Workflows — checkpointed, idempotent, high-throughput; client-facing web modules on AWS EKS, batch compute on EC2 Spot, with Datadog and Grafana for observability.',
@@ -549,7 +549,7 @@ const PF_SOCIALS = [
 // The road is drawn twice: a fat translucent stroke for the asphalt and a thin
 // dashed stroke over it for the centreline. Both paths carry the same `d`, and
 // the lane keeps an id because portfolio.js samples it to drive the bus.
-const PF_ROAD = 'M 500 0 C 590 100 590 320 500 400 C 410 480 410 592 500 672 C 590 752 590 864 500 944 C 410 1024 410 1136 500 1216 C 560 1280 540 1310 500 1340';
+const PF_ROAD = 'M 196 -148 C 196 -100 240 -66 320 -62 C 400 -58 460 -34 500 0 C 590 100 590 320 500 400 C 410 480 410 592 500 672 C 590 752 590 864 500 944 C 410 1024 410 1136 500 1216 C 560 1280 540 1310 500 1340';
 
 function busRoute() {
   const marks = [[566, 218], [434, 536], [566, 808], [434, 1080]]
@@ -562,12 +562,62 @@ function busRoute() {
 </div>`).join('\n');
 
   return `<div class="pf-road">
-<svg class="pf-roadsvg" viewBox="0 0 1000 1600" role="img" aria-label="Career road descending from the mountains: Samsung Research, then Arcesium Regulatory ETL, ARMOR, TRACS, and Arcesium Intelligence, the AI/ML agent team.">
+<svg class="pf-roadsvg" viewBox="0 -210 1000 1810" role="img" aria-label="Career road running on from the campus gate: Samsung Research, then Arcesium Regulatory ETL, ARMOR, TRACS, and Arcesium Intelligence, the AI/ML agent team.">
 <path class="pf-asphalt" d="${PF_ROAD}"></path>
 <path class="pf-lane" id="pf-lane" d="${PF_ROAD}"></path>
+<g class="pf-gate">
+<g class="pf-tree"><polygon points="96,-148 116,-192 136,-148" fill="#2E7D46" stroke="#0E1A2B" stroke-width="3"></polygon></g>
+<line x1="150" y1="-148" x2="150" y2="-196" stroke="#0E1A2B" stroke-width="4"></line>
+<line x1="242" y1="-148" x2="242" y2="-196" stroke="#0E1A2B" stroke-width="4"></line>
+<rect x="140" y="-206" width="112" height="18" rx="4" fill="var(--acc)" stroke="#0E1A2B" stroke-width="3"></rect>
+<text x="196" y="-192" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="700" letter-spacing="1.4" fill="#0E1A2B">MESRA GATE</text>
+<circle cx="196" cy="-148" r="9" fill="var(--acc)" stroke="#0E1A2B" stroke-width="3"></circle>
+<g class="pf-tree pf-tree-b"><polygon points="852,-60 872,-106 892,-60" fill="#2E7D46" stroke="#0E1A2B" stroke-width="3"></polygon></g>
+<path d="M 700 -170 q 8 -10 16 0 q 8 -10 16 0" fill="none" stroke="#0E1A2B" stroke-width="3" stroke-linecap="round"></path>
+</g>
 ${marks}
 <circle class="pf-terminus" cx="500" cy="1340" r="13"></circle>
 <circle class="pf-terminus-in" cx="500" cy="1340" r="5.5"></circle>
+<g class="pf-scenery" aria-hidden="true">
+<g class="pf-tree"><polygon points="96,340 124,268 152,340" fill="#2E7D46" stroke="#0E1A2B" stroke-width="3"></polygon></g>
+<g class="pf-tree pf-tree-c"><polygon points="160,340 182,286 204,340" fill="#3C9159" stroke="#0E1A2B" stroke-width="3"></polygon></g>
+<line x1="90" y1="340" x2="215" y2="340" stroke="#0E1A2B" stroke-width="3" stroke-linecap="round"></line>
+<g class="pf-rabbit"><animateMotion dur="7s" repeatCount="indefinite" path="M 96 322 L 208 322"></animateMotion>
+<g class="pf-hop"><circle cx="0" cy="0" r="7" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="2.5"></circle>
+<polygon points="-4,-6 -7,-16 -1,-8" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="2"></polygon>
+<polygon points="3,-7 7,-16 8,-6" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="2"></polygon></g></g>
+
+<g class="pf-mill">
+<line x1="800" y1="560" x2="800" y2="448" stroke="#0E1A2B" stroke-width="5"></line>
+<rect x="770" y="560" width="60" height="14" fill="#8C97AB" stroke="#0E1A2B" stroke-width="3"></rect>
+<g class="pf-sails">
+<polygon points="800,448 838,432 800,424" fill="var(--acc)" stroke="#0E1A2B" stroke-width="2.5"></polygon>
+<polygon points="800,448 816,486 824,448" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="2.5"></polygon>
+<polygon points="800,448 762,464 800,472" fill="var(--acc)" stroke="#0E1A2B" stroke-width="2.5"></polygon>
+<polygon points="800,448 784,410 776,448" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="2.5"></polygon>
+</g>
+<circle cx="800" cy="448" r="6" fill="#0E1A2B"></circle>
+</g>
+
+<g class="pf-pond">
+<ellipse cx="160" cy="850" rx="88" ry="26" fill="#BEE3F8" stroke="#0E1A2B" stroke-width="3"></ellipse>
+<g><animateMotion dur="9s" repeatCount="indefinite" keyPoints="0;1;1;0;0" keyTimes="0;0.45;0.5;0.95;1" calcMode="linear" path="M 100 856 L 214 846"></animateMotion>
+<polygon points="0,0 -14,-7 -14,7" fill="var(--acc)" stroke="#0E1A2B" stroke-width="2.5"></polygon></g>
+<g class="pf-reed"><path d="M 250 852 q -4 -46 10 -66" fill="none" stroke="#2E7D46" stroke-width="4" stroke-linecap="round"></path></g>
+<g class="pf-reed pf-reed-b"><path d="M 268 852 q 6 -40 -8 -58" fill="none" stroke="#3C9159" stroke-width="4" stroke-linecap="round"></path></g>
+</g>
+
+<g class="pf-sign">
+<line x1="806" y1="1180" x2="806" y2="1058" stroke="#0E1A2B" stroke-width="5"></line>
+<circle class="pf-lamp" cx="806" cy="1050" r="14" fill="var(--acc)" stroke="#0E1A2B" stroke-width="3"></circle>
+<g class="pf-board">
+<rect x="762" y="1092" width="88" height="26" rx="4" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="3"></rect>
+<text x="806" y="1110" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="700" letter-spacing="1.2" fill="#0E1A2B">NEXT →</text>
+</g>
+<line x1="756" y1="1180" x2="880" y2="1180" stroke="#0E1A2B" stroke-width="3" stroke-linecap="round"></line>
+<g class="pf-tree pf-tree-d"><polygon points="864,1180 886,1126 908,1180" fill="#2E7D46" stroke="#0E1A2B" stroke-width="3"></polygon></g>
+</g>
+</g>
 <g id="pf-bus"><g transform="translate(-27,-15)">
 <rect x="0" y="0" width="54" height="26" rx="6" fill="#FFD808" stroke="#0E1A2B" stroke-width="3"></rect>
 <rect x="7" y="5" width="11" height="10" rx="2" fill="#BEE3F8" stroke="#0E1A2B" stroke-width="2.5"></rect>
@@ -587,6 +637,13 @@ function buildPortfolio() {
 <polygon points="60,300 330,60 600,300" fill="#8C97AB" stroke="#0E1A2B" stroke-width="3"></polygon><polygon points="330,60 268,136 392,136" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="3"></polygon>
 <polygon points="420,300 740,20 1060,300" fill="#A6B0C2" stroke="#0E1A2B" stroke-width="3"></polygon><polygon points="740,20 664,116 816,116" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="3"></polygon>
 <polygon points="900,300 1140,90 1280,240 1280,300" fill="#8C97AB" stroke="#0E1A2B" stroke-width="3"></polygon><polygon points="1140,90 1088,152 1192,152" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="3"></polygon>
+<line x1="740" y1="26" x2="1140" y2="96" stroke="#0E1A2B" stroke-width="2.5"></line>
+<g class="pf-gondola"><animateMotion dur="24s" repeatCount="indefinite" keyPoints="0;1;1;0;0" keyTimes="0;0.46;0.5;0.96;1" calcMode="linear" path="M 764 30 L 1116 92"></animateMotion>
+<line x1="0" y1="0" x2="0" y2="15" stroke="#0E1A2B" stroke-width="2.5"></line>
+<rect x="-13" y="15" width="26" height="20" rx="4" fill="var(--acc)" stroke="#0E1A2B" stroke-width="2.5"></rect>
+<rect x="-8" y="20" width="6" height="7" fill="#BEE3F8" stroke="#0E1A2B" stroke-width="1.5"></rect>
+<rect x="2" y="20" width="6" height="7" fill="#BEE3F8" stroke="#0E1A2B" stroke-width="1.5"></rect>
+</g>
 <rect x="0" y="252" width="1280" height="48" fill="#FFFFFF"></rect>
 <path class="pf-hero-asphalt" d="M 980 231 C 990 260 920 274 820 279 C 720 284 640 274 640 300"></path>
 <path class="pf-hero-lane" d="M 980 231 C 990 260 920 274 820 279 C 720 284 640 274 640 300"></path>
@@ -605,7 +662,15 @@ function buildPortfolio() {
 </g></svg>
 <div class="pf-cloud pf-cloud-a"></div>
 <div class="pf-cloud pf-cloud-b"></div>
-<div class="pf-cloud pf-cloud-c"></div>`;
+<div class="pf-cloud pf-cloud-c"></div>
+<div class="pf-snow" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+<svg class="pf-kite" viewBox="0 0 80 130" aria-hidden="true">
+<polygon points="40,4 66,34 40,64 14,34" fill="var(--acc)" stroke="#0E1A2B" stroke-width="3"></polygon>
+<line x1="40" y1="4" x2="40" y2="64" stroke="#0E1A2B" stroke-width="2"></line>
+<line x1="14" y1="34" x2="66" y2="34" stroke="#0E1A2B" stroke-width="2"></line>
+<path d="M40 64 q -10 14 0 26 q 10 12 -2 24" fill="none" stroke="#0E1A2B" stroke-width="2.5"></path>
+<path d="M34 84 l 9 -5 M31 108 l 9 -5" stroke="#0E1A2B" stroke-width="2.5"></path>
+</svg>`;
 
   const socials = PF_SOCIALS.map((s) =>
     `<a class="pf-icon-link" href="${s.href}" title="${s.label}" aria-label="${s.label}"${s.me ? ' rel="me"' : ''}>${s.svg}</a>`).join('\n');
@@ -616,7 +681,10 @@ ${landscape}
 <div class="pf-shell pf-hero-shell">
 <nav class="pf-nav" aria-label="Sections">
 <span class="pf-wordmark">cartmancodes</span>
-<a href="#experience">Experience</a><a href="#projects">Projects</a><a href="#notes">Notes</a><a href="#hobbies">Hobbies</a>
+<a href="#education">Education</a><a href="#experience">Experience</a><a href="#projects">Projects</a><a href="#notes">Notes</a><a href="#hobbies">Hobbies</a>
+<button id="pf-motion" class="pf-motion" type="button" aria-pressed="false">
+<span class="pf-motion-icon" aria-hidden="true">⏸</span><span class="pf-motion-text">motion</span>
+</button>
 </nav>
 <div class="pf-hero-content">
 <div class="pf-hero-copy">
@@ -631,6 +699,65 @@ ${landscape}
 </div>
 </div>
 </header>`;
+
+  // A full-bleed ink band under the hero. The line types itself in portfolio.js;
+  // the static text here is what a reader without JavaScript sees.
+  const terminal = `<div class="pf-term">
+<div class="pf-shell pf-term-in">
+<span class="pf-term-host">cartman@mesra:~</span><span id="pf-type" class="pf-term-line">$ ping knowledge.local — 64 bytes received: curiosity alive</span>
+</div>
+</div>`;
+
+  const education = `<section id="education" class="pf-section pf-edu">
+<h2 class="pf-label">Education</h2>
+<div class="pf-edu-grid">
+<figure class="pf-campus">
+<svg viewBox="0 0 360 250" role="img" aria-label="Sketch of the Mesra campus: the clock-tower building against the hills">
+<circle cx="318" cy="42" r="15" fill="var(--acc)" stroke="#0E1A2B" stroke-width="3"></circle>
+<line x1="318" y1="16" x2="318" y2="24" stroke="#0E1A2B" stroke-width="2.5"></line><line x1="318" y1="60" x2="318" y2="68" stroke="#0E1A2B" stroke-width="2.5"></line>
+<line x1="292" y1="42" x2="300" y2="42" stroke="#0E1A2B" stroke-width="2.5"></line><line x1="336" y1="42" x2="344" y2="42" stroke="#0E1A2B" stroke-width="2.5"></line>
+<path d="M56 62 q 7 -9 14 0 q 7 -9 14 0" fill="none" stroke="#0E1A2B" stroke-width="2.5" stroke-linecap="round"></path>
+<path d="M210 44 q 6 -8 12 0 q 6 -8 12 0" fill="none" stroke="#0E1A2B" stroke-width="2.5" stroke-linecap="round"></path>
+<polygon points="-8,206 84,110 190,206" fill="#A6B0C2" stroke="#0E1A2B" stroke-width="3"></polygon>
+<polygon points="84,110 58,146 112,146" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="3"></polygon>
+<polygon points="160,206 268,96 368,206" fill="#8C97AB" stroke="#0E1A2B" stroke-width="3"></polygon>
+<polygon points="268,96 236,142 302,142" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="3"></polygon>
+<rect x="-4" y="206" width="368" height="48" fill="#FFFFFF"></rect>
+<line x1="-4" y1="206" x2="364" y2="206" stroke="#0E1A2B" stroke-width="3"></line>
+<rect x="130" y="140" width="100" height="66" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="3"></rect>
+<rect x="124" y="130" width="112" height="10" fill="#8C97AB" stroke="#0E1A2B" stroke-width="3"></rect>
+<rect x="140" y="154" width="14" height="16" fill="#BEE3F8" stroke="#0E1A2B" stroke-width="2.5"></rect>
+<rect x="206" y="154" width="14" height="16" fill="#BEE3F8" stroke="#0E1A2B" stroke-width="2.5"></rect>
+<path d="M168 206 v-16 a12 12 0 0 1 24 0 v16" fill="#BEE3F8" stroke="#0E1A2B" stroke-width="2.5"></path>
+<rect x="166" y="88" width="28" height="42" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="3"></rect>
+<polygon points="161,88 180,68 199,88" fill="#8C97AB" stroke="#0E1A2B" stroke-width="3"></polygon>
+<circle cx="180" cy="106" r="8" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="2.5"></circle>
+<line x1="180" y1="106" x2="180" y2="101" stroke="#0E1A2B" stroke-width="2"></line>
+<line x1="180" y1="68" x2="180" y2="52" stroke="#0E1A2B" stroke-width="2.5"></line>
+<polygon points="180,52 202,57 180,62" fill="var(--acc)" stroke="#0E1A2B" stroke-width="2.5"></polygon>
+<polygon points="34,206 56,162 78,206" fill="#2E7D46" stroke="#0E1A2B" stroke-width="3"></polygon>
+<polygon points="256,206 280,156 304,206" fill="#2E7D46" stroke="#0E1A2B" stroke-width="3"></polygon>
+<polygon points="304,206 322,170 340,206" fill="#3C9159" stroke="#0E1A2B" stroke-width="3"></polygon>
+</svg>
+<figcaption>MESRA CAMPUS, RANCHI — BATCH OF 2017</figcaption>
+</figure>
+<div class="pf-edu-copy">
+<svg class="pf-pennant" width="270" height="66" viewBox="0 0 270 66" aria-hidden="true">
+<line x1="8" y1="4" x2="8" y2="64" stroke="#0E1A2B" stroke-width="4" stroke-linecap="round"></line>
+<polygon points="12,8 262,30 12,52" fill="var(--acc)" stroke="#0E1A2B" stroke-width="3"></polygon>
+<text x="32" y="35" font-family="IBM Plex Mono, monospace" font-size="13" font-weight="700" letter-spacing="3" fill="#0E1A2B">BIT MESRA</text>
+</svg>
+<div class="pf-card pf-edu-card">
+<h3>Birla Institute of Technology, Mesra</h3>
+<p class="pf-edu-degree">B.E., Computer Science &amp; Engineering · Class of 2017</p>
+<p class="pf-prose">Mesra is where the fundamentals were laid — data structures, networks, operating systems — and where ICPC practice turned into a habit of thinking in systems. The campus sits on the Chota Nagpur plateau, so the mountains up top aren't far off.</p>
+</div>
+<div class="pf-edu-pills">
+<span class="pf-pill">Est. 1955</span><span class="pf-pill">Ranchi, Jharkhand</span><span class="pf-pill">ACM ICPC regionals</span>
+</div>
+</div>
+</div>
+</section>`;
 
   const experience = `<section id="experience" class="pf-section pf-exp">
 <h2 class="pf-label pf-exp-label">Experience</h2>
@@ -659,7 +786,7 @@ ${PF_PROJECTS.map((p) => `<a class="pf-card pf-project" href="${p.href}">
 <span class="pf-iv">CC</span>
 <span class="pf-notes-copy">
 <strong>The notes section is a whole website — cartmancodes/vault</strong>
-<span>${docs.length} worked system-design documents · ${totalDiagrams} diagrams · 5 CI gates · a practice layer with XP · a snake game. Enter the vault →</span>
+<span>${docs.length} worked system-design documents · ${totalDiagrams} diagrams · 6 CI gates · a practice layer with XP · a snake game. Enter the vault →</span>
 </span>
 <span class="pf-notes-domain">cartmancodes.com/vault →</span>
 </a>
@@ -686,7 +813,7 @@ ${PF_HOBBIES.map((h) => `<article class="pf-card">
   writeFileSync(path.join(SITE, 'index.html'), page({
     title: 'Shubhojeet Chakraborty — Technical Lead, AI/ML',
     desc: 'Shubhojeet Chakraborty builds systems at scale at Arcesium — AI infrastructure, regulatory data platforms, and a full system-design study vault.',
-    body: `${hero}\n<main>\n${experience}\n${projects}\n${notes}\n${hobbies}\n</main>\n${foot}
+    body: `${hero}\n${terminal}\n<main>\n${education}\n${experience}\n${projects}\n${notes}\n${hobbies}\n</main>\n${foot}
 <script src="/assets/portfolio.js" defer></script>`,
     cls: 'portfolio',
     chrome: false,
