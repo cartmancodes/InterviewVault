@@ -631,7 +631,7 @@ ${landscape}
 <div class="pf-shell pf-hero-shell">
 <nav class="pf-nav" aria-label="Sections">
 <span class="pf-wordmark">cartmancodes</span>
-<a href="#experience">Experience</a><a href="#projects">Projects</a><a href="#notes">Notes</a><a href="#hobbies">Hobbies</a>
+<a href="#education">Education</a><a href="#experience">Experience</a><a href="#projects">Projects</a><a href="#notes">Notes</a><a href="#hobbies">Hobbies</a>
 <button id="pf-motion" class="pf-motion" type="button" aria-pressed="false">
 <span class="pf-motion-icon" aria-hidden="true">⏸</span><span class="pf-motion-text">motion</span>
 </button>
@@ -657,6 +657,57 @@ ${landscape}
 <span class="pf-term-host">cartman@mesra:~</span><span id="pf-type" class="pf-term-line">$ ping knowledge.local — 64 bytes received: curiosity alive</span>
 </div>
 </div>`;
+
+  const education = `<section id="education" class="pf-section pf-edu">
+<h2 class="pf-label">Education</h2>
+<div class="pf-edu-grid">
+<figure class="pf-campus">
+<svg viewBox="0 0 360 250" role="img" aria-label="Sketch of the Mesra campus: the clock-tower building against the hills">
+<circle cx="318" cy="42" r="15" fill="var(--acc)" stroke="#0E1A2B" stroke-width="3"></circle>
+<line x1="318" y1="16" x2="318" y2="24" stroke="#0E1A2B" stroke-width="2.5"></line><line x1="318" y1="60" x2="318" y2="68" stroke="#0E1A2B" stroke-width="2.5"></line>
+<line x1="292" y1="42" x2="300" y2="42" stroke="#0E1A2B" stroke-width="2.5"></line><line x1="336" y1="42" x2="344" y2="42" stroke="#0E1A2B" stroke-width="2.5"></line>
+<path d="M56 62 q 7 -9 14 0 q 7 -9 14 0" fill="none" stroke="#0E1A2B" stroke-width="2.5" stroke-linecap="round"></path>
+<path d="M210 44 q 6 -8 12 0 q 6 -8 12 0" fill="none" stroke="#0E1A2B" stroke-width="2.5" stroke-linecap="round"></path>
+<polygon points="-8,206 84,110 190,206" fill="#A6B0C2" stroke="#0E1A2B" stroke-width="3"></polygon>
+<polygon points="84,110 58,146 112,146" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="3"></polygon>
+<polygon points="160,206 268,96 368,206" fill="#8C97AB" stroke="#0E1A2B" stroke-width="3"></polygon>
+<polygon points="268,96 236,142 302,142" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="3"></polygon>
+<rect x="-4" y="206" width="368" height="48" fill="#FFFFFF"></rect>
+<line x1="-4" y1="206" x2="364" y2="206" stroke="#0E1A2B" stroke-width="3"></line>
+<rect x="130" y="140" width="100" height="66" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="3"></rect>
+<rect x="124" y="130" width="112" height="10" fill="#8C97AB" stroke="#0E1A2B" stroke-width="3"></rect>
+<rect x="140" y="154" width="14" height="16" fill="#BEE3F8" stroke="#0E1A2B" stroke-width="2.5"></rect>
+<rect x="206" y="154" width="14" height="16" fill="#BEE3F8" stroke="#0E1A2B" stroke-width="2.5"></rect>
+<path d="M168 206 v-16 a12 12 0 0 1 24 0 v16" fill="#BEE3F8" stroke="#0E1A2B" stroke-width="2.5"></path>
+<rect x="166" y="88" width="28" height="42" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="3"></rect>
+<polygon points="161,88 180,68 199,88" fill="#8C97AB" stroke="#0E1A2B" stroke-width="3"></polygon>
+<circle cx="180" cy="106" r="8" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="2.5"></circle>
+<line x1="180" y1="106" x2="180" y2="101" stroke="#0E1A2B" stroke-width="2"></line>
+<line x1="180" y1="68" x2="180" y2="52" stroke="#0E1A2B" stroke-width="2.5"></line>
+<polygon points="180,52 202,57 180,62" fill="var(--acc)" stroke="#0E1A2B" stroke-width="2.5"></polygon>
+<polygon points="34,206 56,162 78,206" fill="#2E7D46" stroke="#0E1A2B" stroke-width="3"></polygon>
+<polygon points="256,206 280,156 304,206" fill="#2E7D46" stroke="#0E1A2B" stroke-width="3"></polygon>
+<polygon points="304,206 322,170 340,206" fill="#3C9159" stroke="#0E1A2B" stroke-width="3"></polygon>
+</svg>
+<figcaption>MESRA CAMPUS, RANCHI — BATCH OF 2017</figcaption>
+</figure>
+<div class="pf-edu-copy">
+<svg class="pf-pennant" width="270" height="66" viewBox="0 0 270 66" aria-hidden="true">
+<line x1="8" y1="4" x2="8" y2="64" stroke="#0E1A2B" stroke-width="4" stroke-linecap="round"></line>
+<polygon points="12,8 262,30 12,52" fill="var(--acc)" stroke="#0E1A2B" stroke-width="3"></polygon>
+<text x="32" y="35" font-family="IBM Plex Mono, monospace" font-size="13" font-weight="700" letter-spacing="3" fill="#0E1A2B">BIT MESRA</text>
+</svg>
+<div class="pf-card pf-edu-card">
+<h3>Birla Institute of Technology, Mesra</h3>
+<p class="pf-edu-degree">B.E., Computer Science &amp; Engineering · Class of 2017</p>
+<p class="pf-prose">Mesra is where the fundamentals were laid — data structures, networks, operating systems — and where ICPC practice turned into a habit of thinking in systems. The campus sits on the Chota Nagpur plateau, so the mountains up top aren't far off.</p>
+</div>
+<div class="pf-edu-pills">
+<span class="pf-pill">Est. 1955</span><span class="pf-pill">Ranchi, Jharkhand</span><span class="pf-pill">ACM ICPC regionals</span>
+</div>
+</div>
+</div>
+</section>`;
 
   const experience = `<section id="experience" class="pf-section pf-exp">
 <h2 class="pf-label pf-exp-label">Experience</h2>
@@ -712,7 +763,7 @@ ${PF_HOBBIES.map((h) => `<article class="pf-card">
   writeFileSync(path.join(SITE, 'index.html'), page({
     title: 'Shubhojeet Chakraborty — Technical Lead, AI/ML',
     desc: 'Shubhojeet Chakraborty builds systems at scale at Arcesium — AI infrastructure, regulatory data platforms, and a full system-design study vault.',
-    body: `${hero}\n${terminal}\n<main>\n${experience}\n${projects}\n${notes}\n${hobbies}\n</main>\n${foot}
+    body: `${hero}\n${terminal}\n<main>\n${education}\n${experience}\n${projects}\n${notes}\n${hobbies}\n</main>\n${foot}
 <script src="/assets/portfolio.js" defer></script>`,
     cls: 'portfolio',
     chrome: false,

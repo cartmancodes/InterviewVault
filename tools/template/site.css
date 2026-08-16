@@ -1111,6 +1111,28 @@ html:has(body.portfolio) { scroll-padding-top: 16px; }
   padding: 6px 14px; border-radius: 100px; margin-top: 26px;
 }
 
+/* education — the campus drawn as a second polaroid, a pennant, and the
+   degree card. Sits between the hero and the road: the road Task 5 builds
+   runs up to this section's campus gate. */
+.pf-edu-grid { display: flex; gap: 40px; align-items: flex-start; flex-wrap: wrap; margin-top: 18px; }
+/* the campus sketch is framed exactly like the staff photo, one notch slower */
+.pf-campus {
+  flex: 0 1 360px; min-width: 280px; margin: 0;
+  background: var(--paper); border: var(--cut); border-radius: 6px;
+  box-shadow: 5px 5px 0 var(--ink); padding: 10px 10px 14px;
+  transform: rotate(-2deg); transform-origin: top center;
+  animation: pf-sway 7s ease-in-out infinite; animation-play-state: var(--amb, running);
+}
+.pf-campus svg { display: block; width: 100%; height: auto; border: var(--cut); border-radius: 4px; background: var(--sky); }
+.pf-campus figcaption { font: 600 11px/1.55 var(--mono); text-align: center; margin-top: 9px; letter-spacing: .08em; }
+.pf-edu-copy { flex: 1 1 420px; min-width: 300px; }
+.pf-pennant { display: block; }
+.pf-edu-card { margin-top: 14px; padding: 16px 18px; }
+.pf-edu-card h3 { font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
+.pf-edu-degree { font-size: 13.5px; color: var(--ink-2); margin-top: 2px; }
+.pf-edu-card .pf-prose { margin-top: 10px; }
+.pf-edu-pills { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+
 /* experience — the career as a bus route down one road. The wrapper holds the
    SVG's aspect ratio so the stop cards can be placed in percentages and stay
    pinned to their kerb at any width. */
