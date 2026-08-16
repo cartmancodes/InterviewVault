@@ -749,7 +749,7 @@ ${landscape}
 </svg>
 <div class="pf-card pf-edu-card">
 <h3>Birla Institute of Technology, Mesra</h3>
-<p class="pf-edu-degree">B.E., Computer Science &amp; Engineering · Class of 2017</p>
+<p class="pf-edu-degree">B.E. · Class of 2017</p>
 <p class="pf-prose">Mesra is where the fundamentals were laid — data structures, networks, operating systems — and where ICPC practice turned into a habit of thinking in systems. The campus sits on the Chota Nagpur plateau, so the mountains up top aren't far off.</p>
 </div>
 <div class="pf-edu-pills">
