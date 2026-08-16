@@ -969,6 +969,11 @@ html:has(body.portfolio) { scroll-padding-top: 16px; }
 @keyframes pf-drift { from { transform: translateX(-180px); } to { transform: translateX(112vw); } }
 @keyframes pf-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 @keyframes pf-sway { 0%, 100% { transform: rotate(-2.6deg); } 50% { transform: rotate(-1.1deg); } }
+@keyframes pf-snow {
+  0%   { transform: translate(0, -24px); }
+  50%  { transform: translate(16px, 270px); }
+  100% { transform: translate(-8px, 560px); }
+}
 
 .pf-sun {
   position: absolute; top: 78px; right: 44px; width: 86px; height: 86px; z-index: 1;
@@ -995,12 +1000,33 @@ html:has(body.portfolio) { scroll-padding-top: 16px; }
 .pf-cloud-c { top: 64px; width: 80px; height: 22px; animation-duration: 52s; animation-delay: -14s; }
 .pf-cloud-c::before { left: 19px; top: -13px; width: 38px; height: 28px; }
 
+.pf-snow { position: absolute; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; }
+.pf-snow i {
+  position: absolute; top: -20px; display: block; border-radius: 50%;
+  background: var(--paper); border: 2px solid var(--ink);
+  animation: pf-snow 10s linear infinite;
+  animation-play-state: var(--amb, running);
+}
+.pf-snow i:nth-child(1) { left:  8%; width:  9px; height:  9px; animation-duration:  9s; }
+.pf-snow i:nth-child(2) { left: 22%; width:  7px; height:  7px; animation-duration: 12s;   animation-delay:  -4s; }
+.pf-snow i:nth-child(3) { left: 38%; width: 10px; height: 10px; animation-duration: 10s;   animation-delay:  -7s; }
+.pf-snow i:nth-child(4) { left: 55%; width:  7px; height:  7px; animation-duration: 13s;   animation-delay:  -2s; }
+.pf-snow i:nth-child(5) { left: 70%; width:  9px; height:  9px; animation-duration: 11s;   animation-delay:  -9s; }
+.pf-snow i:nth-child(6) { left: 84%; width:  8px; height:  8px; animation-duration: 10.5s; animation-delay:  -5s; }
+.pf-snow i:nth-child(7) { left: 93%; width:  7px; height:  7px; animation-duration: 12.5s; animation-delay: -11s; }
+
+.pf-kite {
+  position: absolute; top: 64px; right: 6%; width: 74px; height: 120px; z-index: 1;
+  animation: pf-bob 4.4s ease-in-out infinite; animation-play-state: var(--amb, running);
+}
+.pf-gondola { animation-play-state: var(--amb, running); }
+
 /* the road leaves the right mountain and runs off the bottom edge, where the
    experience road picks it up */
 .pf-hero-asphalt { fill: none; stroke: var(--ink); stroke-width: 22; stroke-linecap: round; opacity: .12; }
 .pf-hero-lane { fill: none; stroke: var(--ink); stroke-width: 3; stroke-dasharray: 12 10; }
 
-.pf-pines { animation: pf-bob 3.6s ease-in-out infinite; }
+.pf-pines { animation: pf-bob 3.6s ease-in-out infinite; animation-play-state: var(--amb, running); }
 .pf-pines-b { animation-duration: 4.2s; animation-delay: -1.6s; }
 
 .pf-nav { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 30px; }
@@ -1042,6 +1068,7 @@ html:has(body.portfolio) { scroll-padding-top: 16px; }
   background: var(--paper); border: var(--cut); border-radius: 6px;
   box-shadow: 5px 5px 0 var(--ink);
   transform-origin: top center; animation: pf-sway 6s ease-in-out infinite;
+  animation-play-state: var(--amb, running);
   padding: 10px 10px 14px;
 }
 .pf-polaroid img {

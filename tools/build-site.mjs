@@ -587,6 +587,13 @@ function buildPortfolio() {
 <polygon points="60,300 330,60 600,300" fill="#8C97AB" stroke="#0E1A2B" stroke-width="3"></polygon><polygon points="330,60 268,136 392,136" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="3"></polygon>
 <polygon points="420,300 740,20 1060,300" fill="#A6B0C2" stroke="#0E1A2B" stroke-width="3"></polygon><polygon points="740,20 664,116 816,116" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="3"></polygon>
 <polygon points="900,300 1140,90 1280,240 1280,300" fill="#8C97AB" stroke="#0E1A2B" stroke-width="3"></polygon><polygon points="1140,90 1088,152 1192,152" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="3"></polygon>
+<line x1="740" y1="26" x2="1140" y2="96" stroke="#0E1A2B" stroke-width="2.5"></line>
+<g class="pf-gondola"><animateMotion dur="24s" repeatCount="indefinite" keyPoints="0;1;1;0;0" keyTimes="0;0.46;0.5;0.96;1" calcMode="linear" path="M 764 30 L 1116 92"></animateMotion>
+<line x1="0" y1="0" x2="0" y2="15" stroke="#0E1A2B" stroke-width="2.5"></line>
+<rect x="-13" y="15" width="26" height="20" rx="4" fill="var(--acc)" stroke="#0E1A2B" stroke-width="2.5"></rect>
+<rect x="-8" y="20" width="6" height="7" fill="#BEE3F8" stroke="#0E1A2B" stroke-width="1.5"></rect>
+<rect x="2" y="20" width="6" height="7" fill="#BEE3F8" stroke="#0E1A2B" stroke-width="1.5"></rect>
+</g>
 <rect x="0" y="252" width="1280" height="48" fill="#FFFFFF"></rect>
 <path class="pf-hero-asphalt" d="M 980 231 C 990 260 920 274 820 279 C 720 284 640 274 640 300"></path>
 <path class="pf-hero-lane" d="M 980 231 C 990 260 920 274 820 279 C 720 284 640 274 640 300"></path>
@@ -605,7 +612,15 @@ function buildPortfolio() {
 </g></svg>
 <div class="pf-cloud pf-cloud-a"></div>
 <div class="pf-cloud pf-cloud-b"></div>
-<div class="pf-cloud pf-cloud-c"></div>`;
+<div class="pf-cloud pf-cloud-c"></div>
+<div class="pf-snow" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+<svg class="pf-kite" viewBox="0 0 80 130" aria-hidden="true">
+<polygon points="40,4 66,34 40,64 14,34" fill="var(--acc)" stroke="#0E1A2B" stroke-width="3"></polygon>
+<line x1="40" y1="4" x2="40" y2="64" stroke="#0E1A2B" stroke-width="2"></line>
+<line x1="14" y1="34" x2="66" y2="34" stroke="#0E1A2B" stroke-width="2"></line>
+<path d="M40 64 q -10 14 0 26 q 10 12 -2 24" fill="none" stroke="#0E1A2B" stroke-width="2.5"></path>
+<path d="M34 84 l 9 -5 M31 108 l 9 -5" stroke="#0E1A2B" stroke-width="2.5"></path>
+</svg>`;
 
   const socials = PF_SOCIALS.map((s) =>
     `<a class="pf-icon-link" href="${s.href}" title="${s.label}" aria-label="${s.label}"${s.me ? ' rel="me"' : ''}>${s.svg}</a>`).join('\n');
