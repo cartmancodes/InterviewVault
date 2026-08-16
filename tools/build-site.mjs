@@ -617,6 +617,9 @@ ${landscape}
 <nav class="pf-nav" aria-label="Sections">
 <span class="pf-wordmark">cartmancodes</span>
 <a href="#experience">Experience</a><a href="#projects">Projects</a><a href="#notes">Notes</a><a href="#hobbies">Hobbies</a>
+<button id="pf-motion" class="pf-motion" type="button" aria-pressed="false">
+<span class="pf-motion-icon" aria-hidden="true">⏸</span><span class="pf-motion-text">motion</span>
+</button>
 </nav>
 <div class="pf-hero-content">
 <div class="pf-hero-copy">

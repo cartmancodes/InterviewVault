@@ -931,10 +931,23 @@ body.portfolio {
   --pf-shell: 1180px;
   --pf-pad: 32px;
   background: var(--paper);
+  /* The page's ambient motion is infinite, so WCAG 2.2.2 requires a way to stop
+     it. Every looping animation reads this property; portfolio.js flips it. */
+  --amb: running;
 }
 
 /* no sticky header here, so the vault's scroll offset would read as a gap */
 html:has(body.portfolio) { scroll-padding-top: 16px; }
+
+.pf-motion {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  font: 600 12px var(--mono); letter-spacing: .06em; text-transform: uppercase;
+  padding: 8px 14px; border-radius: 100px;
+  color: var(--ink); background: var(--paper); border: var(--cut);
+  transition: background-color .12s ease;
+}
+.pf-motion:hover { background: var(--acc); }
+.pf-motion-icon { font-size: 11px; line-height: 1; }
 
 /* --pf-shell is the content column the design measures from (1180px). This site
    is border-box, so the side padding has to be added back onto max-width to land

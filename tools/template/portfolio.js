@@ -1,3 +1,44 @@
+// Ambient motion switch. C2's scene loops forever — sun, clouds, snow, gondola,
+// kite, rabbit, windmill, duck — so WCAG 2.2.2 wants a way to stop it. Every
+// looping animation reads --amb, so one property parks the whole page.
+(() => {
+  const btn = document.getElementById('pf-motion');
+  if (!btn) return;
+  const body = document.body;
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+
+  function apply(state) {
+    body.style.setProperty('--amb', state);
+    const paused = state === 'paused';
+    btn.setAttribute('aria-pressed', String(paused));
+    btn.querySelector('.pf-motion-icon').textContent = paused ? '▶' : '⏸';
+    btn.setAttribute('aria-label', paused ? 'Resume background motion' : 'Pause background motion');
+    // The gondola, the rabbit and the duck ride <animateMotion>, which is SMIL —
+    // animation-play-state cannot reach it, but every <svg> root can pause its
+    // own timeline. Without this the toggle would stop most of the scene and
+    // leave three things moving, which is worse than not offering it.
+    document.querySelectorAll('svg').forEach((svg) => {
+      if (typeof svg.pauseAnimations !== 'function') return;
+      paused ? svg.pauseAnimations() : svg.unpauseAnimations();
+    });
+  }
+
+  // A reduced-motion preference is not a preference we get to overrule, so the
+  // stored choice is only consulted when the user has not asked for less motion.
+  let state = 'running';
+  if (reduced.matches) state = 'paused';
+  else if (localStorage.getItem('pf-motion') === 'paused') state = 'paused';
+  apply(state);
+
+  btn.addEventListener('click', () => {
+    state = state === 'paused' ? 'running' : 'paused';
+    apply(state);
+    try { localStorage.setItem('pf-motion', state); } catch (e) { /* private mode */ }
+  });
+
+  reduced.addEventListener('change', (e) => { if (e.matches) apply('paused'); });
+})();
+
 // The bus drives the career road. Its distance along the lane tracks how far the
 // reader has scrolled the road through the viewport, and it banks into the
 // curves by sampling a second point just ahead for the tangent.
