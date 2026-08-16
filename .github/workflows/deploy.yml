@@ -58,6 +58,12 @@ jobs:
       - name: Check Python samples parse
         run: python3 tools/check-python.py
 
+      # A source gate, so it runs before the build like the two above: the
+      # landing page's motion pause button is a WCAG 2.2.2 mechanism, and an
+      # animation that forgets to bind --amb makes it lie.
+      - name: Check portfolio motion is pausable
+        run: node tools/check-motion.mjs
+
       - name: Render diagrams
         working-directory: tools
         run: node render-diagrams.mjs

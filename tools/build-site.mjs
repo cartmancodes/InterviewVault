@@ -786,7 +786,7 @@ ${PF_PROJECTS.map((p) => `<a class="pf-card pf-project" href="${p.href}">
 <span class="pf-iv">CC</span>
 <span class="pf-notes-copy">
 <strong>The notes section is a whole website — cartmancodes/vault</strong>
-<span>${docs.length} worked system-design documents · ${totalDiagrams} diagrams · 5 CI gates · a practice layer with XP · a snake game. Enter the vault →</span>
+<span>${docs.length} worked system-design documents · ${totalDiagrams} diagrams · 6 CI gates · a practice layer with XP · a snake game. Enter the vault →</span>
 </span>
 <span class="pf-notes-domain">cartmancodes.com/vault →</span>
 </a>

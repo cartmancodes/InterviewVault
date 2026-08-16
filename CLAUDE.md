@@ -23,12 +23,13 @@ never be hand-edited. GitHub Actions builds and deploys it to Cloudflare Pages.
 - **DSA chapter structure is enforced** — every file under `DSA/` follows the heading
   order exported by `tools/dsa-config.mjs`. Ordinary `cpp` blocks must compile as C++17;
   `cpp legacy` blocks preserve original notebook code verbatim and are not compiled.
-- **Run the gates before claiming done** — CI runs the same five and a failure blocks the
+- **Run the gates before claiming done** — CI runs the same six and a failure blocks the
   deploy:
 
   ```bash
   node tools/check-dsa.mjs
   python3 tools/check-python.py
+  node tools/check-motion.mjs
   cd tools && node render-diagrams.mjs && node build-site.mjs && cd ..
   node tools/check-site.mjs
   ```

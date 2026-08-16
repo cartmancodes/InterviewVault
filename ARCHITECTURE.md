@@ -72,6 +72,8 @@ tools/
   check-dsa.mjs               gate: DSA chapter contract, links, C++17 syntax
   check-dsa.test.mjs          unit tests for that gate
   check-python.py             gate: every ```python block parses
+  check-motion.mjs            gate: every looping landing-page animation binds
+                              --amb, so the motion pause button is not a lie
   dsa-config.mjs              DSA study metadata: order, pattern, difficulty
   render-diagrams.mjs         mermaid → SVG, content-hashed
   build-site.mjs              the generator
@@ -91,11 +93,12 @@ wrangler.toml                 Cloudflare Worker static-asset config
 
 ## 3. The build pipeline
 
-Five stages. CI runs all five; a non-zero exit at any stage blocks the deploy.
+Six stages. CI runs all six; a non-zero exit at any stage blocks the deploy.
 
 ```bash
 node tools/check-dsa.mjs
 python3 tools/check-python.py
+node tools/check-motion.mjs
 cd tools && node render-diagrams.mjs && node build-site.mjs && cd ..
 node tools/check-site.mjs
 ```
@@ -127,6 +130,34 @@ failure. It is a syntax gate only — nothing is imported or executed.
 
 This exists because the vault's server-side code is Python by convention, and a
 code block that does not parse is a doc bug that no other gate would catch.
+
+### Stage 0c — `check-motion.mjs`
+
+The landing page animates forever, so WCAG 2.2.2 requires a mechanism to stop it.
+That mechanism is a single custom property, `--amb`, which `portfolio.js` flips to
+`paused` — and an animation obeys it only if its declaration binds it:
+
+```css
+animation: pf-sway 6s ease-in-out infinite var(--amb, running);
+```
+
+The gate parses `tools/template/site.css`, walks every style rule from the
+`portfolio landing page` marker to EOF (descending into `@media`, skipping
+`@keyframes`), and fails if a rule mentions `infinite` without also mentioning
+`var(--amb`. No browser, no dependencies — a regex and a brace walk.
+
+It exists because two classes of breakage shipped undetected. Animations that
+never carried the binding at all, and — the one no diff makes visible — rules that
+set `animation-play-state: var(--amb)` as a lone longhand and were then reset by a
+**later `animation:` shorthand at equal specificity**, since the shorthand resets
+every `animation-*` longhand it does not name. Binding inside the shorthand is
+what makes the rule robust: the binding travels with the declaration.
+
+SMIL `<animateMotion>` (`.pf-rabbit`, `.pf-pond`, `.pf-gondola`) is out of scope.
+It is deaf to `animation-play-state` and is paused by `pauseAnimations()` on the
+`<svg>` roots in `portfolio.js`; it declares no CSS animation, so the gate never
+sees it. Timer-driven motion (the typing terminal) is out of scope too — it
+subscribes to the `pf-motion` event that the toggle dispatches on `document`.
 
 ### Stage 1 — `render-diagrams.mjs`
 
@@ -580,7 +611,7 @@ otherwise stretch the column and push the whole page into horizontal scroll.
 
 **build job** — checkout → Node 20 with `tools/package-lock.json` npm cache →
 `npm ci` → install Chrome for Puppeteer → **restore the diagram cache** →
-the five gates → upload `site/` as an artifact.
+the six gates → upload `site/` as an artifact.
 
 The diagram cache is keyed on `hashFiles('LLD/**/*.md', 'DSA/**/*.md')` with a
 `diagrams-` restore prefix, so an exact hit skips rendering entirely and a partial

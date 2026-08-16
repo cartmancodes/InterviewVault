@@ -65,11 +65,12 @@ Cloudflare Pages. Deployment and one-time secret setup are documented in
 
 ### CI gates
 
-Every push and pull request runs the same five checks you can run locally:
+Every push and pull request runs the same six checks you can run locally:
 
 ```bash
 node tools/check-dsa.mjs        # DSA structure, links and non-legacy C++17 samples
 python3 tools/check-python.py    # every ```python block parses
+node tools/check-motion.mjs      # every looping landing-page animation can be paused
 cd tools && node render-diagrams.mjs   # every mermaid block renders
 node build-site.mjs && cd ..
 node tools/check-site.mjs        # no broken links, missing assets or dead anchors
