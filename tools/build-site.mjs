@@ -469,25 +469,25 @@ ${chips}
 // is the terminus, so it sits centred and filled rather than on a shoulder.
 const PF_STOPS = [
   {
-    when: '2017–19 · first stop', side: 'l', top: '7.2%',
+    when: '2017–19 · first stop', side: 'l', top: '17.97%',
     role: 'Samsung Research — Software Engineer, Advanced Software',
     founding: false,
     body: 'GPU-accelerated image/video effects in OpenGL ES at 60fps; native Tizen C++. On the Advanced Software team, built C# applications in Xamarin for mobile and TV.',
   },
   {
-    when: '2019–21', side: 'r', top: '26.3%',
+    when: '2019–21', side: 'r', top: '34.85%',
     role: 'Arcesium — Software Engineer, Regulatory ETL',
     founding: false,
     body: 'MiFID/EMIR regulatory ETL in Python (pandas, SQLAlchemy) on SQL Server: ingestion, transformation, validation, plus deterministic and fuzzy-matching reconciliation utilities for high-volume trade data, monitored with Datadog and Grafana.',
   },
   {
-    when: '2021–23', side: 'l', top: '43.3%',
+    when: '2021–23', side: 'l', top: '49.88%',
     role: 'Arcesium — Senior Software Engineer, ARMOR',
     founding: true,
     body: 'Automatic post-trade reporting for TICB/TIC SLT; led the web layer, data-quality checker, authorisation module and core ETL. The Java/Spring Boot application ran on EKS backed by PostgreSQL, with files uploaded to S3; ETL was orchestrated through Argo Workflows on EC2 Spot with retry and checkpoint logic, using ZooKeeper for distributed locking and Datadog and Grafana for observability.',
   },
   {
-    when: '2023–25', side: 'r', top: '60.3%',
+    when: '2023–25', side: 'r', top: '64.91%',
     role: 'Arcesium — Technical Lead, TRACS',
     founding: true,
     body: 'MiFID/MAS trade-reporting platform for hedge-fund clients. Spark ETL orchestrated with Argo Workflows — checkpointed, idempotent, high-throughput; client-facing web modules on AWS EKS, batch compute on EC2 Spot, with Datadog and Grafana for observability.',
@@ -549,7 +549,7 @@ const PF_SOCIALS = [
 // The road is drawn twice: a fat translucent stroke for the asphalt and a thin
 // dashed stroke over it for the centreline. Both paths carry the same `d`, and
 // the lane keeps an id because portfolio.js samples it to drive the bus.
-const PF_ROAD = 'M 500 0 C 590 100 590 320 500 400 C 410 480 410 592 500 672 C 590 752 590 864 500 944 C 410 1024 410 1136 500 1216 C 560 1280 540 1310 500 1340';
+const PF_ROAD = 'M 196 -148 C 196 -100 240 -66 320 -62 C 400 -58 460 -34 500 0 C 590 100 590 320 500 400 C 410 480 410 592 500 672 C 590 752 590 864 500 944 C 410 1024 410 1136 500 1216 C 560 1280 540 1310 500 1340';
 
 function busRoute() {
   const marks = [[566, 218], [434, 536], [566, 808], [434, 1080]]
@@ -562,12 +562,62 @@ function busRoute() {
 </div>`).join('\n');
 
   return `<div class="pf-road">
-<svg class="pf-roadsvg" viewBox="0 0 1000 1600" role="img" aria-label="Career road descending from the mountains: Samsung Research, then Arcesium Regulatory ETL, ARMOR, TRACS, and Arcesium Intelligence, the AI/ML agent team.">
+<svg class="pf-roadsvg" viewBox="0 -210 1000 1810" role="img" aria-label="Career road running on from the campus gate: Samsung Research, then Arcesium Regulatory ETL, ARMOR, TRACS, and Arcesium Intelligence, the AI/ML agent team.">
 <path class="pf-asphalt" d="${PF_ROAD}"></path>
 <path class="pf-lane" id="pf-lane" d="${PF_ROAD}"></path>
+<g class="pf-gate">
+<g class="pf-tree"><polygon points="96,-148 116,-192 136,-148" fill="#2E7D46" stroke="#0E1A2B" stroke-width="3"></polygon></g>
+<line x1="150" y1="-148" x2="150" y2="-196" stroke="#0E1A2B" stroke-width="4"></line>
+<line x1="242" y1="-148" x2="242" y2="-196" stroke="#0E1A2B" stroke-width="4"></line>
+<rect x="140" y="-206" width="112" height="18" rx="4" fill="var(--acc)" stroke="#0E1A2B" stroke-width="3"></rect>
+<text x="196" y="-192" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="700" letter-spacing="1.4" fill="#0E1A2B">MESRA GATE</text>
+<circle cx="196" cy="-148" r="9" fill="var(--acc)" stroke="#0E1A2B" stroke-width="3"></circle>
+<g class="pf-tree pf-tree-b"><polygon points="852,-60 872,-106 892,-60" fill="#2E7D46" stroke="#0E1A2B" stroke-width="3"></polygon></g>
+<path d="M 700 -170 q 8 -10 16 0 q 8 -10 16 0" fill="none" stroke="#0E1A2B" stroke-width="3" stroke-linecap="round"></path>
+</g>
 ${marks}
 <circle class="pf-terminus" cx="500" cy="1340" r="13"></circle>
 <circle class="pf-terminus-in" cx="500" cy="1340" r="5.5"></circle>
+<g class="pf-scenery" aria-hidden="true">
+<g class="pf-tree"><polygon points="96,340 124,268 152,340" fill="#2E7D46" stroke="#0E1A2B" stroke-width="3"></polygon></g>
+<g class="pf-tree pf-tree-c"><polygon points="160,340 182,286 204,340" fill="#3C9159" stroke="#0E1A2B" stroke-width="3"></polygon></g>
+<line x1="90" y1="340" x2="215" y2="340" stroke="#0E1A2B" stroke-width="3" stroke-linecap="round"></line>
+<g class="pf-rabbit"><animateMotion dur="7s" repeatCount="indefinite" path="M 96 322 L 208 322"></animateMotion>
+<g class="pf-hop"><circle cx="0" cy="0" r="7" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="2.5"></circle>
+<polygon points="-4,-6 -7,-16 -1,-8" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="2"></polygon>
+<polygon points="3,-7 7,-16 8,-6" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="2"></polygon></g></g>
+
+<g class="pf-mill">
+<line x1="800" y1="560" x2="800" y2="448" stroke="#0E1A2B" stroke-width="5"></line>
+<rect x="770" y="560" width="60" height="14" fill="#8C97AB" stroke="#0E1A2B" stroke-width="3"></rect>
+<g class="pf-sails">
+<polygon points="800,448 838,432 800,424" fill="var(--acc)" stroke="#0E1A2B" stroke-width="2.5"></polygon>
+<polygon points="800,448 816,486 824,448" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="2.5"></polygon>
+<polygon points="800,448 762,464 800,472" fill="var(--acc)" stroke="#0E1A2B" stroke-width="2.5"></polygon>
+<polygon points="800,448 784,410 776,448" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="2.5"></polygon>
+</g>
+<circle cx="800" cy="448" r="6" fill="#0E1A2B"></circle>
+</g>
+
+<g class="pf-pond">
+<ellipse cx="160" cy="850" rx="88" ry="26" fill="#BEE3F8" stroke="#0E1A2B" stroke-width="3"></ellipse>
+<g><animateMotion dur="9s" repeatCount="indefinite" keyPoints="0;1;1;0;0" keyTimes="0;0.45;0.5;0.95;1" calcMode="linear" path="M 100 856 L 214 846"></animateMotion>
+<polygon points="0,0 -14,-7 -14,7" fill="var(--acc)" stroke="#0E1A2B" stroke-width="2.5"></polygon></g>
+<g class="pf-reed"><path d="M 250 852 q -4 -46 10 -66" fill="none" stroke="#2E7D46" stroke-width="4" stroke-linecap="round"></path></g>
+<g class="pf-reed pf-reed-b"><path d="M 268 852 q 6 -40 -8 -58" fill="none" stroke="#3C9159" stroke-width="4" stroke-linecap="round"></path></g>
+</g>
+
+<g class="pf-sign">
+<line x1="806" y1="1180" x2="806" y2="1058" stroke="#0E1A2B" stroke-width="5"></line>
+<circle class="pf-lamp" cx="806" cy="1050" r="14" fill="var(--acc)" stroke="#0E1A2B" stroke-width="3"></circle>
+<g class="pf-board">
+<rect x="762" y="1092" width="88" height="26" rx="4" fill="#FFFFFF" stroke="#0E1A2B" stroke-width="3"></rect>
+<text x="806" y="1110" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="700" letter-spacing="1.2" fill="#0E1A2B">NEXT →</text>
+</g>
+<line x1="756" y1="1180" x2="880" y2="1180" stroke="#0E1A2B" stroke-width="3" stroke-linecap="round"></line>
+<g class="pf-tree pf-tree-d"><polygon points="864,1180 886,1126 908,1180" fill="#2E7D46" stroke="#0E1A2B" stroke-width="3"></polygon></g>
+</g>
+</g>
 <g id="pf-bus"><g transform="translate(-27,-15)">
 <rect x="0" y="0" width="54" height="26" rx="6" fill="#FFD808" stroke="#0E1A2B" stroke-width="3"></rect>
 <rect x="7" y="5" width="11" height="10" rx="2" fill="#BEE3F8" stroke="#0E1A2B" stroke-width="2.5"></rect>
