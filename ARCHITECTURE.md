@@ -47,11 +47,15 @@ Three properties fall out of this shape and are worth preserving:
 
 | | |
 |---|---|
-| Documents | 122 across 10 collections |
-| Pre-rendered diagrams | 615 unique |
+| Documents | 123 across 10 collections |
+| Pre-rendered diagrams | 619 unique |
 | Authored challenge files | 33 (28 interview answers + 5 deep dives) |
-| Build + client source | ~3,180 lines (`tools/`) |
+| Build + client source | ~4,420 lines (`tools/`) |
 | Runtime dependencies | none — 3 build-time (`marked`, `mermaid`, `puppeteer`) |
+
+The document and diagram counts are the two the build prints on every run
+(`built 123 pages`, `619 unique diagrams`), so they are worth re-reading off a
+build rather than trusting this table.
 
 ---
 
