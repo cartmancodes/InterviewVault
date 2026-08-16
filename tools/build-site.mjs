@@ -650,6 +650,14 @@ ${landscape}
 </div>
 </header>`;
 
+  // A full-bleed ink band under the hero. The line types itself in portfolio.js;
+  // the static text here is what a reader without JavaScript sees.
+  const terminal = `<div class="pf-term">
+<div class="pf-shell pf-term-in">
+<span class="pf-term-host">cartman@mesra:~</span><span id="pf-type" class="pf-term-line">$ ping knowledge.local — 64 bytes received: curiosity alive</span>
+</div>
+</div>`;
+
   const experience = `<section id="experience" class="pf-section pf-exp">
 <h2 class="pf-label pf-exp-label">Experience</h2>
 ${busRoute()}
@@ -704,7 +712,7 @@ ${PF_HOBBIES.map((h) => `<article class="pf-card">
   writeFileSync(path.join(SITE, 'index.html'), page({
     title: 'Shubhojeet Chakraborty — Technical Lead, AI/ML',
     desc: 'Shubhojeet Chakraborty builds systems at scale at Arcesium — AI infrastructure, regulatory data platforms, and a full system-design study vault.',
-    body: `${hero}\n<main>\n${experience}\n${projects}\n${notes}\n${hobbies}\n</main>\n${foot}
+    body: `${hero}\n${terminal}\n<main>\n${experience}\n${projects}\n${notes}\n${hobbies}\n</main>\n${foot}
 <script src="/assets/portfolio.js" defer></script>`,
     cls: 'portfolio',
     chrome: false,

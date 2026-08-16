@@ -1080,6 +1080,24 @@ html:has(body.portfolio) { scroll-padding-top: 16px; }
   margin-top: 9px; letter-spacing: .08em;
 }
 
+/* terminal strip — a full-bleed ink band under the hero. The line types
+   itself in portfolio.js; the static text in build-site.mjs is what a
+   reader without JavaScript sees. */
+.pf-term { background: var(--ink); }
+.pf-term-in {
+  display: flex; gap: 10px; align-items: baseline;
+  padding: 11px var(--pf-pad); overflow: hidden; white-space: nowrap;
+  font: 600 12.5px var(--mono);
+}
+/* 9.05:1 on ink */
+.pf-term-host { color: var(--sky); flex: none; }
+.pf-term-line { color: var(--paper); overflow: hidden; text-overflow: ellipsis; }
+
+/* section reveal — the class is added by JS, so a reader without
+   JavaScript never gets opacity: 0. */
+.pf-reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s cubic-bezier(.2,.7,.3,1); }
+.pf-shown { opacity: 1; transform: none; }
+
 /* sections */
 .pf-section {
   max-width: calc(var(--pf-shell) + var(--pf-pad) * 2);

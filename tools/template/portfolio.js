@@ -79,3 +79,54 @@
   // web fonts and the polaroid can reflow the page after first paint
   setTimeout(drive, 400);
 })();
+
+// The prompt types one line, holds, deletes and moves to the next. Under a
+// reduced-motion preference the first line is simply left standing.
+(() => {
+  const el = document.getElementById('pf-type');
+  if (!el) return;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  const msgs = [
+    '$ ping knowledge.local — 64 bytes received: curiosity alive',
+    '$ uptime — 9 years in production, 0 dropped packets',
+    '$ whoami — technical lead by day, side-project gremlin by night',
+  ];
+  let m = 0, i = msgs[0].length, deleting = false, timer;
+
+  function step() {
+    const s = msgs[m];
+    if (deleting) {
+      i -= 3;
+      if (i <= 0) { i = 0; deleting = false; m = (m + 1) % msgs.length; }
+      el.textContent = msgs[m].slice(0, i) + '▌';
+      timer = setTimeout(step, 24);
+      return;
+    }
+    i++;
+    if (i >= s.length) { el.textContent = s; deleting = true; timer = setTimeout(step, 2800); return; }
+    el.textContent = s.slice(0, i) + '▌';
+    timer = setTimeout(step, 42);
+  }
+  timer = setTimeout(step, 1600);
+  // a background tab should not keep a 42ms timer alive
+  addEventListener('pagehide', () => clearTimeout(timer));
+})();
+
+// Sections settle into place as they come up. One observer, and each section is
+// released the moment it has been revealed.
+(() => {
+  const secs = document.querySelectorAll('main section');
+  if (!secs.length || !('IntersectionObserver' in window)) return;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  secs.forEach((s) => s.classList.add('pf-reveal'));
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((e) => {
+      if (!e.isIntersecting) return;
+      e.target.classList.add('pf-shown');
+      io.unobserve(e.target);
+    });
+  }, { threshold: 0.1 });
+  secs.forEach((s) => io.observe(s));
+})();
