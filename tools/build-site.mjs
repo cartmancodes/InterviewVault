@@ -519,12 +519,6 @@ const PF_PROJECTS = [
     meta: 'Arcesium · EKS · write-up →',
   },
   {
-    name: 'Two migrations, five lessons',
-    href: '/in-the-wild/engineering-notes-from-two-platform-migrations/',
-    blurb: 'The failure modes that rhymed across both platform migrations, distilled into a production checklist.',
-    meta: 'Arcesium · write-up →',
-  },
-  {
     name: 'music-decoder',
     href: 'https://github.com/cartmancodes/music-decoder',
     blurb: 'Analyze audio for chord progressions and guitar tabs, or compose music from a scale and progression.',
