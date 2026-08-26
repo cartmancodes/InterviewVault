@@ -507,6 +507,24 @@ const PF_STACK = [
 
 const PF_PROJECTS = [
   {
+    name: 'Firm-wide LLM gateway',
+    href: '/in-the-wild/how-we-built-the-firmwide-llm-gateway/',
+    blurb: 'One authenticated entry point to every model provider — persistent budgets on Postgres, deliberately sized in-memory rate limits, prompts to S3 cold storage.',
+    meta: 'Arcesium · LiteLLM · write-up →',
+  },
+  {
+    name: 'Spark on Kubernetes',
+    href: '/in-the-wild/how-we-ran-spark-on-kubernetes/',
+    blurb: 'Moved two regulatory-reporting pipelines off single-JVM Spark — cluster mode, then client mode. 75% faster, 74% cheaper, and the bottleneck moved downstream.',
+    meta: 'Arcesium · EKS · write-up →',
+  },
+  {
+    name: 'Two migrations, five lessons',
+    href: '/in-the-wild/engineering-notes-from-two-platform-migrations/',
+    blurb: 'The failure modes that rhymed across both platform migrations, distilled into a production checklist.',
+    meta: 'Arcesium · write-up →',
+  },
+  {
     name: 'music-decoder',
     href: 'https://github.com/cartmancodes/music-decoder',
     blurb: 'Analyze audio for chord progressions and guitar tabs, or compose music from a scale and progression.',
