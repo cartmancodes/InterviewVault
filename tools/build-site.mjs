@@ -519,6 +519,12 @@ const PF_PROJECTS = [
     meta: 'Arcesium · EKS · write-up →',
   },
   {
+    name: 'Two-tier versioned cache',
+    href: '/in-the-wild/two-tier-cache-with-versioned-keys/',
+    blurb: 'An L1 in-process cache over shared Redis that never deletes a key — invalidation is one INCR on a version counter baked into the key itself.',
+    meta: 'neural-city · Redis · write-up →',
+  },
+  {
     name: 'music-decoder',
     href: 'https://github.com/cartmancodes/music-decoder',
     blurb: 'Analyze audio for chord progressions and guitar tabs, or compose music from a scale and progression.',
