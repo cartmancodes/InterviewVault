@@ -6,17 +6,38 @@
 
 ## 🧒 Layman's Explanation
 
-Picture a workshop with one workbench. Every worker who needs to cut a piece of timber has to queue for it. The bench is never idle, but the workers spend most of their day waiting. That queue is **lock contention**: in a C program, every single `malloc` has to take a lock, and with one shared pool of memory, every thread queues behind every other thread.
+Give every worker in a workshop their own bench, and nobody queues for tools — that is a **memory arena**: a private pool a thread allocates from without taking a lock shared with every other thread. Each bench also gets its own scrap bin, and a worker at bench 7 cannot use the offcuts sitting in bin 3 — the wood exists and is paid for, but it is unreachable, so bench 7 just orders more.
 
-The obvious fix is more benches. Give each worker their own bench and the queue disappears. This is what per-thread arenas are, and for the problem they were built to solve they work beautifully.
+A landlord who bills by total square footage does not care which bin anything sits in. Nobody wasted material and nobody leaked anything — there were simply more benches than the room needed, and the sum of everyone's small, reasonable scrap pile is what went over budget.
 
-But each bench comes with its own **offcuts bin**. When a worker finishes a cut, the leftover timber goes into the bin beside *their* bench — not back to a central store. And here is the part that surprises people: a worker at bench 7 who needs a small piece **cannot use the offcuts sitting in bin 3**. The wood exists, it is paid for, it is sitting right there — and it is unreachable. So bench 7 orders new timber.
+### The Whole Path, in One Picture
 
-Now add the floor manager, who does not care whose bin anything is in. He measures the total square footage the workshop occupies and compares it against the lease. Timber in a bin counts exactly the same as timber in use.
+Here is that same shape as an actual allocation moving through the machine. You do not need any kernel background to read it — every technical term that shows up later in the article is just a closer look at one box in this picture.
 
-That is the whole failure. Nothing was wasted, nothing leaked, no worker did anything wrong. Every bin holds a perfectly reasonable amount of scrap. There are simply **far more benches than anyone intended** — because the workshop sized itself for the whole building rather than for the one room it was actually renting — and the sum of all those small, reasonable piles of scrap is what breached the lease.
+```mermaid
+flowchart TD
+    THREAD["A thread calls malloc"] --> ARENA["Assigned to an arena<br/>a bench, sticky, decided once"]
+    ARENA -->|"the main arena"| GROW["The heap grows in place<br/>one shared region"]
+    ARENA -->|"any other arena"| NEW["A new, separate 64 MB<br/>region is carved out"]
+    GROW --> FREE["The thread frees memory<br/>back into its own arena"]
+    NEW --> FREE
+    FREE -->|"freed at the very edge"| GIVEBACK["Handed back to the OS"]
+    FREE -->|"freed in the middle,<br/>live data still above it"| STUCK["Stranded: stays resident,<br/>invisible to other arenas"]
+    GIVEBACK --> RSS["Counted in the process's<br/>resident memory, RSS"]
+    STUCK --> RSS
+    RSS --> CGROUP["The pod's memory limit sums<br/>RSS across every arena"]
+    CGROUP -->|"under the limit"| OK["Pod runs on, unaware"]
+    CGROUP -->|"over the limit"| KILL["kubelet kills the pod:<br/>exit 137, OOMKilled"]
 
-The last piece of the analogy is the one that makes it hard to diagnose. If you ask the workers "are you wasting timber?", they will honestly say no, and they will be right. You have to go and look in the bins.
+    classDef good fill:#90EE90
+    classDef warn fill:#FFE4B5
+    classDef bad fill:#FFB6C1
+    class GIVEBACK,OK good
+    class STUCK,CGROUP warn
+    class KILL bad
+```
+
+Nothing in that picture is a mistake by itself — every arrow is a reasonable design choice. The bug is what happens when the left branch (a new arena, over and over) fires far more often than intended, and the "stranded" branch accumulates across all of them. The rest of this article is about why that happens, and how to tell it apart from a real leak.
 
 ## 🎯 The TLDR
 
@@ -69,9 +90,19 @@ flowchart TD
     class SHARE bad
 ```
 
-Two structural details matter for everything that follows:
+### Two Ways to Ask the Kernel for Memory
 
-**The main arena and the secondary arenas are not the same thing.** The main arena is the original process heap, extended and contracted with `brk`. Secondary arenas are created with `mmap`, as linked lists of heaps, each heap **64 MB** on 64-bit. This asymmetry is why trimming behaves differently between them, and why the arena count multiplies address space in units of 64 MB.
+Neither arena type invents memory on its own — every byte glibc hands out ultimately came from one of two requests to the kernel, and the difference between them is why the two arena types behave so differently.
+
+**`brk`** moves a single pointer, the *program break*, which marks the current end of the heap sitting right after your program's data in virtual memory. Ask the kernel to move the break up and the heap grows; ask it to move down and the heap shrinks. Because it is one pointer for one contiguous region, memory can only be handed back from the **top** — right below the break. A freed block with anything still live above it cannot be returned, no matter how large it is, since the break can't move past a byte that's still in use.
+
+**`mmap`** asks the kernel for a brand new region of virtual address space that doesn't have to sit next to the heap at all. Called anonymously — no file behind it — the kernel doesn't hand over physical RAM up front; it just reserves the address range and marks those pages "not present" in the page table. The first time a thread touches a page in that range, a page fault fires, and only then does the kernel find a physical frame and map it in: the same demand paging that backs a process's memory generally. Because each `mmap`ed region is its own independent mapping, it can be handed back with `munmap` on its own, with no shared pointer to coordinate.
+
+That is the whole reason glibc treats the two arena types differently: the **main arena** grows and shrinks with `brk`, sharing one break pointer across whichever threads land on it. Every **secondary arena** gets its own **64 MB** region from `mmap`, so it can be released independently — and it's also why a thread on arena 2 can never reach into arena 1's free list: they are genuinely separate mappings, not slices of one heap.
+
+Two structural details fall out of that split and matter for everything that follows:
+
+**Trimming behaves differently between the two.** The main arena's freed pages return to the OS only when they sit at the top of that one break-managed heap; each secondary arena returns its own pages via `munmap`/`madvise` independently. This is also why the arena count multiplies address space in units of 64 MB — one new `mmap` per new arena.
 
 **Thread-to-arena assignment is sticky, and it is decided on first allocation.** A thread does not shop around for the least-contended arena on every `malloc` — it stays where it was. That is the point: the cost of choosing well is precisely what the design is avoiding. It is a good trade when threads are roughly as numerous as cores, and it is the source of the imbalance when they are not.
 
