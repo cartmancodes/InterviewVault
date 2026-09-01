@@ -1,0 +1,117 @@
+{
+  "slug": "notes-data-indexing",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "A query filters by tenant_id, then a created_at range, and returns newest rows first. Which index best matches it?",
+      "options": [
+        {
+          "id": "separate",
+          "label": "Two separate single-column indexes",
+          "sub": "index tenant_id and created_at independently",
+          "correct": false,
+          "verdict": "The planner may combine separate indexes, but it still has more work and may need an explicit sort. The indexes do not encode the query's equality-then-range access pattern together."
+        },
+        {
+          "id": "composite",
+          "label": "Composite (tenant_id, created_at DESC)",
+          "sub": "match equality first and ordered range second",
+          "correct": true,
+          "verdict": "The leftmost tenant equality narrows the index, and the following timestamp entries are already ordered for the range and result ordering. The tradeoff is added write and storage cost."
+        }
+      ],
+      "defend": {
+        "prompt": "Which claims correctly qualify the composite index?",
+        "options": [
+          { "label": "Column order must reflect actual predicates and sorting", "correct": true },
+          { "label": "Every insert and update may pay index-maintenance cost", "correct": true },
+          { "label": "INCLUDE columns can enable an index-only plan", "correct": true },
+          { "label": "The index guarantees every possible tenant query is fast", "correct": false }
+        ],
+        "explain": "Indexes are workload-specific. A covering form can avoid heap access for a narrow projection, but wider indexes consume memory and increase write amplification. Verify the real plan with EXPLAIN ANALYZE instead of assuming the optimizer will use it."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Index reasoning ladder",
+      "xp": 70,
+      "prompt": "Reason from index structure and access patterns.",
+      "rungs": [
+        {
+          "q": "Which index is the default fit for equality, ranges, and ordered scans?",
+          "choices": ["B-tree", "Hash only", "Inverted index"],
+          "answer": 0,
+          "note": "B-trees preserve key order while supporting efficient point and range lookups."
+        },
+        {
+          "q": "For an index on (tenant_id, created_at), which predicate can use its leftmost prefix directly?",
+          "choices": ["created_at only", "tenant_id only", "message body contains token"],
+          "answer": 1,
+          "note": "The index is ordered first by tenant_id; skipping that leading column generally prevents a direct prefix lookup."
+        },
+        {
+          "q": "Which index is designed to map terms to matching documents?",
+          "choices": ["Inverted index", "Geospatial index", "Heap file"],
+          "answer": 0,
+          "note": "An inverted index stores a posting list for each token and powers full-text retrieval."
+        }
+      ],
+      "explain": "Choose the structure from the operation: B-trees for ordered keys, inverted indexes for text terms, and geospatial structures for spatial neighborhoods. Then choose composite order from the workload's predicates."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the path of a covered composite-index query.",
+      "palette": [
+        "SQL Query",
+        "Query Planner",
+        "Composite Index Root",
+        "Matching Leaf Range",
+        "Included Columns",
+        "Return Rows",
+        "Full Table Scan",
+        "External Sort",
+        "Write-Ahead Log Replay"
+      ],
+      "slots": [
+        { "accept": "SQL Query" },
+        { "accept": "Query Planner" },
+        { "accept": "Composite Index Root" },
+        { "accept": "Matching Leaf Range" },
+        { "accept": "Included Columns" },
+        { "accept": "Return Rows" }
+      ],
+      "explain": "The planner selects the composite index, traverses its B-tree to the matching prefix and range, and reads the projected values from the index itself. When visibility rules permit an index-only scan, included columns avoid random heap fetches and the index order avoids a separate sort."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "A formerly fast write-heavy table slows after months of tuning. Which signal identifies the bottleneck?",
+      "cards": [
+        { "name": "Index Count", "metric": "19 indexes", "delta": "+12 unused", "state": "hot" },
+        { "name": "Buffer Hit Rate", "metric": "98.7%", "delta": "healthy", "state": "ok" },
+        { "name": "Read QPS", "metric": "3.1k/s", "delta": "flat", "state": "ok" },
+        { "name": "Lock Waits", "metric": "4 ms p99", "delta": "steady", "state": "ok" }
+      ],
+      "answer": "Index Count",
+      "explain": "Every inserted or changed row must maintain applicable indexes. Twelve unused indexes add write amplification, WAL volume, storage, and cache pressure without serving reads. Confirm usage statistics and remove redundant indexes through the database's safe operational process.",
+      "wrong": {
+        "Buffer Hit Rate": "A high, healthy hit rate does not explain the write regression and suggests reads are mostly memory-resident.",
+        "Read QPS": "Read traffic is flat, so it does not correlate with the worsening write path.",
+        "Lock Waits": "Low, steady lock waits do not match the accumulated per-write index maintenance cost."
+      }
+    }
+  ]
+}

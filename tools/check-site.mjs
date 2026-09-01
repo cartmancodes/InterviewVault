@@ -189,13 +189,13 @@ for (const file of pages) {
 
   const payloadMatches = [...html.matchAll(/<script\b[^>]*\bid="iv-challenges"[^>]*>([\s\S]*?)<\/script>/g)];
   challengePayloadCounts.set(rel, payloadMatches.length);
-  if (payloadMatches.length > 1 && (rel.startsWith('answers/') || rel.startsWith('deep-dives/'))) {
+  if (payloadMatches.length > 1 && (rel.startsWith('answers/') || rel.startsWith('deep-dives/') || rel.startsWith('notes/'))) {
     problems.push(`${rel}: expected exactly one iv-challenges payload, found ${payloadMatches.length}`);
   }
 
   for (const m of payloadMatches) {
-    if (!rel.startsWith('answers/') && !rel.startsWith('deep-dives/')) {
-      problems.push(`${rel}: iv-challenges payload is outside answers/ or deep-dives/`);
+    if (!rel.startsWith('answers/') && !rel.startsWith('deep-dives/') && !rel.startsWith('notes/')) {
+      problems.push(`${rel}: iv-challenges payload is outside answers/, deep-dives/, or notes/`);
     }
 
     let payload;
@@ -276,10 +276,13 @@ for (const file of readdirSync(CHALLENGES).filter((f) => f.endsWith('.json'))) {
   }
   authoredSlugs.add(slug);
 
-  const targets = [
-    `answers/${slug}/index.html`,
-    `deep-dives/${slug}/index.html`,
-  ].filter((target) => existsSync(path.join(SITE, target)));
+  const targetSlug = slug.startsWith('notes-') ? slug.slice('notes-'.length) : slug;
+  const targets = slug.startsWith('notes-')
+    ? [`notes/${targetSlug}/index.html`]
+    : [
+        `answers/${targetSlug}/index.html`,
+        `deep-dives/${targetSlug}/index.html`,
+      ].filter((target) => existsSync(path.join(SITE, target)));
   if (!targets.length) {
     problems.push(`authored challenge ${slug}: no applicable built target page`);
     continue;

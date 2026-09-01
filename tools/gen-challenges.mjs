@@ -138,6 +138,9 @@ export function buildChallenges(mdPath, slug) {
   const extracted = [extractTriage(md), extractRecall(md)].filter(Boolean);
 
   let authored = [];
+  // `slug` is also the stable progress key. Collections with overlapping document
+  // slugs use a scoped value (for example `notes-redis`) and therefore a scoped
+  // authored filename.
   const file = path.join(AUTHORED, `${slug}.json`);
   if (existsSync(file)) {
     try {

@@ -1,6 +1,6 @@
 # InterviewVault
 
-A system-design and DSA study vault: 122 worked documents, 607 diagrams, written to be
+A system-design and DSA study vault: 127 worked documents, 636 diagrams, written to be
 read the week before an interview and re-read the morning of.
 
 The markdown is the source of truth. `site/` is a static build of it — a browsable
@@ -19,7 +19,7 @@ library that deploys to Cloudflare Pages.
 | [Quick Reference](LLD/SystemDesign/Patterns/QuickReference/) | 7 | Condensed cheat-sheets, one per pattern. |
 | [Deep Dives](LLD/SystemDesign/DeepDives/) | 13 | One technology at a time — Kafka, Cassandra, Redis, Flink, and friends. |
 | [Problem Breakdowns](LLD/SystemDesign/ProblemBreakdowns/) | 30 | Full worked designs for the questions asked by name. |
-| [In the Wild](LLD/SystemDesign/IntheWild/) | 3 | How real companies solved it, and what they traded away. |
+| [In the Wild](LLD/SystemDesign/IntheWild/) | 8 | How real companies solved it, and what they traded away. |
 | [Interview Answers](LLD/questions/) | 28 | My own answers: requirements → deep dives → scaling journey → depth by level. |
 | [Data Structures](DSA/) | 8 | The algorithm notes behind the coding rounds. |
 
@@ -81,22 +81,24 @@ cannot reach the published site.
 
 ### Practice sidecar
 
-The 28 interview-answer docs carry a client-side practice layer: a sidecar beside the
-article with tier-scoped checkpoints (Mid / Senior / Staff+), six mechanics, XP and a
-streak. Progress is one JSON blob in `localStorage` — no account, no backend, nothing
-leaves the browser. The [vault map](site/progress/) shows coverage across every doc.
+The 28 interview-answer docs and all nine Deep Notes carry a client-side practice layer;
+five technology deep dives carry it too. The sidecar beside each article has tier-scoped
+checkpoints (Mid / Senior / Staff+), six mechanics, XP and a streak. Progress is one JSON
+blob in `localStorage` — no account, no backend, nothing leaves the browser. The
+[vault map](site/progress/) shows coverage across interview answers and Deep Notes.
 
 Challenge content comes from two places:
 
 | Source | Mechanics | Coverage |
 |---|---|---|
-| Extracted from the markdown at build time | requirements triage, win conditions | 28 answer docs |
-| Hand-authored in [`content/challenges/`](content/challenges/) | tradeoff duel, capacity ladder, architecture builder, spot the bottleneck | 33 docs (28 answers + 5 deep dives) |
+| Extracted from the markdown at build time | requirements triage, win conditions | 28 answer docs, plus eligible authored docs |
+| Hand-authored in [`content/challenges/`](content/challenges/) | tradeoff duel, capacity ladder, architecture builder, spot the bottleneck | 42 docs (28 answers + 9 Deep Notes + 5 deep dives) |
 
 Triage comes straight from each doc's own `In scope` / `Out of scope` lists, and win
-conditions from its Insider Tips. To add authored challenges for another doc, drop a
-`content/challenges/<slug>.json` alongside `bitly.json` and rebuild — authored
-checkpoints override extracted ones with the same id.
+conditions from its Insider Tips. Answer and deep-dive challenge filenames use the doc
+slug. Deep Notes use `content/challenges/notes-<slug>.json` so overlapping slugs such as
+Redis keep independent questions and progress. Authored checkpoints override extracted
+ones with the same id.
 
 The build machinery is documented in **[ARCHITECTURE.md](ARCHITECTURE.md)**.
 

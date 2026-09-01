@@ -1,0 +1,117 @@
+{
+  "slug": "notes-caching",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "A payment balance must survive cache failure and reads may tolerate one cache miss after an update. Which default write path is safer?",
+      "options": [
+        {
+          "id": "write-behind",
+          "label": "Write behind through the cache",
+          "sub": "acknowledge now and flush to the database later",
+          "correct": false,
+          "verdict": "Write-behind improves throughput, but an acknowledged balance update can disappear if the cache or its write buffer fails before the database flush. That is the wrong durability tradeoff for money."
+        },
+        {
+          "id": "db-first",
+          "label": "Database first, then invalidate",
+          "sub": "commit the source of truth and delete the cached value",
+          "correct": true,
+          "verdict": "The durable database commits first. Invalidating the cache makes the next read miss and repopulate from the source of truth, avoiding acknowledged writes that exist only in cache."
+        }
+      ],
+      "defend": {
+        "prompt": "Which consequences should the design explicitly handle?",
+        "options": [
+          { "label": "A cache miss is slower because it also queries the database", "correct": true },
+          { "label": "Concurrent misses for one hot key need single-flight protection", "correct": true },
+          { "label": "TTL jitter can prevent many keys expiring together", "correct": true },
+          { "label": "Deleting the cache before the database commit guarantees fresh reads", "correct": false }
+        ],
+        "explain": "Cache-aside keeps the database authoritative, but misses pay both cache and database latency. Request coalescing prevents a popular expired key from creating a thundering herd, while jitter spreads unrelated expirations. Commit the database before invalidating so readers do not refill the old database value during the write."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Cache reasoning ladder",
+      "xp": 70,
+      "prompt": "Reason from hit rate, eviction, and expiry behavior.",
+      "rungs": [
+        {
+          "q": "A service handles 100,000 reads/s at a 95% cache hit rate. About how many reads/s reach the database?",
+          "choices": ["500", "5,000", "95,000"],
+          "answer": 1,
+          "note": "The 5% miss path reaches the database: 100,000 × 0.05 = 5,000 reads/s."
+        },
+        {
+          "q": "Which eviction policy considers both frequency and recency?",
+          "choices": ["FIFO", "LFU", "Fixed TTL only"],
+          "answer": 1,
+          "note": "LFU favors frequently accessed keys and commonly uses recency to break ties or age old popularity."
+        },
+        {
+          "q": "What is the primary purpose of adding random jitter to TTL values?",
+          "choices": ["Guarantee strong consistency", "Spread expirations over time", "Make keys use less memory"],
+          "answer": 1,
+          "note": "Jitter prevents a large cohort of keys from expiring at the same instant and overwhelming the backing store."
+        }
+      ],
+      "explain": "Cache capacity is not just bytes. Hit rate controls backing-store load, eviction controls which working set survives, and expiration shape controls whether misses arrive smoothly or as an avalanche."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the cache-aside miss path in execution order.",
+      "palette": [
+        "Read Request",
+        "Cache Lookup",
+        "Cache Miss",
+        "Database Read",
+        "Populate Cache with TTL",
+        "Return Fresh Data",
+        "Acknowledge Before DB Write",
+        "Broadcast to Every Shard",
+        "Delete Source Row"
+      ],
+      "slots": [
+        { "accept": "Read Request" },
+        { "accept": "Cache Lookup" },
+        { "accept": "Cache Miss" },
+        { "accept": "Database Read" },
+        { "accept": "Populate Cache with TTL" },
+        { "accept": "Return Fresh Data" }
+      ],
+      "explain": "In cache-aside, the application owns both reads. It checks the cache first, queries the database only on a miss, then stores the fresh value with a bounded TTL before responding. Under heavy concurrency, wrap the database-and-fill portion in single-flight coordination so one miss rebuilds the key."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "At exactly 12:00, read latency and database CPU spike although traffic is flat. Which signal identifies the root cause?",
+      "cards": [
+        { "name": "Cache Misses", "metric": "82%", "delta": "+79pt at 12:00", "state": "hot" },
+        { "name": "Request Rate", "metric": "41k/s", "delta": "flat", "state": "ok" },
+        { "name": "Database CPU", "metric": "96%", "delta": "+61pt", "state": "warn" },
+        { "name": "Network Errors", "metric": "0.02%", "delta": "steady", "state": "ok" }
+      ],
+      "answer": "Cache Misses",
+      "explain": "The synchronized jump in misses while request volume stays flat points to a cache avalanche: many keys expired together and pushed their reads to the database. Add TTL jitter, stagger warming, and use single-flight for hot keys. Database CPU is the downstream symptom.",
+      "wrong": {
+        "Request Rate": "Traffic is flat, so a demand surge does not explain the sudden amplification at exactly the expiry boundary.",
+        "Database CPU": "High database CPU explains latency but is an effect of the miss flood, not the initiating signal.",
+        "Network Errors": "The small, steady error rate does not correlate with the sharp latency event."
+      }
+    }
+  ]
+}

@@ -1,0 +1,119 @@
+{
+  "slug": "notes-core-concepts",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "A read-heavy service is growing, but one well-indexed primary still handles writes comfortably. What is the better first scaling move?",
+      "options": [
+        {
+          "id": "shard",
+          "label": "Shard the database immediately",
+          "sub": "split all data and transactions across machines",
+          "correct": false,
+          "verdict": "Sharding adds routing, rebalancing, cross-shard query, and transaction complexity. It is premature while write capacity and data size remain within one primary."
+        },
+        {
+          "id": "cache-replicas",
+          "label": "Cache hot reads and add read replicas",
+          "sub": "scale the measured read bottleneck first",
+          "correct": true,
+          "verdict": "Caching removes repeated hot reads and replicas expand read capacity without changing the write partition. Monitor staleness and replica lag, then shard only when a single write or storage boundary demands it."
+        }
+      ],
+      "defend": {
+        "prompt": "Which principles support the incremental design?",
+        "options": [
+          { "label": "Measure the actual read and write load separately", "correct": true },
+          { "label": "Keep the database as source of truth", "correct": true },
+          { "label": "Define acceptable cache and replica staleness", "correct": true },
+          { "label": "Read replicas increase primary write throughput", "correct": false }
+        ],
+        "explain": "Scaling should follow the constrained resource. Caches and replicas are read tools, with consistency tradeoffs, while sharding is a later write and storage tool. They solve different limits and should not be presented as interchangeable."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Fundamentals ladder",
+      "xp": 70,
+      "prompt": "Connect the core concepts to the problem each one solves.",
+      "rungs": [
+        {
+          "q": "Which mechanism primarily reduces repeated read latency and database load?",
+          "choices": ["Caching", "Two-phase commit", "Range sharding"],
+          "answer": 0,
+          "note": "A cache serves frequently requested values from a faster layer and trades freshness and invalidation complexity for speed."
+        },
+        {
+          "q": "Which technique distributes a dataset that no longer fits one database node?",
+          "choices": ["Sharding", "Normalization only", "TLS termination"],
+          "answer": 0,
+          "note": "Sharding partitions records across machines through a chosen key and routing strategy."
+        },
+        {
+          "q": "During a network partition, what choice does CAP force a distributed system to make?",
+          "choices": ["Consistency versus availability", "Latency versus storage", "SQL versus HTTP"],
+          "answer": 0,
+          "note": "Because partitions can occur, the system must decide whether conflicting operations remain available or are rejected to preserve one consistent view."
+        }
+      ],
+      "explain": "Core system-design tools are responses to different limits: indexes change lookup cost, caches change repeated-read cost, replicas change read capacity and availability, and shards change the ownership boundary."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build a conventional read path for a globally accessed, read-heavy API.",
+      "palette": [
+        "Client",
+        "DNS and Edge",
+        "Load Balancer",
+        "Stateless API",
+        "Cache",
+        "Indexed Primary or Read Replica",
+        "Response",
+        "Cross-Shard Transaction First",
+        "Unindexed Full Scan",
+        "Write-Behind Source of Truth"
+      ],
+      "slots": [
+        { "accept": "Client" },
+        { "accept": "DNS and Edge" },
+        { "accept": "Load Balancer" },
+        { "accept": "Stateless API" },
+        { "accept": "Cache" },
+        { "accept": "Indexed Primary or Read Replica" },
+        { "accept": "Response" }
+      ],
+      "explain": "The network directs the client to the service, a load balancer spreads requests across stateless instances, and a cache absorbs repeated reads. Misses use an index on the authoritative database or an acceptable-lag replica. Each layer has a distinct job and failure mode."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Search latency rises linearly with table growth while service CPU and network stay healthy. Which signal identifies the bottleneck?",
+      "cards": [
+        { "name": "Query Plan", "metric": "sequential scan 84M rows", "delta": "+19M/month", "state": "hot" },
+        { "name": "Service CPU", "metric": "26%", "delta": "healthy", "state": "ok" },
+        { "name": "Network RTT", "metric": "3 ms", "delta": "steady", "state": "ok" },
+        { "name": "Cache Hit Rate", "metric": "91%", "delta": "steady", "state": "ok" }
+      ],
+      "answer": "Query Plan",
+      "explain": "The database scans the growing table for each miss. Add an index that matches the real predicate and ordering, validate it with the query plan, and keep the cache as an acceleration layer rather than hiding an unbounded database access path.",
+      "wrong": {
+        "Service CPU": "The application has compute headroom and is waiting on the database access path.",
+        "Network RTT": "Stable low network latency does not grow with the table and therefore does not match the symptom.",
+        "Cache Hit Rate": "A healthy stable cache still leaves misses; it does not explain why each miss becomes linearly more expensive."
+      }
+    }
+  ]
+}

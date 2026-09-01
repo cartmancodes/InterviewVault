@@ -1,0 +1,119 @@
+{
+  "slug": "notes-data-modelling",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "An order and its line items require transactional updates, joins, and multiple reporting queries. Which primary model is the stronger starting point?",
+      "options": [
+        {
+          "id": "document",
+          "label": "One denormalized document per order",
+          "sub": "embed everything for a single read",
+          "correct": false,
+          "verdict": "Embedding can make whole-order reads simple, but unbounded or independently updated children and varied reporting access patterns make one document increasingly awkward."
+        },
+        {
+          "id": "relational",
+          "label": "Relational order and line-item tables",
+          "sub": "use keys, constraints, and transactions",
+          "correct": true,
+          "verdict": "The workload values relationships, integrity, and flexible queries. Normalize the source of truth first, then add targeted denormalized read models when measured access patterns justify them."
+        }
+      ],
+      "defend": {
+        "prompt": "Which principles support that decision?",
+        "options": [
+          { "label": "Start from requirements and access patterns", "correct": true },
+          { "label": "Keep authoritative relationships constrained", "correct": true },
+          { "label": "Denormalize selectively for proven read paths", "correct": true },
+          { "label": "Choose NoSQL whenever the data volume is large", "correct": false }
+        ],
+        "explain": "Scale alone does not choose a model. Transaction boundaries, relationship shape, query flexibility, and operational needs do. Denormalization is a deliberate duplication tradeoff and needs a plan for asynchronous repair or consistency."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Model reasoning ladder",
+      "xp": 70,
+      "prompt": "Reason from relationships, keys, and access patterns.",
+      "rungs": [
+        {
+          "q": "Which store naturally fits traversing many-to-many relationships such as social connections?",
+          "choices": ["Graph database", "Object storage", "Time-series table only"],
+          "answer": 0,
+          "note": "Graph models make vertices and edges first-class and optimize relationship traversal."
+        },
+        {
+          "q": "What should drive a wide-column table's partition and clustering keys?",
+          "choices": ["The access pattern", "Alphabetical field order", "The JSON payload size"],
+          "answer": 0,
+          "note": "Wide-column modeling starts from the queries because partition keys determine locality and supported reads."
+        },
+        {
+          "q": "Why update a denormalized counter asynchronously?",
+          "choices": ["To make it the source of truth", "To keep the core write independent and repairable", "To eliminate duplicate data"],
+          "answer": 1,
+          "note": "The authoritative event or row commits first; the derived counter can lag and be rebuilt if an update fails."
+        }
+      ],
+      "explain": "Good modeling maps each important access pattern and transaction boundary onto keys and storage structures. Derived models can optimize reads as long as ownership and repair are explicit."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the data-modeling decision flow before choosing a database product.",
+      "palette": [
+        "Functional Requirements",
+        "Access Patterns",
+        "Entities and Relationships",
+        "Transaction Boundaries",
+        "Primary and Partition Keys",
+        "Indexes and Read Models",
+        "Scale and Migration Plan",
+        "Pick a Trendy Database",
+        "Add Every Index",
+        "Shard Before Measuring"
+      ],
+      "slots": [
+        { "accept": "Functional Requirements" },
+        { "accept": "Access Patterns" },
+        { "accept": "Entities and Relationships" },
+        { "accept": "Transaction Boundaries" },
+        { "accept": "Primary and Partition Keys" },
+        { "accept": "Indexes and Read Models" },
+        { "accept": "Scale and Migration Plan" }
+      ],
+      "explain": "Modeling begins with what the system must read and write. Those operations reveal entities, relationships, atomicity boundaries, and keys. Only then should you select indexes, derived read models, scaling boundaries, and a database whose guarantees fit the model."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "A user-profile document grows until reads and updates become erratic. Which signal identifies the modeling bottleneck?",
+      "cards": [
+        { "name": "Embedded Activity Array", "metric": "14 MB p95", "delta": "+1.2 MB/week", "state": "hot" },
+        { "name": "Profile Fields", "metric": "6 KB", "delta": "stable", "state": "ok" },
+        { "name": "Database CPU", "metric": "31%", "delta": "healthy", "state": "ok" },
+        { "name": "Connection Pool", "metric": "42% used", "delta": "steady", "state": "ok" }
+      ],
+      "answer": "Embedded Activity Array",
+      "explain": "An unbounded one-to-many collection was embedded into the profile's hot document. Split activity into its own collection or table keyed by user and time, paginate it, and keep only a bounded summary in the profile if the common read needs one.",
+      "wrong": {
+        "Profile Fields": "The bounded profile payload is small and stable; it is not driving the growth or update cost.",
+        "Database CPU": "There is ample CPU headroom, so adding compute would not fix the oversized document shape.",
+        "Connection Pool": "Pool utilization is healthy and steady rather than correlated with the increasing document size."
+      }
+    }
+  ]
+}

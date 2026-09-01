@@ -17,11 +17,11 @@ The folder decides the URL, the section nav, and whether the doc gets a practice
 | Folder | URL | Sidecar |
 |---|---|---|
 | `LLD/SystemDesign/InaHurry/` | `/in-a-hurry/<slug>/` | no |
-| `LLD/CoreConcepts/` | `/notes/<slug>/` | no |
+| `LLD/CoreConcepts/` | `/notes/<slug>/` | when `notes-<slug>.json` is authored |
 | `LLD/SystemDesign/CoreConcepts/` | `/concepts/<slug>/` | no |
 | `LLD/SystemDesign/Patterns/` | `/patterns/<slug>/` | no |
 | `LLD/SystemDesign/Patterns/QuickReference/` | `/patterns/quick-reference/<slug>/` | no |
-| `LLD/SystemDesign/DeepDives/` | `/deep-dives/<slug>/` | no |
+| `LLD/SystemDesign/DeepDives/` | `/deep-dives/<slug>/` | when `<slug>.json` is authored |
 | `LLD/SystemDesign/ProblemBreakdowns/` | `/breakdowns/<slug>/` | no |
 | `LLD/SystemDesign/IntheWild/` | `/in-the-wild/<slug>/` | no |
 | **`LLD/questions/`** | `/answers/<slug>/` | **yes** |
@@ -139,14 +139,16 @@ the checker.
 - Images live beside the doc in `assets/` and are referenced relatively:
   `![Caption](assets/thing.svg)`. The build copies them and rewrites the path.
 
-## 7. Practice challenges (`LLD/questions/` only)
+## 7. Practice challenges (`LLD/questions/`, Deep Notes, and selected deep dives)
 
 Two sources, merged at build time; authored checkpoints override extracted ones with the
 same `id`.
 
 - **Extracted free** from the doc: `requirements` (triage) and `recall` (win conditions).
 - **Authored** in `content/challenges/<slug>.json`: `duel`, `ladder`, `builder`,
-  `bottleneck`. See `content/challenges/bitly.json` for the full reference.
+  `bottleneck`. See `content/challenges/bitly.json` for the full reference. Deep
+  Notes use both filename and inner slug `notes-<document-slug>` so their progress
+  cannot collide with another collection's page (for example `notes-redis`).
 
 ```jsonc
 {

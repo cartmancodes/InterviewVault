@@ -1,0 +1,119 @@
+{
+  "slug": "notes-sharding",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "An order service mostly reads and updates a single order by ID, with IDs distributed across time. Which shard key is the stronger default?",
+      "options": [
+        {
+          "id": "created-at",
+          "label": "created_at range",
+          "sub": "keep chronological orders together",
+          "correct": false,
+          "verdict": "Range sharding supports time scans, but current writes concentrate on the newest range and create a hot shard while historical shards sit idle."
+        },
+        {
+          "id": "order-id",
+          "label": "Hash of order_id",
+          "sub": "spread point reads and writes evenly",
+          "correct": true,
+          "verdict": "A high-cardinality order ID distributes load well and aligns the dominant point operations with one shard. The cost is that global time-range scans require scatter-gather or a separate read model."
+        }
+      ],
+      "defend": {
+        "prompt": "Which statements belong in the shard-key defense?",
+        "options": [
+          { "label": "High cardinality leaves room for many shards", "correct": true },
+          { "label": "Query alignment keeps common operations single-shard", "correct": true },
+          { "label": "Global aggregates may need precomputation", "correct": true },
+          { "label": "Hashing makes cross-shard transactions atomic", "correct": false }
+        ],
+        "explain": "A shard key must balance distribution with locality. Hashing order IDs serves the stated workload, but it does not solve operations spanning keys. Frequent global views should be cached or materialized rather than scattered on every request."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Shard reasoning ladder",
+      "xp": 70,
+      "prompt": "Reason from distribution, query fanout, and transactions.",
+      "rungs": [
+        {
+          "q": "Which property immediately disqualifies a boolean such as is_premium as a shard key?",
+          "choices": ["Low cardinality", "High selectivity", "Stable values"],
+          "answer": 0,
+          "note": "Two values permit only two natural partitions and usually produce badly uneven groups."
+        },
+        {
+          "q": "A global top-10 query runs across 16 shards. What is its basic read pattern?",
+          "choices": ["One random shard", "Scatter to shards and merge", "A local transaction on the router"],
+          "answer": 1,
+          "note": "Each shard returns local candidates and the coordinator merges them, multiplying network and compute work."
+        },
+        {
+          "q": "What is the best first response to frequent cross-shard transactions?",
+          "choices": ["Redesign placement to colocate related data", "Add more coordinators", "Use two-phase commit for every write"],
+          "answer": 0,
+          "note": "Frequent distributed transactions usually signal that the shard boundary does not match the write boundary."
+        }
+      ],
+      "explain": "Sharding moves complexity into routing, fanout, rebalancing, and transactions. The shard key is therefore an access-pattern decision, not merely a distribution formula."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the single-shard request path for a hash-sharded order lookup.",
+      "palette": [
+        "Order Request",
+        "Extract order_id",
+        "Stable Hash",
+        "Shard Map",
+        "Target Shard",
+        "Local Index Lookup",
+        "Return Order",
+        "Query Every Shard",
+        "Two-Phase Commit",
+        "Newest Time Shard"
+      ],
+      "slots": [
+        { "accept": "Order Request" },
+        { "accept": "Extract order_id" },
+        { "accept": "Stable Hash" },
+        { "accept": "Shard Map" },
+        { "accept": "Target Shard" },
+        { "accept": "Local Index Lookup" },
+        { "accept": "Return Order" }
+      ],
+      "explain": "The router extracts the shard key, hashes it, resolves the hash through the current shard map, and sends the point lookup to exactly one shard. A local index finds the order inside that shard. Scatter-gather and distributed commit are unnecessary for this aligned access pattern."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Write p99 rises every evening, but adding replicas does not help. Which signal identifies the bottleneck?",
+      "cards": [
+        { "name": "Newest Range Shard", "metric": "writes 71k/s", "delta": "+64k/s", "state": "hot" },
+        { "name": "Historical Shards", "metric": "writes <900/s", "delta": "idle", "state": "ok" },
+        { "name": "Read Replicas", "metric": "CPU 18%", "delta": "healthy", "state": "ok" },
+        { "name": "Router Errors", "metric": "0.01%", "delta": "steady", "state": "ok" }
+      ],
+      "answer": "Newest Range Shard",
+      "explain": "A created_at range key sends all current inserts to the newest shard. Read replicas do not divide primary writes. Move to hash-based distribution, pre-split and rotate writable buckets, or use a compound key that spreads the active time window while preserving the required query shape.",
+      "wrong": {
+        "Historical Shards": "Their low write rate demonstrates the skew but does not cause the overloaded active range.",
+        "Read Replicas": "Replicas have headroom and cannot absorb the primary's insert path.",
+        "Router Errors": "A tiny stable error rate does not correlate with the recurring write saturation."
+      }
+    }
+  ]
+}

@@ -1,0 +1,119 @@
+{
+  "slug": "notes-networking",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "A browser dashboard receives one-way server updates and reconnects over ordinary HTTP infrastructure. Which protocol is the simpler fit?",
+      "options": [
+        {
+          "id": "websocket",
+          "label": "WebSocket",
+          "sub": "maintain a bidirectional full-duplex connection",
+          "correct": false,
+          "verdict": "WebSockets are the right tool when both sides need low-latency messages, but they add connection-state and reconnect complexity that this one-way stream does not require."
+        },
+        {
+          "id": "sse",
+          "label": "Server-Sent Events",
+          "sub": "stream server events over HTTP",
+          "correct": true,
+          "verdict": "SSE matches server-to-browser updates, works with the HTTP model, and provides browser reconnection behavior. It is text-oriented and one-way, which is acceptable for the stated workload."
+        }
+      ],
+      "defend": {
+        "prompt": "Which qualifications make the choice sound?",
+        "options": [
+          { "label": "Use WebSockets if clients must send frequent live messages", "correct": true },
+          { "label": "Long-lived connections require capacity planning", "correct": true },
+          { "label": "Reconnects need resume or missed-event handling", "correct": true },
+          { "label": "SSE provides arbitrary binary frames in both directions", "correct": false }
+        ],
+        "explain": "Protocol selection follows communication shape. Both SSE and WebSockets create long-lived connections that must be balanced and observed, and either system needs an application-level strategy for gaps after disconnects."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Network reasoning ladder",
+      "xp": 70,
+      "prompt": "Reason from load-balancer layers and transport behavior.",
+      "rungs": [
+        {
+          "q": "Which load balancer can route by HTTP path or header?",
+          "choices": ["Layer 7", "Layer 4 only", "DNS resolver only"],
+          "answer": 0,
+          "note": "An application-layer balancer understands HTTP semantics and can route /api differently from /images."
+        },
+        {
+          "q": "Which transport preserves message boundaries but does not guarantee delivery?",
+          "choices": ["TCP", "UDP", "HTTP/2"],
+          "answer": 1,
+          "note": "UDP sends independent datagrams without TCP's ordered, reliable byte stream."
+        },
+        {
+          "q": "What is the main latency benefit of connection pooling?",
+          "choices": ["Reuse established connections", "Remove geographic distance", "Make every request idempotent"],
+          "answer": 0,
+          "note": "Pooling avoids repeatedly paying TCP and TLS setup and reduces ephemeral-port and server handshake pressure."
+        }
+      ],
+      "explain": "Network choices span different layers: L4 balances connections, L7 understands application requests, transports define delivery behavior, and connection reuse removes avoidable setup from the hot path."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build a global dynamic-request path from user to a healthy application instance.",
+      "palette": [
+        "Client",
+        "DNS or Anycast Entry",
+        "Nearest Edge",
+        "Regional Layer 7 Load Balancer",
+        "Health-Checked Application Pool",
+        "Pooled Dependency Connection",
+        "Response",
+        "Broadcast Packet Globally",
+        "New TCP Connection per DB Query",
+        "Random Unhealthy Instance"
+      ],
+      "slots": [
+        { "accept": "Client" },
+        { "accept": "DNS or Anycast Entry" },
+        { "accept": "Nearest Edge" },
+        { "accept": "Regional Layer 7 Load Balancer" },
+        { "accept": "Health-Checked Application Pool" },
+        { "accept": "Pooled Dependency Connection" },
+        { "accept": "Response" }
+      ],
+      "explain": "Global routing brings the client to a nearby edge or region. The L7 balancer applies HTTP routing and selects a healthy application instance. The service reuses pooled connections to dependencies instead of paying a fresh transport and TLS handshake on every call."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "API p99 rises while handlers and the database remain fast. Which signal identifies the bottleneck?",
+      "cards": [
+        { "name": "Connection Setup", "metric": "47% of latency", "delta": "+39pt", "state": "hot" },
+        { "name": "Handler CPU", "metric": "23%", "delta": "healthy", "state": "ok" },
+        { "name": "Database Query", "metric": "6 ms p99", "delta": "steady", "state": "ok" },
+        { "name": "Packet Loss", "metric": "0.03%", "delta": "steady", "state": "ok" }
+      ],
+      "answer": "Connection Setup",
+      "explain": "The service is repeatedly paying connection establishment rather than reusing a healthy pool. Enable and correctly size keep-alive and dependency connection pools, then monitor reuse, queueing, and idle expiry.",
+      "wrong": {
+        "Handler CPU": "Low handler CPU shows compute is not saturated and does not account for time spent before useful work.",
+        "Database Query": "The database stays fast and steady; its query time is not driving the new p99.",
+        "Packet Loss": "The tiny stable loss rate does not correlate with the large increase in setup time."
+      }
+    }
+  ]
+}

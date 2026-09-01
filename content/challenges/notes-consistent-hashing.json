@@ -1,0 +1,117 @@
+{
+  "slug": "notes-consistent-hashing",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "A distributed cache frequently adds and removes nodes. Which placement scheme minimizes remapping?",
+      "options": [
+        {
+          "id": "modulo",
+          "label": "hash(key) modulo node count",
+          "sub": "simple direct placement using the current cluster size",
+          "correct": false,
+          "verdict": "Modulo placement is simple and balanced while the node count is fixed, but changing that divisor remaps most keys and can create a cache-miss storm."
+        },
+        {
+          "id": "ring",
+          "label": "Consistent hash ring",
+          "sub": "assign keys to the next token clockwise",
+          "correct": true,
+          "verdict": "Adding or removing a node changes only the adjacent token ranges. Virtual nodes spread those ranges around the ring so movement and recovery load are shared more evenly."
+        }
+      ],
+      "defend": {
+        "prompt": "Which caveats remain after choosing consistent hashing?",
+        "options": [
+          { "label": "Virtual nodes improve balance across physical nodes", "correct": true },
+          { "label": "A hot key can still overload its owner", "correct": true },
+          { "label": "Replication must still be designed separately", "correct": true },
+          { "label": "The ring guarantees perfectly equal load", "correct": false }
+        ],
+        "explain": "Consistent hashing limits remapping; it does not make unequal traffic disappear or provide copies by itself. Virtual nodes smooth statistical imbalance and let heterogeneous machines own different token counts, while replication and hot-key mitigation remain separate concerns."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Ring reasoning ladder",
+      "xp": 70,
+      "prompt": "Reason from the hash-ring assignment and membership changes.",
+      "rungs": [
+        {
+          "q": "After hashing a key onto the ring, which node owns it?",
+          "choices": ["The first node clockwise", "The lowest-latency node", "Every node with a larger ID"],
+          "answer": 0,
+          "note": "The key walks clockwise from its hash position and belongs to the first node token encountered."
+        },
+        {
+          "q": "With N evenly balanced nodes, roughly what fraction of keys moves when one node is added?",
+          "choices": ["About 1/N", "About half", "Nearly all keys"],
+          "answer": 0,
+          "note": "Only the ranges newly claimed from the added node's clockwise successors move, ideally around one node's share."
+        },
+        {
+          "q": "Why give each physical server many virtual nodes?",
+          "choices": ["To eliminate hashing", "To distribute its ranges and failure load", "To make all keys replicate automatically"],
+          "answer": 1,
+          "note": "Scattered tokens average out uneven ring gaps and spread a failed server's ranges across multiple surviving neighbors."
+        }
+      ],
+      "explain": "The ring's useful property is bounded movement under membership change. Virtual nodes improve how evenly both normal traffic and reassigned ranges are distributed, but do not change the ownership rule."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the key-placement path on a ring with virtual nodes.",
+      "palette": [
+        "Object Key",
+        "Stable Hash Function",
+        "Ring Position",
+        "First Virtual Node Clockwise",
+        "Owning Physical Node",
+        "Store or Route Request",
+        "Modulo Current Node Count",
+        "Broadcast to All Nodes",
+        "Random Physical Node"
+      ],
+      "slots": [
+        { "accept": "Object Key" },
+        { "accept": "Stable Hash Function" },
+        { "accept": "Ring Position" },
+        { "accept": "First Virtual Node Clockwise" },
+        { "accept": "Owning Physical Node" },
+        { "accept": "Store or Route Request" }
+      ],
+      "explain": "Both keys and virtual-node tokens occupy the same hash space. The router hashes the key, finds the first token clockwise, resolves that token to a physical node, and sends the operation there. Membership changes update token ownership without changing a global modulo divisor."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "The ring is statistically balanced, yet one cache node saturates during a live event. Which signal identifies the bottleneck?",
+      "cards": [
+        { "name": "Top Key Traffic", "metric": "58% of requests", "delta": "+51pt", "state": "hot" },
+        { "name": "Token Ownership", "metric": "10.4%", "delta": "near 10% target", "state": "ok" },
+        { "name": "Other Nodes", "metric": "CPU 24%", "delta": "healthy", "state": "ok" },
+        { "name": "Membership Changes", "metric": "0", "delta": "none", "state": "ok" }
+      ],
+      "answer": "Top Key Traffic",
+      "explain": "Even token ownership cannot split one key: it hashes to one owner. Replicate or salt read-hot keys, add an L1 cache, or redesign the key when writes must also be divided. Adding more virtual nodes only improves range balance.",
+      "wrong": {
+        "Token Ownership": "The node owns approximately its fair share of the ring, so token imbalance does not explain the concentrated traffic.",
+        "Other Nodes": "Low CPU elsewhere is consistent with a single hot owner but is not the cause of that concentration.",
+        "Membership Changes": "No nodes joined or left, so remapping and recovery traffic are not involved."
+      }
+    }
+  ]
+}

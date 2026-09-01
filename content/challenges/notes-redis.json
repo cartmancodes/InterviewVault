@@ -1,0 +1,117 @@
+{
+  "slug": "notes-redis",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "A cache entry must not be refilled with stale data after a concurrent database update. Which invalidation primitive is safer?",
+      "options": [
+        {
+          "id": "delete",
+          "label": "Delete the cache key after each write",
+          "sub": "let the next reader refill the same key",
+          "correct": false,
+          "verdict": "A read that began before deletion can finish afterward and write the old value back into the same key. The resulting stale entry survives until another invalidation or TTL."
+        },
+        {
+          "id": "version",
+          "label": "Atomically increment a version key",
+          "sub": "make subsequent readers use a new namespace",
+          "correct": true,
+          "verdict": "INCR moves new readers to a fresh versioned key. Old fills can only write the old namespace, which ages out by TTL or eviction instead of overwriting the current cache."
+        }
+      ],
+      "defend": {
+        "prompt": "Which details complete the versioned-cache design?",
+        "options": [
+          { "label": "Give old versioned values a TTL", "correct": true },
+          { "label": "Use hash tags when version and value must share a Redis Cluster slot", "correct": true },
+          { "label": "Use a Lua compare-and-set before filling after a slow DB read", "correct": true },
+          { "label": "Treat Pub/Sub delivery as the durable invalidation truth", "correct": false }
+        ],
+        "explain": "The version key is authoritative for cache freshness. Old namespaces need bounded cleanup, related keys may need cluster colocation, and a CAS fill prevents committing data fetched under an obsolete version. Pub/Sub can quickly clear L1 caches but may drop messages."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Redis reasoning ladder",
+      "xp": 70,
+      "prompt": "Reason from Redis execution, durability, and cluster behavior.",
+      "rungs": [
+        {
+          "q": "Why can one unexpectedly expensive command delay unrelated Redis commands?",
+          "choices": ["Commands execute on the main event-loop path", "Every key has a global mutex", "Replicas vote on each read"],
+          "answer": 0,
+          "note": "Redis command execution is primarily serialized, so slow O(N) work blocks other clients even when their keys differ."
+        },
+        {
+          "q": "What is the documented loss window of AOF appendfsync everysec during disaster?",
+          "choices": ["Up to about one second", "No acknowledged data", "Exactly one hour"],
+          "answer": 0,
+          "note": "The speed-oriented everysec policy can lose roughly the latest second of writes, subject to storage behavior."
+        },
+        {
+          "q": "What does a shared Redis Cluster hash tag accomplish?",
+          "choices": ["Colocates related keys in one slot", "Replicates keys to all primaries", "Encrypts the key name"],
+          "answer": 0,
+          "note": "Only the text inside braces is hashed, allowing related keys to land in one slot for multi-key or Lua operations."
+        }
+      ],
+      "explain": "Redis is fast because its hot command path is simple, but command complexity still matters. Persistence and replication settings define loss windows, while cluster slots define which operations can remain local and atomic."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build the versioned-cache read path after a database update increments the version.",
+      "palette": [
+        "Read Current Version",
+        "Build Versioned Cache Key",
+        "Cache Miss on New Version",
+        "Read Source Database",
+        "Lua CAS: Verify Version and Set TTL",
+        "Return Fresh Value",
+        "Refill Old Unversioned Key",
+        "KEYS Star",
+        "Trust Pub/Sub Alone"
+      ],
+      "slots": [
+        { "accept": "Read Current Version" },
+        { "accept": "Build Versioned Cache Key" },
+        { "accept": "Cache Miss on New Version" },
+        { "accept": "Read Source Database" },
+        { "accept": "Lua CAS: Verify Version and Set TTL" },
+        { "accept": "Return Fresh Value" }
+      ],
+      "explain": "The reader observes the new version and therefore misses the new namespace. After fetching the database row, one Lua CAS atomically confirms that the version did not advance and stores the result with a TTL. A stale slow reader fails that check and cannot poison the current key."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "All Redis clients see p99 spikes although memory and network usage are normal. Which signal identifies the bottleneck?",
+      "cards": [
+        { "name": "Slow Log", "metric": "ZRANGE 4.8 s", "delta": "large result set", "state": "hot" },
+        { "name": "Memory", "metric": "61% used", "delta": "healthy", "state": "ok" },
+        { "name": "Network", "metric": "28% capacity", "delta": "healthy", "state": "ok" },
+        { "name": "Replica Lag", "metric": "12 ms", "delta": "steady", "state": "ok" }
+      ],
+      "answer": "Slow Log",
+      "explain": "A multi-second command on Redis's serialized execution path delays unrelated commands behind it. Bound result sizes, inspect the command's complexity and data structure, move heavy work out of the hot path, and use the slow log to verify the fix.",
+      "wrong": {
+        "Memory": "Memory has headroom, so eviction or swapping is not the correlated signal.",
+        "Network": "Bandwidth is far below saturation and cannot explain every client queuing at once.",
+        "Replica Lag": "Low, steady lag does not explain latency on primary command execution."
+      }
+    }
+  ]
+}

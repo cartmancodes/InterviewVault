@@ -269,10 +269,14 @@ function buildDocPage(doc, siblings, idx) {
         .map((h) => `<li><a class="${h.lvl === 3 ? 'h3' : ''}" href="#${h.id}">${esc(h.text)}</a></li>`).join('')}</ol></nav>`
     : '';
 
-  const ch = buildChallenges(path.join(REPO, doc.rel), doc.slug);
+  // Practice progress is keyed by payload slug. Deep Notes share several document
+  // slugs with other collections (for example Redis), so scope their challenge
+  // files and localStorage entries to the collection.
+  const practiceSlug = doc.col.key === 'notes' ? `notes-${doc.slug}` : doc.slug;
+  const ch = buildChallenges(path.join(REPO, doc.rel), practiceSlug);
   const hasSidecar = doc.col.key === 'answers'
     ? ch.checkpoints.length
-    : doc.col.key === 'deep-dives' && ch.authoredCount > 0;
+    : (doc.col.key === 'deep-dives' || doc.col.key === 'notes') && ch.authoredCount > 0;
   let sidecar = '', sheetBtn = '', vaultScript = '';
   if (hasSidecar) {
     sidecar =
@@ -840,21 +844,22 @@ ${PF_HOBBIES.map((h) => `<article class="pf-card">
 
 /* ── vault map (1h) ────────────────────────────────────── */
 function buildProgressPage() {
-  const answers = docs.filter((d) => d.col.key === 'answers');
-  const cards = answers.map((d) => {
-    const ch = buildChallenges(path.join(REPO, d.rel), d.slug);
-    return { slug: d.slug, title: d.title, url: d.url, total: ch.checkpoints.length };
+  const practiceDocs = docs.filter((d) => d.col.key === 'answers' || d.col.key === 'notes');
+  const cards = practiceDocs.map((d) => {
+    const practiceSlug = d.col.key === 'notes' ? `notes-${d.slug}` : d.slug;
+    const ch = buildChallenges(path.join(REPO, d.rel), practiceSlug);
+    return { slug: practiceSlug, title: d.title, url: d.url, total: ch.checkpoints.length };
   }).filter((c) => c.total);
 
   const body = `<section class="hero blueprint"><div class="hero-in">
 <div class="eyebrow">Progress · stored on this device</div>
 <h1>The vault map</h1>
-<p class="hero-sub">Every question doc you have practised, and how far each one got. Nothing leaves this browser — see <a href="#storage">where that stops working</a>.</p>
+<p class="hero-sub">Every interview question and core concept you have practised, and how far each one got. Nothing leaves this browser — see <a href="#storage">where that stops working</a>.</p>
 <div class="stats" id="vm-stats"></div>
 </div></section>
 
 <section class="lib">
-<div class="sec-h">Coverage · ${cards.length} question docs with checkpoints</div>
+<div class="sec-h">Coverage · ${cards.length} practice docs with checkpoints</div>
 <div class="vault-grid" id="vm-grid">${cards.map((c) =>
   `<a class="vault-card" href="${c.url}" data-slug="${c.slug}" data-total="${c.total}">
 <span class="vc-t">${esc(c.title)}</span>
@@ -886,7 +891,7 @@ function buildProgressPage() {
   mkdirSync(path.dirname(out), { recursive: true });
   writeFileSync(out, page({
     title: 'Vault map — cartmancodes/vault',
-    desc: 'Your practice coverage across the interview-answer docs, stored on this device.',
+    desc: 'Your practice coverage across interview answers and core concepts, stored on this device.',
     body,
   }));
 }

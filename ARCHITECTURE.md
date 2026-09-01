@@ -47,9 +47,9 @@ Three properties fall out of this shape and are worth preserving:
 
 | | |
 |---|---|
-| Documents | 123 across 10 collections |
-| Pre-rendered diagrams | 619 unique |
-| Authored challenge files | 33 (28 interview answers + 5 deep dives) |
+| Documents | 127 across 10 collections |
+| Pre-rendered diagrams | 636 unique |
+| Authored challenge files | 42 (28 interview answers + 9 Deep Notes + 5 deep dives) |
 | Build + client source | ~4,420 lines (`tools/`) |
 | Runtime dependencies | none — 3 build-time (`marked`, `mermaid`, `puppeteer`) |
 
@@ -63,8 +63,8 @@ build rather than trusting this table.
 
 ```
 LLD/                          the vault — system design source markdown
-  CoreConcepts/               → /notes/
-  questions/                  → /answers/   (the only collection with a sidecar)
+  CoreConcepts/               → /notes/     (sidecar when authored)
+  questions/                  → /answers/   (sidecar on every document)
   SystemDesign/
     InaHurry/  CoreConcepts/  Patterns/  Patterns/QuickReference/
     DeepDives/  ProblemBreakdowns/  IntheWild/
@@ -274,7 +274,7 @@ The folder decides everything — URL, section nav, and whether a sidecar is bui
 | Source folder | Section key | URL | Sidecar |
 |---|---|---|---|
 | `LLD/SystemDesign/InaHurry/` | `in-a-hurry` | `/in-a-hurry/<slug>/` | — |
-| `LLD/CoreConcepts/` | `notes` | `/notes/<slug>/` | — |
+| `LLD/CoreConcepts/` | `notes` | `/notes/<slug>/` | if authored |
 | `LLD/SystemDesign/CoreConcepts/` | `concepts` | `/concepts/<slug>/` | — |
 | `LLD/SystemDesign/Patterns/QuickReference/` | `quickref` | `/patterns/quick-reference/<slug>/` | — |
 | `LLD/SystemDesign/Patterns/` | `patterns` | `/patterns/<slug>/` | — |
@@ -304,7 +304,9 @@ nine items wide.
 Sidecar rules differ by collection: an **answers** doc gets one whenever any
 checkpoint exists (extracted or authored); a **deep-dives** doc gets one only when
 an authored `content/challenges/<slug>.json` exists for it (currently cassandra,
-flink, kafka, redis, zookeeper).
+flink, kafka, redis, zookeeper); a **notes** doc gets one from its scoped
+`content/challenges/notes-<slug>.json`. The scoped slug also keys `localStorage`, so
+`/notes/redis/` does not share completion state with `/deep-dives/redis/`.
 
 ### The DSA track
 
@@ -370,8 +372,8 @@ renders — it just silently loses a feature.
 
 ## 5. The challenge system
 
-Every `/answers/` page — and the five deep dives with authored files — gets a
-practice sidecar. Its checkpoints come from two sources, merged in
+Every `/answers/` page, all nine `/notes/` pages, and the five deep dives with authored
+files get a practice sidecar. Their checkpoints come from two sources, merged in
 `gen-challenges.mjs` at build time.
 
 ### Source A — extracted from the markdown
@@ -393,7 +395,8 @@ sidecar's collapsible list.
 ### Source B — hand-authored JSON
 
 Four mechanics cannot be derived from headings and live in
-`content/challenges/<slug>.json` — one file per doc, 33 files, each with all four:
+`content/challenges/<slug>.json` — one file per doc, 42 files, each with all four.
+Deep Notes use the scoped filename and inner slug `notes-<slug>`:
 
 | Id | Type | Tier · XP | Shape | Scored on |
 |---|---|---|---|---|
@@ -689,8 +692,9 @@ heading contracts from §4, rebuild. Nothing to register.
 
 **Add practice challenges** — create `content/challenges/<slug>.json` with the
 four standard checkpoints from §5 (the contract is enforced, so copy an existing
-file as the template). The filename must match the doc's derived slug. Works for
-answer docs and deep dives alike; rebuild and the sidecar picks it up.
+file as the template). The filename must match the inner slug. Answer docs and deep
+dives use the document slug; Deep Notes use `notes-<slug>` to avoid collection
+collisions. Rebuild and the sidecar picks it up.
 
 **Add a DSA chapter** — two files: the markdown in `DSA/` following the exact H2
 sequence, and an entry in `tools/dsa-config.mjs` with a free `order` slot. The

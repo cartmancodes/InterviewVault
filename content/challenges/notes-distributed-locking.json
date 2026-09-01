@@ -1,0 +1,117 @@
+{
+  "slug": "notes-distributed-locking",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "Tradeoff duel",
+      "xp": 80,
+      "prompt": "Two workers may process the same payment request. The operation already has a unique request ID. What should be the first line of defense?",
+      "options": [
+        {
+          "id": "lock",
+          "label": "Distributed lock around every request",
+          "sub": "serialize workers using a leased lock",
+          "correct": false,
+          "verdict": "A lock adds liveness, expiry, ownership, and stale-holder failure modes. It may still be useful for coordination, but it does not by itself make repeated payment effects safe."
+        },
+        {
+          "id": "idempotency",
+          "label": "Idempotency key with durable result",
+          "sub": "record one outcome per request ID",
+          "correct": true,
+          "verdict": "A uniqueness constraint or conditional write turns retries into reads of the original result. This directly addresses duplicate effects and avoids coordination when the domain permits it."
+        }
+      ],
+      "defend": {
+        "prompt": "If a lock is still required, which properties are essential?",
+        "options": [
+          { "label": "Acquire ownership and TTL atomically", "correct": true },
+          { "label": "Release only when the owner token matches", "correct": true },
+          { "label": "Use fencing tokens at the protected resource", "correct": true },
+          { "label": "Assume a renewed lease proves the old worker stopped", "correct": false }
+        ],
+        "explain": "Leases recover from crashes but cannot stop a paused former holder from resuming. Atomic ownership checks prevent one client deleting another's lock, and monotonically increasing fencing tokens let the resource reject stale work."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Lock safety ladder",
+      "xp": 70,
+      "prompt": "Reason from leases, ownership, and stale workers.",
+      "rungs": [
+        {
+          "q": "Why must a distributed lock have an expiry?",
+          "choices": ["To improve read throughput", "To release ownership after a crashed holder", "To guarantee fairness"],
+          "answer": 1,
+          "note": "Without a lease or TTL, a crashed process can leave the resource locked forever."
+        },
+        {
+          "q": "Why is GET followed by DELETE an unsafe release sequence?",
+          "choices": ["Another owner can acquire between the two commands", "DELETE cannot remove strings", "GET always reads a replica"],
+          "answer": 0,
+          "note": "The check and delete must be atomic, commonly through a Lua script, so a client cannot delete a successor's lock."
+        },
+        {
+          "q": "What does a fencing token allow a storage layer to do?",
+          "choices": ["Reject operations from an older lock holder", "Extend every lease", "Elect a Redis primary"],
+          "answer": 0,
+          "note": "The resource remembers the highest monotonic token and rejects stale operations carrying a lower value."
+        }
+      ],
+      "explain": "A lease controls who should act now; a fencing token protects the resource from someone who incorrectly believes they still may act. They solve different parts of distributed time and failure."
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Architecture builder",
+      "xp": 100,
+      "prompt": "Build a fenced critical-section path that remains safe after a stale worker resumes.",
+      "palette": [
+        "Worker Requests Lease",
+        "Coordinator Grants Monotonic Token",
+        "Worker Sends Token with Mutation",
+        "Resource Compares Highest Token",
+        "Resource Applies Newer Mutation",
+        "Atomic Owner-Checked Release",
+        "Plain DELETE Lock",
+        "Trust Wall Clock",
+        "Apply Stale Mutation"
+      ],
+      "slots": [
+        { "accept": "Worker Requests Lease" },
+        { "accept": "Coordinator Grants Monotonic Token" },
+        { "accept": "Worker Sends Token with Mutation" },
+        { "accept": "Resource Compares Highest Token" },
+        { "accept": "Resource Applies Newer Mutation" },
+        { "accept": "Atomic Owner-Checked Release" }
+      ],
+      "explain": "The coordinator issues an increasing fencing token with the lease. Every protected mutation carries it, and the resource rejects any token older than the greatest already accepted. The client then releases only its own lease atomically. A resumed stale worker can no longer corrupt the resource."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Spot the bottleneck",
+      "xp": 90,
+      "prompt": "Checkout throughput collapses although the lock service is healthy. Which signal identifies the bottleneck?",
+      "cards": [
+        { "name": "Lock Granularity", "metric": "one lock: all orders", "delta": "96% contention", "state": "hot" },
+        { "name": "Lock Service CPU", "metric": "17%", "delta": "healthy", "state": "ok" },
+        { "name": "Lease Expiry", "metric": "30 s", "delta": "stable", "state": "ok" },
+        { "name": "Network RTT", "metric": "2.1 ms", "delta": "+0.1 ms", "state": "ok" }
+      ],
+      "answer": "Lock Granularity",
+      "explain": "A global orders lock serializes unrelated checkouts. Lock only the actual contention domain, such as one order or account, or replace the lock with a conditional update or idempotency constraint when possible.",
+      "wrong": {
+        "Lock Service CPU": "The coordinator has ample headroom; the application is voluntarily serializing work through one key.",
+        "Lease Expiry": "A stable TTL may affect failure recovery, but it does not explain contention among healthy holders.",
+        "Network RTT": "A nearly unchanged 2.1 ms round trip is too small and too stable to explain the collapse."
+      }
+    }
+  ]
+}
