@@ -56,8 +56,20 @@ cd ../site && python3 -m http.server 8899    # preview at localhost:8899
 
 Diagrams are pre-rendered to SVG at build time, so pages ship with **no client-side
 JavaScript for rendering** — they load instantly and work without JS. The only scripts
-are progressive enhancements: the home-page search filter and Packet Runner mini-game,
-a table-of-contents highlighter, and the practice sidecar.
+are progressive enhancements: the portfolio terminal, the home-page search filter and
+Packet Runner mini-game, a table-of-contents highlighter, and the practice sidecar.
+
+The landing page pairs an animated Cartman scene with a portfolio terminal, using
+the vault's sky-blue and yellow accents. Dark mode is the landing-page default;
+the header toggle restores the original light palette and remembers the choice.
+The vault itself keeps its light theme. Click a section or type
+a command; Tab completes commands and the arrow keys browse command history. Motion
+and instant-text preferences are stored locally, and all portfolio sections remain
+readable without JavaScript. Its markup lives in `tools/template/portfolio.html`;
+the build injects career/project data and current vault counts.
+
+On phones, use **Explore portfolio** to jump to the terminal. Section buttons and
+command shortcuts have larger touch targets, and the output scrolls above the input.
 
 `site/` is **not committed** — GitHub Actions builds it on every push and deploys to
 Cloudflare Pages. Deployment and one-time secret setup are documented in

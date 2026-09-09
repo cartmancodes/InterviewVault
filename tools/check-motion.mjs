@@ -23,10 +23,9 @@
 // Binding inside the shorthand is what satisfies it robustly, since the binding
 // then travels with the declaration and no later shorthand can strip it.
 //
-// SMIL (<animateMotion>: .pf-rabbit, .pf-pond, .pf-gondola) is out of scope — it
-// is paused by pauseAnimations() in portfolio.js and has no CSS animation to
-// carry a binding. It is invisible to this check precisely because it declares
-// no animation.
+// requestAnimationFrame typing is out of scope: portfolio.js finishes pending
+// text and cancels the frame when motion is paused. The sprite and cursor use
+// CSS animations, so they are covered here.
 import { readFileSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';

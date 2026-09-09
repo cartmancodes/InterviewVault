@@ -923,371 +923,507 @@ body.mech-open { overflow: hidden; }
 .mech-panel.wide .slot:not(.filled)::after { font-size: 17px; }
 
 /* ── portfolio landing page ─────────────────────────────── */
-/* "Construction paper": flat cutout shapes, 2px ink outlines, hard offset
-   shadows with no blur. Design source: docs/superpowers "InterviewVault Design
-   System" → portfolio-reference.html. Every accent reads --acc, so the whole
-   page re-themes from one property (#FFD808 / #4FC3D9 / #E23D3D). */
+/* Reference terminal layout, scoped to the landing page. */
+body.portfolio { --terminal-accent: var(--ink); }
+body.portfolio * { box-sizing:border-box }
+body.portfolio { margin:0; background:var(--sky-wash); color:var(--ink); font-family:var(--sans); font-size:16px; line-height:1.6 }
+body.portfolio button,
+body.portfolio input,
+body.portfolio a { -webkit-tap-highlight-color:transparent }
+body.portfolio button,
+body.portfolio input { font:inherit }
+body.portfolio button,
+body.portfolio a { touch-action:manipulation }
+body.portfolio button { cursor:pointer }
+body.portfolio a { color:inherit; text-decoration:none }
+body.portfolio button { color:inherit }
+body.portfolio button:focus-visible,
+body.portfolio a:focus-visible,
+body.portfolio input:focus-visible { outline:2px solid var(--terminal-accent); outline-offset:5px }
+body.portfolio button { border:0; background:none }
+body.portfolio button:hover,
+body.portfolio a:hover { color:var(--terminal-accent) }
+body.portfolio .site-shell { width:min(1440px,100%); margin:auto; padding:0 56px }
+body.portfolio .header { height:106px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--rule) }
+body.portfolio .brand { display:flex; align-items:center; gap:13px; font-size:23px; font-weight:700; letter-spacing:-.8px }
+body.portfolio .brand-light { font-weight:400 }
+body.portfolio .brand-mark { display:grid; place-content:center; width:37px; height:37px; border:1px solid var(--ink-2); border-radius:9px; font-family:var(--mono); font-size:24px; color:var(--terminal-accent); letter-spacing:-4px; padding-right:4px }
+body.portfolio .brand-mark span { color:var(--ink-2) }
+body.portfolio .highlight-text { color:var(--terminal-accent) }
+body.portfolio .header-right { display:flex; align-items:center; gap:34px }
+body.portfolio .edition { font:12px var(--mono); letter-spacing:1.2px; color:var(--mut) }
+body.portfolio .quiet-button { display:flex; align-items:center; gap:9px; font:13px var(--mono); color:var(--ink-2); border:1px solid var(--rule); border-radius:6px; padding:9px 12px }
+body.portfolio .quiet-button:hover { background:var(--sky-wash) }
+body.portfolio .quiet-button #motion-icon { font-size:16px }
+body.portfolio main { display:grid; grid-template-columns:minmax(0,.9fr) minmax(0,1.22fr); gap:65px; padding:52px 0 44px; min-height:740px }
+body.portfolio .intro { min-width:0; padding-top:9px; display:flex; flex-direction:column }
+body.portfolio .eyebrow { display:flex; gap:11px; align-items:center; font:11px var(--mono); color:var(--ink-2); letter-spacing:1.3px }
+body.portfolio .tiny-line { width:23px; height:1px; background:var(--terminal-accent) }
+body.portfolio h1 { font-size:clamp(34px,3.5vw,52px); line-height:1.11; font-weight:600; letter-spacing:-2.1px; margin:24px 0 15px }
+body.portfolio .role { font-size:16px; margin:0 }
+body.portfolio .dim { color:var(--mut) }
+body.portfolio .intro-copy { color:var(--mut); font-size:17px; margin:20px 0 0; line-height:1.65 }
+body.portfolio .character-stage { position:relative; margin:33px -18px 0; flex:1; display:flex; flex-direction:column; justify-content:flex-end; min-height:270px }
+body.portfolio .speech { position:relative; z-index:2; align-self:flex-end; margin:0 34px -28px 70px; padding:9px 15px; max-width:290px; border:1px solid var(--ink-2); background:var(--sky-wash); border-radius:8px; font:12px/1.5 var(--mono); color:var(--ink-2); transform:rotate(-2deg) }
+body.portfolio .speech-corner { position:absolute; bottom:-6px; left:22px; width:10px; height:10px; border-bottom:1px solid var(--ink-2); border-right:1px solid var(--ink-2); background:var(--sky-wash); transform:skewY(25deg) rotate(45deg) }
+body.portfolio .cartman { width:100%; aspect-ratio:3/2; background-image:url('/assets/cartman-typing.png'); background-size:200% 200%; background-position:0 0; mask-image:linear-gradient(to bottom,transparent,#000 12%,#000 85%,transparent),linear-gradient(to right,transparent,#000 10%,#000 90%,transparent); mask-composite:intersect; animation:pf-idle 6s steps(1,end) infinite var(--amb, running) }
+body.portfolio.is-typing .cartman { animation:pf-typing .65s steps(1,end) infinite var(--amb, running) }
+body.portfolio .scene-caption { position:relative; margin:-17px 32px 0; display:flex; align-items:center; gap:7px; font:10px var(--mono); letter-spacing:.8px; color:var(--ink-2) }
+body.portfolio .caption-code { margin-left:auto; color:var(--ink-2) }
+body.portfolio .live-dot { display:inline-block; background:var(--terminal-accent); width:5px; height:5px; border-radius:50%; flex-shrink:0 }
+body.portfolio.is-typing .scene-caption .live-dot { animation:pf-pulse .7s infinite var(--amb, running) }
+body.portfolio .social-links { display:flex; align-items:center; gap:26px; font:13px var(--mono); padding:23px 0 0; margin-top:21px; border-top:1px solid var(--rule) }
+body.portfolio .social-links a span { color:var(--mut); margin-left:6px }
+body.portfolio .location { font-size:10px; letter-spacing:1px; color:var(--ink-2); margin-left:auto }
+body.portfolio .workspace { min-width:0 }
+body.portfolio .terminal { border:1px solid var(--ink-2); background:var(--paper); border-radius:12px; overflow:hidden; box-shadow:0 20px 55px #0003; display:flex; flex-direction:column; height:661px; outline:none }
+body.portfolio .terminal-title { height:43px; min-height:43px; display:flex; align-items:center; justify-content:space-between; padding:0 18px; border-bottom:1px solid var(--rule); background:var(--sky-wash); font:12px var(--mono); color:var(--ink-2) }
+body.portfolio .window-dots { display:flex; gap:6px }
+body.portfolio .window-dots i { width:8px; height:8px; background:var(--acc); border-radius:50% }
+body.portfolio .window-dots i:nth-child(2) { background:var(--acc) }
+body.portfolio .window-dots i:nth-child(3) { background:var(--acc) }
+body.portfolio .shell-label { font-size:11px; color:var(--ink-2) }
+body.portfolio .terminal-nav { display:flex; border-bottom:1px solid var(--rule); background:var(--sky-wash); padding:0 13px; gap:4px }
+body.portfolio .terminal-nav button { font:11px var(--mono); color:var(--ink-2); display:flex; align-items:center; gap:8px; padding:17px 11px 16px; border-bottom:2px solid transparent; white-space:nowrap }
+body.portfolio .terminal-nav button span { font-size:13px; color:var(--ink-2) }
+body.portfolio .terminal-nav button:hover span { color:var(--terminal-accent) }
+body.portfolio .terminal-nav button.active { color:var(--terminal-accent); border-color:var(--terminal-accent) }
+body.portfolio .terminal-nav button.active span { color:var(--ink) }
+body.portfolio .terminal-viewport { padding:23px 28px 25px; flex:1; min-height:0; overflow-y:auto; scrollbar-color:var(--ink-2) transparent; scrollbar-width:thin }
+body.portfolio .system-line { color:var(--ink-2); font:11px var(--mono); display:flex; align-items:center; gap:8px; margin-bottom:26px }
+body.portfolio .system-version { margin-left:auto; font-size:10px }
+body.portfolio .command-line { font:13px/1.5 var(--mono); display:flex; align-items:center; flex-wrap:wrap; gap:0; margin-bottom:26px }
+body.portfolio .prompt-user { color:var(--terminal-accent) }
+body.portfolio .path { white-space:pre; color:var(--ink-2) }
+body.portfolio .prompt-arrow { color:var(--ink-2); margin-right:11px; font-size:18px }
+body.portfolio #shown-command { color:var(--ink) }
+body.portfolio #typing-cursor { font-size:13px; color:var(--terminal-accent); margin-left:6px; opacity:0 }
+body.portfolio.is-output-typing #typing-cursor { animation:pf-blink .7s step-end infinite var(--amb, running) }
+body.portfolio .output-kicker { font:11px var(--mono)!important; letter-spacing:1.3px; color:var(--ink-2)!important; margin:0 0 12px!important }
+body.portfolio h2 { font-size:33px; letter-spacing:-1px; line-height:1.2; font-weight:500; margin:0 0 20px }
+body.portfolio #output>p { font-size:16px; line-height:1.75; color:var(--ink-2); margin:13px 0 }
+body.portfolio #output strong { color:var(--ink); font-weight:500 }
+body.portfolio .fact-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:25px 0; padding:18px 0; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule) }
+body.portfolio .fact-grid>div { display:flex; flex-direction:column; gap:5px }
+body.portfolio .fact-value { font:26px var(--mono); color:var(--ink) }
+body.portfolio .fact-value>span { font-size:17px }
+body.portfolio .fact-label,
+body.portfolio .stack-label { font:10px var(--mono); letter-spacing:1px; color:var(--mut) }
+body.portfolio .tags { display:flex; flex-wrap:wrap; gap:7px; margin-top:12px }
+body.portfolio .tags span { padding:3px 9px; background:var(--sky-wash); border:1px solid var(--ink-2); border-radius:4px; color:var(--ink-2); font:11px/1.6 var(--mono) }
+body.portfolio #output .end-note { font:12px/1.8 var(--mono); color:var(--ink-2); margin-top:25px }
+body.portfolio .end-note button { padding:0; color:var(--terminal-accent); text-decoration:underline; text-underline-offset:3px; font:inherit }
+body.portfolio .end-note>span { color:var(--terminal-accent) }
+body.portfolio .command-area { border-top:1px solid var(--rule); padding:15px 23px 10px; background:var(--sky-wash) }
+body.portfolio .suggestions { display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-bottom:11px; font:10px var(--mono); color:var(--ink-2) }
+body.portfolio .suggestions>span { margin-right:5px; font-size:10px; letter-spacing:1px }
+body.portfolio .suggestions button { border:1px solid var(--ink-2); border-radius:4px; padding:3px 8px; font:11px var(--mono); color:var(--ink-2) }
+body.portfolio .suggestions button:hover { background:var(--sky-wash); color:var(--terminal-accent); border-color:var(--ink-2) }
+body.portfolio #command-form { display:flex; align-items:center; gap:0; border:1px solid var(--ink-2); border-radius:6px; padding:5px 7px 5px 12px; background:var(--sky-wash) }
+body.portfolio #command-form:focus-within { border-color:var(--terminal-accent); box-shadow:0 0 0 2px #9be0c412 }
+body.portfolio #command-input { background:transparent; color:var(--ink); border:0; outline:0; min-width:0; flex:1; font:13px var(--mono); height:31px }
+body.portfolio #command-input::placeholder { color:var(--ink-2) }
+body.portfolio .enter-button { border-radius:4px; background:var(--sky-wash); color:var(--terminal-accent); width:30px; height:28px; display:grid; place-content:center; font-size:20px }
+body.portfolio .terminal-status { display:flex; align-items:center; justify-content:space-between; margin-top:9px; font:10px var(--mono); color:var(--ink-2); gap:8px }
+body.portfolio .terminal-status>span:first-child { display:flex; align-items:center; gap:6px }
+body.portfolio .divider { margin:0 4px; color:var(--ink-2) }
+body.portfolio .terminal-status button { font:10px var(--mono); padding:0; color:var(--terminal-accent) }
+body.portfolio .terminal-status:has(button:not([hidden])) #input-help { display:none }
+body.portfolio .terminal-note { font:11px/1.5 var(--mono); color:var(--ink-2); display:flex; gap:8px; margin:15px 3px 0; align-items:center }
+body.portfolio .terminal-note>span { font-size:17px; color:var(--ink-2) }
+body.portfolio .terminal-note button { margin-left:auto; font:11px var(--mono); color:var(--terminal-accent); padding:2px 0; border-bottom:1px dotted var(--ink-2) }
+body.portfolio .timeline { margin-top:28px }
+body.portfolio .timeline section { border-left:1px solid var(--ink-2); padding:0 0 22px 18px; position:relative }
+body.portfolio .timeline section:before { content:''; position:absolute; left:-4px; top:7px; width:7px; height:7px; border-radius:50%; background:var(--ink-2) }
+body.portfolio .timeline section:first-child:before { background:var(--terminal-accent) }
+body.portfolio .date { font:10px var(--mono); letter-spacing:1px; color:var(--ink-2) }
+body.portfolio h3 { font-size:16px; font-weight:500; line-height:1.5; margin:7px 0 }
+body.portfolio h3 span { color:var(--ink-2); font-size:13px }
+body.portfolio .timeline p,
+body.portfolio .project p,
+body.portfolio .hobby p { font-size:16px; color:var(--ink-2); line-height:1.8; margin:7px 0 }
+body.portfolio .project { display:flex; gap:14px; border-top:1px solid var(--rule); padding:17px 0 }
+body.portfolio .project:hover h3 { color:var(--terminal-accent) }
+body.portfolio .project-number { font:11px var(--mono); color:var(--ink-2); margin-top:10px }
+body.portfolio .project h3 { display:flex; justify-content:space-between; margin-top:2px }
+body.portfolio .project>div { flex:1 }
+body.portfolio .project-meta { font:9px/1.6 var(--mono); letter-spacing:.7px; color:var(--ink-2) }
+body.portfolio .primary-link { display:flex; justify-content:space-between; align-items:center; background:var(--acc); color:var(--ink); padding:13px 17px; font:13px var(--mono); margin-top:26px; border-radius:5px; gap:10px; overflow-wrap:anywhere }
+body.portfolio .primary-link:hover { background:var(--acc); color:var(--ink) }
+body.portfolio .primary-link span { font-size:20px }
+body.portfolio .contact-link { font:13px var(--mono); margin:22px 0; display:flex; justify-content:space-between; overflow-wrap:anywhere }
+body.portfolio .detail-box { padding:20px; background:var(--sky-wash); border:1px solid var(--ink-2); margin-top:25px; border-radius:6px }
+body.portfolio .detail-box p { font:14px/2 var(--mono); color:var(--ink-2) }
+body.portfolio .hobby { display:flex; gap:20px; margin:25px 0 }
+body.portfolio .hobby-symbol { font-size:29px; color:var(--ink-2) }
+body.portfolio .help-list button { width:100%; display:flex; align-items:center; gap:15px; padding:11px 0; text-align:left; border-bottom:1px solid var(--rule) }
+body.portfolio .help-list code { font:13px var(--mono); color:var(--terminal-accent); min-width:95px }
+body.portfolio .help-list span { font-size:13px; color:var(--ink-2) }
+body.portfolio footer { border-top:1px solid var(--rule); padding:25px 0 29px; display:flex; justify-content:space-between; gap:20px; font:11px/1.5 var(--mono); color:var(--ink-2) }
+body.portfolio footer a { color:var(--ink-2) }
+body.portfolio .footer-note { color:var(--ink-2) }
+body.portfolio .skip { position:absolute; top:-100px; left:20px; z-index:10; padding:12px; background:var(--terminal-accent); color:var(--ink) }
+body.portfolio .skip:focus { top:15px }
+body.portfolio .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0 }
+body.portfolio.paused *,
+body.portfolio.paused *:before,
+body.portfolio.paused *:after { animation:none!important; scroll-behavior:auto!important }
+body.portfolio #typing-cursor { pointer-events:none }
+body.portfolio [hidden] { display:none!important }
+@keyframes pf-typing { 0%,100%{background-position:0 0}25%{background-position:100% 0}50%{background-position:0 100%}75%{background-position:100% 100%} }
+@keyframes pf-idle { 0%,93%,100%{background-position:0 0}95%{background-position:0 100%} }
+@keyframes pf-blink { 50%{opacity:1} }
+@keyframes pf-pulse { 50%{opacity:.35} }
+@media(min-width:1450px) {
+body.portfolio main { padding-top:65px; gap:80px }
+body.portfolio .terminal { height:690px }
+body.portfolio .character-stage { min-height:310px }
+body.portfolio h1 { font-size:54px }
+}
+@media(max-width:1150px) {
+body.portfolio .site-shell { padding:0 32px }
+body.portfolio main { gap:32px; grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr) }
+body.portfolio .terminal-nav { padding:0 6px; gap:0 }
+body.portfolio .terminal-nav button { padding:15px 8px; gap:5px }
+body.portfolio .terminal-nav button span { font-size:12px }
+body.portfolio .terminal-viewport { padding:22px }
+body.portfolio .edition { display:none }
+body.portfolio .eyebrow { font-size:9px; letter-spacing:.8px }
+body.portfolio .location { display:none }
+body.portfolio .speech { margin-right:8px }
+body.portfolio .footer-note { display:none }
+}
+@media(max-width:900px) {
+body.portfolio .site-shell { padding:0 23px }
+body.portfolio .header { height:82px }
+body.portfolio main { grid-template-columns:1fr; gap:30px; padding-top:33px }
+body.portfolio .intro { display:grid; grid-template-columns:1fr 1fr; column-gap:10px }
+body.portfolio .eyebrow { grid-column:1/-1; font-size:10px }
+body.portfolio .intro h1 { font-size:clamp(30px,5.5vw,43px); grid-column:1; letter-spacing:-1.5px; margin:20px 0 15px }
+body.portfolio .role { grid-column:1; font-size:14px }
+body.portfolio .intro-copy { grid-column:1; font-size:15px; margin-top:14px }
+body.portfolio .character-stage { grid-column:2; grid-row:2/5; min-height:180px; margin:5px -15px 0 }
+body.portfolio .speech { margin:0 10px -12px 10px; font-size:10px; padding:7px 10px }
+body.portfolio .scene-caption { font-size:8px; letter-spacing:.1px; margin:-2px 20px 0 }
+body.portfolio .caption-code { display:none }
+body.portfolio .social-links { grid-column:1/-1; margin-top:24px; padding-top:17px }
+body.portfolio .location { display:block }
+body.portfolio .terminal { height:680px }
+body.portfolio .terminal-nav button { padding:16px 13px; gap:9px }
+body.portfolio .terminal-nav button span { font-size:13px }
+body.portfolio .terminal-viewport { padding:24px 27px }
+body.portfolio .terminal-note { font-size:10px }
+body.portfolio footer { font-size:10px }
+}
+@media(max-width:450px) {
+body.portfolio .site-shell { padding:0 17px }
+body.portfolio .brand { font-size:20px; gap:9px }
+body.portfolio .brand-mark { width:31px; height:31px; font-size:21px }
+body.portfolio .quiet-button { font-size:11px; padding:7px 9px }
+body.portfolio .header-right { gap:0 }
+body.portfolio .intro h1 { font-size:30px; letter-spacing:-1.4px }
+body.portfolio .role { font-size:12px }
+body.portfolio .intro-copy { font-size:13px }
+body.portfolio .speech { font-size:9px; margin:0 2px -10px 4px }
+body.portfolio .character-stage { margin-right:-10px }
+body.portfolio .scene-caption { margin:1px 13px 0; font-size:7px }
+body.portfolio .scene-caption .live-dot { width:4px; height:4px }
+body.portfolio .social-links { font-size:12px; gap:20px }
+body.portfolio .location { font-size:8px }
+body.portfolio .terminal-nav { justify-content:space-between; padding:0 7px }
+body.portfolio .terminal-nav button { font-size:9px; padding:15px 5px; gap:5px }
+body.portfolio .terminal-nav button span { font-size:11px }
+body.portfolio .terminal-title { font-size:10px }
+body.portfolio .terminal { height:670px }
+body.portfolio .terminal-viewport { padding:22px 20px }
+body.portfolio h2 { font-size:29px }
+body.portfolio .command-area { padding:12px 15px 10px }
+body.portfolio .terminal-note { flex-wrap:wrap; gap:5px }
+body.portfolio .terminal-note button { font-size:10px }
+body.portfolio footer { flex-direction:column; gap:9px }
+body.portfolio .eyebrow { font-size:8px }
+body.portfolio #command-input { font-size:16px }
+body.portfolio .system-line { margin-bottom:22px }
+body.portfolio .fact-label { font-size:9px }
+}
+@media(prefers-reduced-motion:reduce) {
+body.portfolio *,
+body.portfolio *:before,
+body.portfolio *:after { animation:none!important }
+}
+body.portfolio .edition,
+body.portfolio .eyebrow,
+body.portfolio .scene-caption,
+body.portfolio .caption-code,
+body.portfolio .location,
+body.portfolio .system-line,
+body.portfolio .system-version,
+body.portfolio .output-kicker,
+body.portfolio .fact-label,
+body.portfolio .stack-label,
+body.portfolio .tags span,
+body.portfolio .suggestions button,
+body.portfolio .terminal-status,
+body.portfolio .terminal-status button,
+body.portfolio .terminal-note,
+body.portfolio .terminal-note button,
+body.portfolio .date,
+body.portfolio .project-meta,
+body.portfolio footer { font-size:12px }
+body.portfolio .scene-caption { letter-spacing:0 }
+body.portfolio .project-meta { line-height:1.8 }
+body.portfolio .eyebrow { line-height:1.6 }
+body.portfolio .scene-caption .caption-code { font-size:12px }
+body.portfolio .help-list span { font-size:14px }
+body.portfolio .suggestions>span { font-size:12px }
+@media(max-width:1150px) {
+body.portfolio .caption-code { display:none }
+body.portfolio .eyebrow { font-size:12px; letter-spacing:.3px }
+}
+@media(max-width:900px) {
+body.portfolio .scene-caption { font-size:10px }
+body.portfolio .eyebrow { font-size:12px }
+body.portfolio .terminal-nav button span { font-size:13px }
+body.portfolio .role,
+body.portfolio .intro-copy { font-size:16px }
+}
+@media(max-width:450px) {
+body.portfolio .intro { display:flex }
+body.portfolio .intro h1 { font-size:42px; letter-spacing:-1.8px; margin-top:20px }
+body.portfolio .eyebrow { font-size:11px }
+body.portfolio .role,
+body.portfolio .intro-copy { font-size:16px }
+body.portfolio .character-stage { width:100%; max-width:355px; margin:22px auto 0; min-height:210px }
+body.portfolio .speech { font-size:12px; margin:0 12px -18px 45px }
+body.portfolio .scene-caption { font-size:11px; margin:0 16px }
+body.portfolio .social-links { width:100%; font-size:13px }
+body.portfolio .location { font-size:11px }
+body.portfolio .terminal-nav button { gap:4px }
+body.portfolio .terminal-nav button span { font-size:12px }
+body.portfolio .terminal-nav button { font-size:10px }
+body.portfolio .terminal-note { font-size:12px }
+body.portfolio .terminal-note button { font-size:12px }
+body.portfolio .terminal-status { font-size:10px }
+body.portfolio #input-help { font-size:10px }
+body.portfolio h2 { font-size:29px }
+body.portfolio .fact-label { font-size:11px }
+}
+
+/* Keep the vault's paper, sky grid, yellow highlights, and hard ink edges. */
 body.portfolio {
-  --pf-shell: 1180px;
-  --pf-pad: 32px;
-  background: var(--paper);
-  /* The page's ambient motion is infinite, so WCAG 2.2.2 requires a way to stop
-     it. Every looping animation reads this property; portfolio.js flips it. */
-  --amb: running;
+  background-color: var(--sky-wash);
+  background-image: linear-gradient(var(--rule) 1px, transparent 1px),
+    linear-gradient(90deg, var(--rule) 1px, transparent 1px);
+  background-size: 28px 28px;
 }
-
-/* no sticky header here, so the vault's scroll offset would read as a gap */
-html:has(body.portfolio) { scroll-padding-top: 16px; }
-
-.pf-motion {
-  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
-  font: 600 12px var(--mono); letter-spacing: .06em; text-transform: uppercase;
-  padding: 8px 14px; border-radius: 100px;
-  color: var(--ink); background: var(--paper); border: var(--cut);
-  transition: background-color .12s ease;
+body.portfolio .site-shell { background: var(--paper); border-inline: 2px solid var(--ink); }
+body.portfolio .header { border-bottom: var(--cut); }
+body.portfolio .brand-mark { background: var(--ink); color: var(--paper); border: var(--cut); box-shadow: 3px 3px 0 var(--acc); }
+body.portfolio .brand-mark span { color: var(--acc); }
+body.portfolio .brand-mark { display: flex; align-items: center; justify-content: center; line-height: 1; letter-spacing: -3px; padding: 0 3px 0 0; }
+body.portfolio .quiet-button { border: var(--cut); color: var(--ink); background: var(--paper); }
+body.portfolio .quiet-button:hover { background: var(--acc-wash); }
+body.portfolio :focus-visible { outline-color: var(--blue); }
+body.portfolio .terminal-nav :focus-visible { outline-color: var(--ink); outline-offset: -5px; }
+body.portfolio .intro h1 { font-weight: 700; }
+body.portfolio h1 .highlight-text { color: var(--ink); background: var(--acc); }
+body.portfolio h2 .highlight-text { color: var(--ink); background: linear-gradient(transparent 65%, var(--acc) 65%); }
+body.portfolio .tiny-line { height: 3px; background: var(--ink); }
+body.portfolio .character-stage { margin: 30px 0 0; min-height: 285px; justify-content: center; }
+body.portfolio .cartman {
+  background-color: var(--ink); border: var(--cut); border-radius: 8px;
+  mask-image: none; box-shadow: var(--lift); width: 100%;
 }
-.pf-motion:hover { background: var(--acc); }
-.pf-motion-icon { font-size: 11px; line-height: 1; }
-
-/* --pf-shell is the content column the design measures from (1180px). This site
-   is border-box, so the side padding has to be added back onto max-width to land
-   on the same column the reference renders. */
-.pf-shell {
-  max-width: calc(var(--pf-shell) + var(--pf-pad) * 2);
-  margin: 0 auto; padding: 0 var(--pf-pad);
+body.portfolio .speech { background: var(--acc); border: var(--cut); color: var(--ink); margin: 0 18px -12px 36px; box-shadow: 3px 3px 0 var(--ink); }
+body.portfolio .speech-corner { background: var(--acc); border-color: var(--ink); }
+body.portfolio .scene-caption { margin: 17px 0 0; font-size: 10px; }
+body.portfolio .caption-code { font-size: 10px; }
+body.portfolio .live-dot { background: var(--ink); }
+body.portfolio .social-links { gap: 20px; border-top: var(--cut); }
+body.portfolio .social-links a:hover { text-decoration: underline; }
+body.portfolio .location { font-size: 10px; }
+body.portfolio .terminal { border: var(--cut); box-shadow: var(--lift-hi); border-radius: 10px; }
+body.portfolio .terminal-title { background: var(--ink); color: var(--paper); border-bottom: var(--cut); }
+body.portfolio .shell-label { color: var(--sky); }
+body.portfolio .window-dots i:nth-child(2) { background: var(--sky); }
+body.portfolio .window-dots i:nth-child(3) { background: var(--paper); }
+body.portfolio .terminal-nav {
+  background-color: var(--sky);
+  background-image: linear-gradient(var(--sky-grid) 1px, transparent 1px), linear-gradient(90deg, var(--sky-grid) 1px, transparent 1px);
+  background-size: 28px 28px; border-bottom: var(--cut);
 }
-
-/* hero — sky, with the landscape pinned to the bottom edge */
-.pf-hero { position: relative; overflow: hidden; background: var(--sky); }
-.pf-landscape { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 300px; }
-.pf-hero-shell { position: relative; z-index: 2; padding-top: 26px; padding-bottom: 40px; }
-
-/* hero ambience — the scene is alive: the sun turning, clouds crossing, pines
-   swaying, the polaroid hanging off its top corner. All of it stops under the
-   global prefers-reduced-motion rule near the top of this file.
-
-   Every looping `animation` shorthand below ends in `var(--amb, running)` — the
-   shorthand's optional <single-animation-play-state> slot. Binding the pause
-   INSIDE the shorthand is deliberate: a bare `animation-play-state: var(--amb)`
-   longhand is silently wiped by any later `animation:` shorthand at equal
-   specificity (the shorthand resets every longhand it does not name), which is
-   exactly how six of these animations shipped un-pausable. tools/check-motion.mjs
-   fails the build if an infinite animation here loses its binding. */
-@keyframes pf-sunspin { to { transform: rotate(360deg); } }
-@keyframes pf-drift { from { transform: translateX(-180px); } to { transform: translateX(112vw); } }
-@keyframes pf-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
-@keyframes pf-sway { 0%, 100% { transform: rotate(-2.6deg); } 50% { transform: rotate(-1.1deg); } }
-@keyframes pf-snow {
-  0%   { transform: translate(0, -24px); }
-  50%  { transform: translate(16px, 270px); }
-  100% { transform: translate(-8px, 560px); }
+body.portfolio .terminal-nav button,
+body.portfolio .terminal-nav button span { color: var(--ink); }
+body.portfolio .terminal-nav button.active { background: var(--acc); border-color: var(--ink); }
+body.portfolio .terminal-nav button:hover { background: var(--acc-wash); }
+body.portfolio .terminal-nav button.active span { font-weight: 600; }
+body.portfolio .terminal-viewport { scrollbar-color: var(--mut) var(--soft); }
+body.portfolio .command-line { padding: 9px 11px; background: var(--soft); border-left: 3px solid var(--acc); }
+body.portfolio .tags span { background: var(--sky-wash); border-color: var(--rule); color: var(--ink-2); }
+body.portfolio .command-area { background: var(--sky-wash); border-top: var(--cut); }
+body.portfolio .suggestions button { background: var(--paper); color: var(--ink-2); border-color: var(--rule); }
+body.portfolio .suggestions button:hover { background: var(--acc); border-color: var(--ink); color: var(--ink); }
+body.portfolio #command-form { border: var(--cut); background: var(--paper); }
+body.portfolio #command-form:focus-within { box-shadow: 0 0 0 2px var(--blue); }
+body.portfolio .enter-button { background: var(--acc); color: var(--ink); }
+body.portfolio .primary-link { background: var(--acc); border: var(--cut); color: var(--ink); box-shadow: 3px 3px 0 var(--ink); }
+body.portfolio .primary-link:hover { background: var(--acc-wash); }
+body.portfolio .project:hover { background: var(--sky-wash); }
+body.portfolio footer { border-top: var(--cut); }
+body.portfolio footer a { color: var(--ink); text-decoration: underline; }
+body.portfolio .portfolio-fallback { grid-column: 1 / -1; }
+body.portfolio main > noscript { grid-column: 1 / -1; }
+body.portfolio:not(.terminal-enhanced) button,
+body.portfolio:not(.terminal-enhanced) .command-area,
+body.portfolio:not(.terminal-enhanced) .terminal-note,
+body.portfolio:not(.terminal-enhanced) .end-note { display: none; }
+body.portfolio:not(.terminal-enhanced) .terminal { height: auto; }
+body.portfolio:not(.terminal-enhanced) .cartman { animation: none; }
+body.portfolio .portfolio-fallback details { padding: 20px 0; border-top: var(--cut); }
+body.portfolio .portfolio-fallback summary { cursor: pointer; font-weight: 600; }
+body.portfolio .portfolio-fallback details > :not(summary) { margin-top: 20px; }
+@media (max-width: 1150px) {
+  body.portfolio .location { display: none; }
 }
-
-.pf-sun {
-  position: absolute; top: 78px; right: 44px; width: 86px; height: 86px; z-index: 1;
-  transform-origin: center; animation: pf-sunspin 40s linear infinite var(--amb, running);
-}
-
-/* a cloud is a pill plus a half-disc puff; the puff drops its bottom border and
-   paints over the pill's top edge, so the two shapes read as one silhouette.
-   .pf-hero already clips, so they simply leave at the right edge. */
-.pf-cloud {
-  position: absolute; left: 0; z-index: 1;
-  background: var(--paper); border: var(--cut); border-radius: 100px;
-  animation: pf-drift linear infinite var(--amb, running);
-}
-.pf-cloud::before {
-  content: ''; position: absolute;
-  background: var(--paper); border: var(--cut); border-bottom: none; border-radius: 50%;
-}
-/* negative delays so the sky is already mid-crossing on first paint */
-.pf-cloud-a { top: 36px; width: 92px; height: 26px; animation-duration: 46s; }
-.pf-cloud-a::before { left: 22px; top: -15px; width: 44px; height: 32px; }
-.pf-cloud-b { top: 96px; width: 64px; height: 18px; animation-duration: 60s; animation-delay: -32s; }
-.pf-cloud-b::before { left: 15px; top: -11px; width: 32px; height: 24px; }
-.pf-cloud-c { top: 64px; width: 80px; height: 22px; animation-duration: 52s; animation-delay: -14s; }
-.pf-cloud-c::before { left: 19px; top: -13px; width: 38px; height: 28px; }
-
-.pf-snow { position: absolute; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; }
-.pf-snow i {
-  position: absolute; top: -20px; display: block; border-radius: 50%;
-  background: var(--paper); border: 2px solid var(--ink);
-  animation: pf-snow 10s linear infinite var(--amb, running);
-}
-.pf-snow i:nth-child(1) { left:  8%; width:  9px; height:  9px; animation-duration:  9s; }
-.pf-snow i:nth-child(2) { left: 22%; width:  7px; height:  7px; animation-duration: 12s;   animation-delay:  -4s; }
-.pf-snow i:nth-child(3) { left: 38%; width: 10px; height: 10px; animation-duration: 10s;   animation-delay:  -7s; }
-.pf-snow i:nth-child(4) { left: 55%; width:  7px; height:  7px; animation-duration: 13s;   animation-delay:  -2s; }
-.pf-snow i:nth-child(5) { left: 70%; width:  9px; height:  9px; animation-duration: 11s;   animation-delay:  -9s; }
-.pf-snow i:nth-child(6) { left: 84%; width:  8px; height:  8px; animation-duration: 10.5s; animation-delay:  -5s; }
-.pf-snow i:nth-child(7) { left: 93%; width:  7px; height:  7px; animation-duration: 12.5s; animation-delay: -11s; }
-
-.pf-kite {
-  position: absolute; top: 64px; right: 6%; width: 74px; height: 120px; z-index: 1;
-  animation: pf-bob 4.4s ease-in-out infinite var(--amb, running);
-}
-
-/* the road leaves the right mountain and runs off the bottom edge, where the
-   experience road picks it up */
-.pf-hero-asphalt { fill: none; stroke: var(--ink); stroke-width: 22; stroke-linecap: round; opacity: .12; }
-.pf-hero-lane { fill: none; stroke: var(--ink); stroke-width: 3; stroke-dasharray: 12 10; }
-
-.pf-pines { animation: pf-bob 3.6s ease-in-out infinite var(--amb, running); }
-.pf-pines-b { animation-duration: 4.2s; animation-delay: -1.6s; }
-
-.pf-nav { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 30px; }
-.pf-wordmark {
-  font: 700 16px/1.55 var(--mono); color: var(--paper); margin-right: auto;
-  text-shadow: 2px 2px 0 var(--ink);
-}
-.pf-nav a, .pf-notes-links a {
-  font: 600 12px var(--mono); letter-spacing: .06em; text-transform: uppercase;
-  padding: 8px 14px; border-radius: 100px; text-decoration: none;
-  color: var(--ink); background: var(--paper); border: var(--cut);
-  transition: background-color .12s ease;
-}
-.pf-nav a:hover, .pf-notes-links a:hover, .pf-icon-link:hover { background: var(--acc); }
-
-.pf-hero-content { display: flex; gap: 44px; align-items: flex-end; flex-wrap: wrap; }
-.pf-hero-copy { flex: 1 1 460px; min-width: 0; padding-bottom: 30px; }
-.pf-badge {
-  display: inline-block; font: 600 11px/1.55 var(--mono);
-  letter-spacing: .12em; text-transform: uppercase;
-  background: var(--acc); border: var(--cut); border-radius: 100px;
-  padding: 5px 12px; margin-bottom: 14px;
-}
-.pf-hero-copy h1 {
-  font-size: clamp(32px, 4.6vw, 46px); line-height: 1.05; letter-spacing: -.03em;
-  font-weight: 700; max-width: 19ch; color: var(--paper);
-  text-shadow: 3px 3px 0 var(--ink);
-}
-.pf-socials { display: flex; gap: 10px; margin-top: 22px; }
-.pf-icon-link {
-  width: 42px; height: 42px; color: var(--ink); border-radius: 10px;
-  border: var(--cut); background: var(--paper);
-  display: flex; align-items: center; justify-content: center;
-  transition: background-color .12s ease;
-}
-
-.pf-polaroid {
-  flex: 0 1 400px; min-width: 280px; margin-bottom: 8px;
-  background: var(--paper); border: var(--cut); border-radius: 6px;
-  box-shadow: 5px 5px 0 var(--ink);
-  transform-origin: top center; animation: pf-sway 6s ease-in-out infinite var(--amb, running);
-  padding: 10px 10px 14px;
-}
-.pf-polaroid img {
-  display: block; width: 100%; height: auto;
-  border: var(--cut); border-radius: 4px;
-}
-.pf-polaroid figcaption {
-  font: 600 11px/1.55 var(--mono); text-align: center;
-  margin-top: 9px; letter-spacing: .08em;
-}
-
-/* terminal strip — a full-bleed ink band under the hero. The line types
-   itself in portfolio.js; the static text in build-site.mjs is what a
-   reader without JavaScript sees. */
-.pf-term { background: var(--ink); }
-.pf-term-in {
-  display: flex; gap: 10px; align-items: baseline;
-  padding: 11px var(--pf-pad); overflow: hidden; white-space: nowrap;
-  font: 600 12.5px var(--mono);
-}
-/* 9.05:1 on ink */
-.pf-term-host { color: var(--sky); flex: none; }
-.pf-term-line { color: var(--paper); overflow: hidden; text-overflow: ellipsis; }
-
-/* section reveal — the class is added by JS, so a reader without
-   JavaScript never gets opacity: 0. */
-.pf-reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s cubic-bezier(.2,.7,.3,1); }
-.pf-shown { opacity: 1; transform: none; }
-
-/* sections */
-.pf-section {
-  max-width: calc(var(--pf-shell) + var(--pf-pad) * 2);
-  margin: 0 auto; padding: 8px var(--pf-pad);
-}
-.pf-last { padding-bottom: 44px; }
-.pf-label {
-  display: inline-block; font: 600 13px var(--mono);
-  letter-spacing: .1em; text-transform: uppercase;
-  background: var(--ink); color: var(--paper);
-  padding: 6px 14px; border-radius: 100px; margin-top: 26px;
-}
-
-/* education — the campus drawn as a second polaroid, a pennant, and the
-   degree card. Sits between the hero and the road: the road Task 5 builds
-   runs up to this section's campus gate. */
-.pf-edu-grid { display: flex; gap: 40px; align-items: flex-start; flex-wrap: wrap; margin-top: 18px; }
-/* the campus sketch is framed exactly like the staff photo, one notch slower */
-.pf-campus {
-  flex: 0 1 360px; min-width: 280px; margin: 0;
-  background: var(--paper); border: var(--cut); border-radius: 6px;
-  box-shadow: 5px 5px 0 var(--ink); padding: 10px 10px 14px;
-  transform: rotate(-2deg); transform-origin: top center;
-  animation: pf-sway 7s ease-in-out infinite var(--amb, running);
-}
-.pf-campus svg { display: block; width: 100%; height: auto; border: var(--cut); border-radius: 4px; background: var(--sky); }
-.pf-campus figcaption { font: 600 11px/1.55 var(--mono); text-align: center; margin-top: 9px; letter-spacing: .08em; }
-.pf-edu-copy { flex: 1 1 420px; min-width: 300px; }
-.pf-pennant { display: block; }
-.pf-edu-card { margin-top: 14px; padding: 16px 18px; }
-.pf-edu-card h3 { font-size: 16px; font-weight: 600; letter-spacing: -.01em; }
-.pf-edu-degree { font-size: 13.5px; color: var(--ink-2); margin-top: 2px; }
-.pf-edu-card .pf-prose { margin-top: 10px; }
-.pf-edu-pills { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
-
-/* experience — the career as a bus route down one road. The wrapper holds the
-   SVG's aspect ratio so the stop cards can be placed in percentages and stay
-   pinned to their kerb at any width. */
-.pf-exp { position: relative; }
-.pf-exp-label {
-  position: absolute; left: var(--pf-pad); top: 20px; z-index: 2; margin-top: 0;
-}
-.pf-road { position: relative; margin: 0 auto; max-width: 960px; aspect-ratio: 1000 / 1810; }
-.pf-roadsvg { display: block; width: 100%; height: 100%; overflow: visible; }
-
-/* the road, drawn twice: fat translucent asphalt, thin dashed centreline */
-.pf-asphalt { fill: none; stroke: var(--ink); stroke-width: 26; stroke-linecap: round; opacity: .12; }
-.pf-lane { fill: none; stroke: var(--ink); stroke-width: 3; stroke-dasharray: 14 12; }
-.pf-mark { fill: var(--acc); stroke: var(--ink); stroke-width: 3; }
-.pf-terminus { fill: var(--ink); }
-.pf-terminus-in { fill: var(--acc); }
-
-@keyframes pf-swayg { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
-@keyframes pf-hop { 0%, 100% { transform: translateY(0); } 45% { transform: translateY(-9px); } }
-
-/* SVG children rotate about their own box rather than the viewBox origin.
-   The pause rides inside each shorthand for the reason spelled out above the
-   hero keyframes: this rule used to carry a lone `animation-play-state`
-   longhand, and every shorthand below quietly reset it. */
-.pf-tree, .pf-reed, .pf-board, .pf-sails, .pf-hop, .pf-lamp { transform-box: fill-box; }
-.pf-tree, .pf-reed { transform-origin: bottom center; animation: pf-swayg 6s ease-in-out infinite var(--amb, running); }
-.pf-tree-b { animation-duration: 7.4s; animation-delay: -2s; }
-.pf-tree-c { animation-duration: 7.8s; animation-delay: -2.4s; }
-.pf-tree-d { animation-duration: 7.2s; animation-delay: -1.6s; }
-.pf-reed   { animation-duration: 5.6s; animation-delay: -1s; }
-.pf-reed-b { animation-duration: 6.8s; animation-delay: -3s; }
-.pf-sails  { transform-origin: center; animation: pf-sunspin 9s linear infinite var(--amb, running); }
-.pf-hop    { transform-origin: center; animation: pf-hop 1.1s ease-in-out infinite var(--amb, running); }
-.pf-board  { transform-origin: top center; animation: pf-swayg 4.6s ease-in-out infinite var(--amb, running); }
-.pf-lamp   { transform-origin: center; animation: pf-bob 3.4s ease-in-out infinite var(--amb, running); }
-/* .pf-rabbit, .pf-pond and .pf-gondola have no CSS animation at all — they ride
-   <animateMotion>, which is SMIL and deaf to animation-play-state. The pause
-   reaches them through pauseAnimations() on the <svg> root in portfolio.js, so
-   there is deliberately no declaration for them here. */
-
-.pf-stop {
-  position: absolute; width: min(400px, 39%);
-  background: var(--paper); border: var(--cut); border-radius: 10px;
-  box-shadow: var(--lift); padding: 14px 16px;
-}
-.pf-stop-l { left: 59%; top: var(--top); }
-.pf-stop-r { right: 59%; top: var(--top); }
-/* the terminus card is the current job: centred on the road, wider, and filled
-   accent instead of white, so the route reads as arriving somewhere */
-.pf-stop-end {
-  left: 50%; bottom: -12px; transform: translateX(-50%);
-  width: min(540px, 64%); background: var(--acc);
-}
-.pf-stop-when {
-  display: inline-block; padding: 3px 9px; border: var(--cut); border-radius: 100px;
-  font: 700 10.5px var(--mono); background: var(--acc);
-}
-/* on the accent card the pills invert so they stay legible against the fill */
-.pf-stop-end .pf-stop-when, .pf-stop-end .pf-founding { background: var(--paper); }
-.pf-stop h3 { margin-top: 8px; font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
-.pf-stop p { margin-top: 6px; font-size: 13.5px; color: var(--ink-2); }
-.pf-stop-end p { color: var(--prose); }
-
-.pf-founding {
-  display: inline-block; padding: 3px 8px; border: var(--cut); border-radius: 100px;
-  font: 600 10.5px var(--mono); color: var(--ink); background: var(--acc);
-  vertical-align: 2px; margin-left: 6px;
-}
-
-.pf-stack { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; margin-top: 36px; }
-.pf-stack-label { font: 400 11px/1.55 var(--mono); color: var(--mut); margin-right: 3px; }
-.pf-pill {
-  padding: 4px 9px; border: var(--cut); border-radius: 100px;
-  font: 600 11px var(--mono); color: var(--ink); background: var(--paper);
-}
-.pf-creds { font: 400 11.5px/1.55 var(--mono); color: var(--mut); margin-top: 12px; }
-
-/* projects + hobbies share the cutout card */
-.pf-cards {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 14px; margin-top: 16px;
-}
-.pf-cards-wide { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-.pf-card {
-  padding: 16px; background: var(--paper); border: var(--cut); border-radius: 10px;
-  box-shadow: var(--lift);
-}
-.pf-card h3 { font-size: 15px; font-weight: 600; }
-.pf-project {
-  display: flex; flex-direction: column; gap: 6px;
-  text-decoration: none; color: inherit; transition: box-shadow .12s ease;
-}
-.pf-project:hover, .pf-notes:hover { box-shadow: var(--lift-hi); }
-.pf-project span { font-size: 12.5px; color: var(--ink-2); }
-.pf-project small { font: 400 10.5px/1.55 var(--mono); color: var(--mut); }
-.pf-prose { font: 400 14.5px/1.7 var(--serif); color: var(--prose); margin-top: 6px; }
-
-/* notes — the funnel into the vault */
-.pf-notes {
-  display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-top: 16px;
-  padding: 20px 22px; text-decoration: none; color: inherit;
-  background: var(--acc); border: var(--cut); border-radius: 10px;
-  box-shadow: var(--lift); transition: box-shadow .12s ease;
-}
-.pf-iv {
-  width: 42px; height: 42px; border-radius: 9px; flex: none;
-  background: var(--ink); color: var(--paper);
-  font: 600 17px var(--mono); display: grid; place-items: center;
-}
-.pf-notes-copy { flex: 1; min-width: 220px; }
-.pf-notes-copy strong { display: block; font-size: 16px; font-weight: 600; }
-.pf-notes-copy span { font-size: 13px; color: var(--ink-2); }
-.pf-notes-domain { font: 600 11.5px/1.55 var(--mono); }
-.pf-notes-links { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
-.pf-notes-links a { font-size: 11px; padding: 6px 12px; }
-
-/* footer */
-.pf-footer { border-top: var(--cut); background: var(--sky); }
-.pf-footer .pf-shell {
-  padding: 20px var(--pf-pad); display: flex; justify-content: space-between;
-  gap: 14px; flex-wrap: wrap; font: 600 12px/1.55 var(--mono); color: var(--ink);
-}
-.pf-footer a { color: var(--ink); }
-
-/* Above ~1120px the road (max 960px) is narrower than the content column, so it
-   is inset far enough that the absolutely-placed EXPERIENCE pill sits in clear
-   whitespace beside it. Below that the road grows out to the full column and its
-   gate — the tree, then the MESRA GATE sign — slides left underneath the pill.
-   Drop the road until the gate clears: the pill's bottom edge lands 41px below
-   the road's top and the gate's topmost ink about 4px below it, so 48px buys the
-   difference plus a gap, with slack for a wider mono fallback font.
-   margin, not padding: .pf-road is border-box with an aspect-ratio, so padding
-   would squash the SVG and drag every absolutely-positioned stop card with it. */
-@media (min-width: 901px) and (max-width: 1120px) {
-  .pf-road { margin-top: 48px; }
-}
-
 @media (max-width: 900px) {
-  /* Once the cards start reflowing, their production copy is too tall for the
-     route's fixed stop geometry. Switch before they collide: the stops remain
-     in road order and carry the whole story without the decorative SVG. */
-  .pf-roadsvg { display: none; }
-  .pf-road { aspect-ratio: auto; }
-  .pf-stop { position: static; width: 100%; margin: 12px 0; transform: none; }
-  .pf-exp-label { position: static; margin-top: 26px; }
+  body.portfolio .character-stage { margin: 8px 0 0; min-height: 180px; }
+  body.portfolio .speech { margin: 0 5px -12px 15px; }
+  body.portfolio .scene-caption { font-size: 9px; }
+  body.portfolio .location { display: inline; }
+}
+@media (max-width: 450px) {
+  body.portfolio .site-shell { border: 0; }
+  body.portfolio .character-stage { margin-top: 26px; min-height: 210px; }
+  body.portfolio .scene-caption { font-size: 10px; }
+  body.portfolio .social-links { gap: 17px; flex-wrap: wrap; }
+  body.portfolio .location { display: none; }
 }
 
-@media (max-width: 420px) {
-  /* hold the page together down to 320px */
-  body.portfolio { --pf-pad: 20px; }
-  .pf-polaroid { min-width: 0; }
-  .pf-hero-content { gap: 28px; }
+/* The landing page defaults to dark. Theme tokens stay local to this page;
+   the vault continues to use the original light palette. */
+body.portfolio { color-scheme: light; }
+html[data-portfolio-theme="dark"] { color-scheme: dark; background: #101b2a; }
+html[data-portfolio-theme="dark"] body.portfolio {
+  color-scheme: dark;
+  --ink: #EEF4FC;
+  --ink-2: #C1CEDF;
+  --mut: #A6B7CE;
+  --paper: #101B2A;
+  --soft: #1C2B40;
+  --prose: #DBE5F2;
+  --rule: #32445B;
+  --sky-wash: #142438;
+  --acc-wash: #283B50;
+  --blue: #79C3F0;
+  --cut: 2px solid #32445B;
+  --lift: 4px 4px 0 #050C14;
+  --lift-hi: 6px 6px 0 #050C14;
+}
+html[data-portfolio-theme="dark"] .portfolio .site-shell { border-inline-color: var(--rule); }
+html[data-portfolio-theme="dark"] .portfolio .brand-mark,
+html[data-portfolio-theme="dark"] .portfolio .terminal-title { background: #0B1523; color: var(--ink); }
+html[data-portfolio-theme="dark"] .portfolio .window-dots i:nth-child(3) { background: var(--ink); }
+html[data-portfolio-theme="dark"] .portfolio .terminal-nav {
+  background-color: #1B3147;
+  background-image: linear-gradient(#28455F 1px, transparent 1px), linear-gradient(90deg, #28455F 1px, transparent 1px);
+}
+html[data-portfolio-theme="dark"] .portfolio .terminal-nav button.active,
+html[data-portfolio-theme="dark"] .portfolio .terminal-nav button.active span,
+html[data-portfolio-theme="dark"] .portfolio .suggestions button:hover,
+html[data-portfolio-theme="dark"] .portfolio .enter-button,
+html[data-portfolio-theme="dark"] .portfolio .primary-link,
+html[data-portfolio-theme="dark"] .portfolio .speech,
+html[data-portfolio-theme="dark"] .portfolio h1 .highlight-text { color: #0E1A2B; }
+html[data-portfolio-theme="dark"] .portfolio .terminal-nav button.active:hover,
+html[data-portfolio-theme="dark"] .portfolio .primary-link:hover { background: #FFE455; }
+html[data-portfolio-theme="dark"] .portfolio .terminal-nav button.active:focus-visible { outline-color: #0E1A2B; }
+html[data-portfolio-theme="dark"] .portfolio h2 .highlight-text { color: var(--acc); background: none; }
+html[data-portfolio-theme="dark"] .portfolio .speech,
+html[data-portfolio-theme="dark"] .portfolio .primary-link { box-shadow: 3px 3px 0 #050C14; }
+html[data-portfolio-theme="dark"] .portfolio .speech-corner { border-color: var(--rule); }
+html[data-portfolio-theme="dark"] .portfolio .live-dot,
+html[data-portfolio-theme="dark"] .portfolio .tiny-line { background: var(--sky); }
+body.portfolio .header-right { gap: 14px; }
+body.portfolio #theme-toggle { white-space: nowrap; }
+body.portfolio #theme-icon { font-size: 16px; line-height: 1; }
+@media (max-width: 600px) {
+  body.portfolio .header { height: auto; min-height: 120px; padding-block: 18px; flex-wrap: wrap; gap: 16px; }
+  body.portfolio .header-right { width: 100%; gap: 12px; }
+  body.portfolio .header-right .quiet-button { flex: 1; justify-content: center; }
+}
+
+/* Mobile layout and touch controls. Keep text readable as the keyboard opens,
+   and reserve output space independently of the command controls. */
+body.portfolio .mobile-terminal-link,
+body.portfolio .input-help-touch { display: none; }
+body.portfolio .terminal-nav .section-number { font-size: 11px; font-weight: 400; }
+body.portfolio #shown-command,
+body.portfolio #output { overflow-wrap: anywhere; min-width: 0; }
+body.portfolio .project > div,
+body.portfolio .hobby > div { min-width: 0; }
+body.portfolio .skip { background: var(--acc); color: #0E1A2B; }
+@media (max-width: 900px), (pointer: coarse) {
+  body.portfolio .quiet-button,
+  body.portfolio .suggestions button,
+  body.portfolio .terminal-nav button,
+  body.portfolio .terminal-note button,
+  body.portfolio .terminal-status button,
+  body.portfolio .help-list button,
+  body.portfolio .end-note button { min-height: 44px; }
+  body.portfolio .enter-button { width: 44px; height: 44px; flex-shrink: 0; }
+  body.portfolio #command-input { font-size: 16px; min-height: 44px; }
+  body.portfolio .social-links a,
+  body.portfolio footer a { display: inline-flex; align-items: center; min-height: 44px; }
+  body.portfolio .terminal-title,
+  body.portfolio .terminal-nav,
+  body.portfolio .command-area { flex-shrink: 0; }
+  body.portfolio .terminal { height: clamp(640px, 90svh, 800px); }
+  body.portfolio .terminal-note { flex-wrap: wrap; }
+  body.portfolio .terminal-status { min-height: 44px; flex-wrap: wrap; }
+}
+@media (pointer: coarse) {
+  body.portfolio .input-help-keyboard { display: none; }
+  body.portfolio .input-help-touch { display: inline; }
+}
+@media (max-width: 600px) {
+  body.portfolio .site-shell { padding-inline: max(17px, env(safe-area-inset-left)); border: 0; }
+  body.portfolio .intro { display: flex; }
+  body.portfolio .intro h1 { font-size: clamp(36px, 10.5vw, 46px); letter-spacing: -1.5px; margin-top: 20px; }
+  body.portfolio .eyebrow { font-size: 11px; }
+  body.portfolio .role,
+  body.portfolio .intro-copy { font-size: 16px; }
+  body.portfolio .mobile-terminal-link {
+    display: inline-flex; align-self: flex-start; align-items: center; gap: 20px;
+    min-height: 44px; padding: 8px 14px; margin-top: 20px; border: var(--cut);
+    border-radius: 6px; background: var(--acc); color: #0E1A2B; font: 500 13px var(--mono);
+  }
+  body.portfolio .mobile-terminal-link:hover { background: #FFE455; color: #0E1A2B; }
+  body.portfolio .character-stage { width: 100%; max-width: 310px; min-height: 0; margin: 26px auto 0; }
+  body.portfolio .speech { font-size: 12px; }
+  body.portfolio .scene-caption { font-size: 10px; }
+  body.portfolio .social-links { flex-wrap: wrap; gap: 8px 20px; padding-top: 10px; }
+  body.portfolio .location { display: none; }
+  body.portfolio .terminal-nav { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 0; gap: 0; }
+  body.portfolio .terminal-nav button { justify-content: center; padding: 12px 4px; }
+  body.portfolio .terminal-nav button span { font-size: 12px; }
+  body.portfolio .terminal-nav .section-number { display: none; }
+  body.portfolio .terminal-viewport { padding: 20px 16px; }
+  body.portfolio .command-area { padding: 12px 12px 6px; }
+  body.portfolio .suggestions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  body.portfolio .suggestions > span { grid-column: 1 / -1; }
+  body.portfolio .suggestions button { font-size: 13px; padding: 8px; }
+  body.portfolio .terminal-status,
+  body.portfolio #input-help { font-size: 10px; }
+  body.portfolio .terminal-note { gap: 4px 8px; }
+  body.portfolio h2 { font-size: clamp(26px, 7vw, 33px); }
+  body.portfolio .fact-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  body.portfolio .fact-value { font-size: 23px; }
+  body.portfolio .fact-label { font-size: 11px; }
+  body.portfolio .help-list button { flex-wrap: wrap; gap: 4px 12px; }
+  body.portfolio footer { flex-direction: column; gap: 8px; font-size: 12px; }
+}
+@media (max-width: 360px) {
+  body.portfolio .terminal-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  body.portfolio .terminal-nav button span { font-size: 13px; }
+  body.portfolio .terminal-title { padding-inline: 12px; }
 }

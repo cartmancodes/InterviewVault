@@ -86,7 +86,7 @@ tools/
                               contract, DSA page assertions
   template/                   design system + client runtime, copied verbatim
     site.css  vault.js  progress.js  home.js  doc.js  game.js
-    favicon.svg  cartman.png  _headers  _redirects  robots.txt
+    portfolio.html  portfolio.js  favicon.svg  cartman-typing.png  _headers  _redirects  robots.txt
 
 site/                         build output — never hand-edit, never committed
 .github/workflows/            build → validate → deploy
@@ -142,7 +142,7 @@ That mechanism is a single custom property, `--amb`, which `portfolio.js` flips 
 `paused` — and an animation obeys it only if its declaration binds it:
 
 ```css
-animation: pf-sway 6s ease-in-out infinite var(--amb, running);
+animation: pf-idle 6s steps(1, end) infinite var(--amb, running);
 ```
 
 The gate parses `tools/template/site.css`, walks every style rule from the
@@ -157,11 +157,10 @@ set `animation-play-state: var(--amb)` as a lone longhand and were then reset by
 every `animation-*` longhand it does not name. Binding inside the shorthand is
 what makes the rule robust: the binding travels with the declaration.
 
-SMIL `<animateMotion>` (`.pf-rabbit`, `.pf-pond`, `.pf-gondola`) is out of scope.
-It is deaf to `animation-play-state` and is paused by `pauseAnimations()` on the
-`<svg>` roots in `portfolio.js`; it declares no CSS animation, so the gate never
-sees it. Timer-driven motion (the typing terminal) is out of scope too — it
-subscribes to the `pf-motion` event that the toggle dispatches on `document`.
+The terminal's typing effect uses `requestAnimationFrame`, so the pause handler
+also finishes pending text and cancels its frame. Cartman's sprite, typing cursor,
+and activity indicator use CSS animations bound to `--amb`. Reduced-motion settings
+skip typing and animation; the motion and instant-text choices persist locally.
 
 ### Stage 1 — `render-diagrams.mjs`
 
@@ -507,39 +506,28 @@ from §4.
 
 ### The portfolio theme
 
-`/` and the vault now run one identity: **construction paper** — a flat-cutout look
-of bright sky, snow-capped peaks, 2px ink outlines and hard offset shadows with no
-blur, on IBM Plex type and the `--ink` scale. The landing page keeps the mountain
-landscape; the vault keeps the drafting grid, drawn inside its own sky band.
-Everything specific to the landing page is still prefixed `pf-` and scoped under
-`body.portfolio`, so its layout and motion rules collide with nothing — but the
-color tokens are the same shared set the vault reads, defined once in `:root`.
+`/` and the vault share the **construction paper** identity: sky blue, yellow,
+white, navy outlines, hard offset shadows, and IBM Plex type. The landing page
+adapts the two-column layout from
+`https://cartman-codes-terminal.shubhchak.chatgpt.site`: an introduction and animated
+Cartman sprite on the left, with an interactive terminal on the right. The terminal
+has a navy title bar, sky-grid section navigation, a white output pane, and yellow
+highlights. All landing-page CSS selectors are scoped to `body.portfolio`.
 
-Every accent reads `var(--acc)`, defined once in `:root`, so the page re-themes from
-a single property (`#FFD808` pom yellow, or the `#4FC3D9` / `#E23D3D` alternates).
-The career diagram's arrows draw themselves in on load via `stroke-dashoffset`,
-staggered `.12s` apart by a `--i` custom property, and the global reduced-motion
-block zeroes both duration *and* delay so the animation lands finished rather than
-late.
+The landing page defaults to dark mode, with a header toggle for the original light
+palette. `pf-theme` stores the choice locally. A small portfolio-only head script
+applies the saved theme before CSS loads; without JavaScript or storage, dark is
+the default. Dark tokens are scoped to the portfolio so vault pages stay light.
 
-Design source of truth: `docs/superpowers/InterviewVault Design System.zip` →
-`portfolio-reference.html`. Two deliberate departures from it, both because that
-prototype has no `box-sizing: border-box` reset and this stylesheet does: the shell
-is `calc(1180px + 2 * 32px)` so the *content column* still measures the design's
-1180px, and the hero icon buttons are 42px so the 38px inner square plus its 2px
-cutout border renders at the reference's size.
+`tools/template/portfolio.html` holds the layout and command content. `buildPortfolio()`
+injects the existing career/project data, technology stack, year, and live document
+and diagram counts. Internal project and vault links remain local. The build emits
+About content into the initial HTML and a full portfolio fallback in `noscript`.
 
-A third departure is deliberate, not a size fix: the reference prototype colors its
-meta text `#6B7C96`, measured at 4.24:1 on white — under the 4.5:1 AA floor for body
-text. Rather than pixel-match that on the landing page alone, the 2026-08-07
-re-theme gave the whole site one shared `--mut` / `--rule` pair that clears AA
-everywhere it is used, and let the landing page's eight `.pf-*` rules that read
-those tokens — the career-diagram year labels and captions, the timeline date column
-and row dividers, the stack label, the creds line, and the project meta — darken
-along with them. Its focus ring drifts the same way: on sky bands it is `--ink`, not
-`--blue` (see rule 4 below). Both drifts were ruled correct by the human partner on
-2026-08-07 — a later pass should not "fix" the landing page back toward the
-handoff's lower-contrast values.
+`portfolio.js` handles section buttons, command aliases, completion, history, URL
+hashes, typing, and motion controls. Commands only select local content; they never
+execute shell commands. The sprite sheet is `tools/template/cartman-typing.png`,
+copied to the generated assets directory during the build.
 
 Four accessibility rules, each pinned by a measured contrast ratio, are why blue
 survives only as a focus ring and nowhere else: yellow (`--acc`) on white is
@@ -565,13 +553,13 @@ switches to `--ink` on sky bands (9.05:1) and keeps `--blue` only on `--paper` /
 --side-w / --rail-w / --doc-gap    doc-page columns
 ```
 
-The portfolio adds its own structural tokens, scoped to `body.portfolio` and used
-nowhere else — every color is shared with the vault; only these layout constants
-are page-specific:
-
-```css
---pf-shell 1180px    content column      --pf-pad 32px   side padding
-```
+The portfolio uses a 1440px maximum shell and switches to a single column at
+900px. At 600px and below, the introduction and character stack above the terminal,
+with a shortcut to jump directly to it. Mobile controls have 44px touch targets;
+the command shortcuts form a two-column grid, and the main tabs also switch to two
+columns on the smallest phones. The terminal height follows the viewport with a
+minimum reading area, while its output scrolls independently of the input. The
+16px input avoids automatic text-field zoom and requests the mobile Go key.
 
 Two token notes from the 2026-08-07 re-theme:
 

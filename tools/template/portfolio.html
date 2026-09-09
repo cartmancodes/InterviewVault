@@ -1,0 +1,65 @@
+
+  <a class="skip" href="#terminal">Skip to portfolio</a>
+  <div class="site-shell">
+    <header class="header">
+      <a class="brand" href="#about" aria-label="Cartman Codes home"><span class="brand-mark">c<span>_</span></span><span>cartman<span class="brand-light">codes</span><span class="highlight-text">.</span></span></a>
+      <div class="header-right">
+        <span class="edition">PERSONAL PORTFOLIO / {{year}}</span>
+        <button id="theme-toggle" class="quiet-button" type="button" aria-label="Switch to light mode"><span id="theme-icon" aria-hidden="true">☀</span> <span id="theme-label">Light mode</span></button>
+        <button id="motion" class="quiet-button" aria-pressed="false"><span id="motion-icon">Ⅱ</span> <span id="motion-label">Pause motion</span></button>
+      </div>
+    </header>
+    <main>
+      <section class="intro" id="about" aria-labelledby="name">
+        <div class="eyebrow"><span class="tiny-line"></span> THE DEVELOPER BEHIND THE TERMINAL</div>
+        <h1 id="name">Shubhojeet<br>Chakraborty<span class="highlight-text">.</span></h1>
+        <p class="role">Technical Lead, AI/ML <span class="dim">at</span> Arcesium</p>
+        <p class="intro-copy">Building systems at scale.<br>Following curiosity after hours.</p>
+        <a class="mobile-terminal-link" href="#terminal">Explore portfolio <span aria-hidden="true">↓</span></a>
+        <div class="character-stage">
+          <div class="speech"><span id="cartman-line">Fine. I'll show you the portfolio.</span><span class="speech-corner" aria-hidden="true"></span></div>
+          <div id="cartman" class="cartman" role="img" aria-label="Animated Eric Cartman in his red jacket and blue hat, typing at a desktop computer"></div>
+          <div class="scene-caption"><span class="live-dot"></span><span id="scene-status">CARTMAN IS AT THE KEYBOARD</span><span class="caption-code">[ npc_01 ]</span></div>
+        </div>
+        <div class="social-links"><a href="https://github.com/cartmancodes" target="_blank" rel="noopener noreferrer">GitHub <span>↗</span></a><a href="https://in.linkedin.com/in/shubhojeet-chakraborty-540570b0" rel="me">LinkedIn <span>↗</span></a><a href="mailto:shubhchak@gmail.com">Say hello <span>↗</span></a><span class="location">BASED IN INDIA</span></div>
+      </section>
+      <section class="workspace" aria-label="Interactive portfolio terminal">
+        <div class="terminal" id="terminal" tabindex="-1">
+          <div class="terminal-title"><div class="window-dots" aria-hidden="true"><i></i><i></i><i></i></div><span>cartman@portfolio: ~</span><span class="shell-label">zsh</span></div>
+          <nav class="terminal-nav" aria-label="Portfolio sections">
+            <button data-command="about" class="active" aria-current="page"><span class="section-number" aria-hidden="true">01</span> <span>About</span></button><button data-command="experience"><span class="section-number" aria-hidden="true">02</span> <span>Experience</span></button><button data-command="projects"><span class="section-number" aria-hidden="true">03</span> <span>Projects</span></button><button data-command="notes"><span class="section-number" aria-hidden="true">04</span> <span>Notes</span></button>
+          </nav>
+          <div class="terminal-viewport" id="viewport" tabindex="0" role="region" aria-label="Scrollable terminal output">
+            <div class="system-line"><span class="highlight-text">✓</span> portfolio loaded <span class="system-version">v1.0.0</span></div>
+            <div class="command-line"><span class="prompt-user">cartman</span><span class="dim">@portfolio</span><span class="path"> ~ </span><span class="prompt-arrow">❯</span> <span id="shown-command">whoami</span><span id="typing-cursor" aria-hidden="true">▋</span></div>
+            <article id="output" aria-label="Portfolio content">{{about}}</article>
+            
+          </div>
+          <div class="command-area">
+            <div class="suggestions" aria-label="More commands"><span>TRY</span><button data-command="education">education</button><button data-command="hobbies">hobbies</button><button data-command="contact">contact</button><button data-command="help">help</button></div>
+            <form id="command-form" autocomplete="off"><label for="command-input" class="prompt-arrow" aria-label="Enter a portfolio command">❯</label><input id="command-input" name="command" placeholder="Type a command…" spellcheck="false" autocapitalize="off" autocorrect="off" enterkeyhint="go" aria-describedby="input-help"><button type="submit" class="enter-button" aria-label="Run command">↵</button></form>
+            <div class="terminal-status"><span><span class="live-dot"></span><span id="terminal-state">ready</span></span><span id="input-help"><span class="input-help-keyboard">Tab to complete <span class="divider">/</span> ↑ command history</span><span class="input-help-touch">Tap a section or enter a command</span></span><button id="skip-typing" hidden>Skip typing →</button></div>
+          </div>
+        </div>
+        <p class="terminal-note"><span>⌘</span> A little personality. A lot of engineering. <button id="read-mode" aria-pressed="false">Instant text</button></p>
+      </section>
+    {{fallback}}
+    </main>
+    <footer><span>© {{year}} Shubhojeet Chakraborty</span><span class="footer-note">Built with curiosity. Served with attitude.</span><a href="/vault/">Visit the knowledge vault ↗</a></footer>
+  </div>
+  <p class="sr-only" id="announcement" role="status" aria-live="polite"></p>
+  <template id="content-about">
+    <p class="output-kicker">HELLO, INTERNET.</p><h2>I make complex systems<br><span class="highlight-text">work together.</span></h2>
+    <p>I'm Shubhojeet — a technical lead working across AI infrastructure, distributed systems, and data platforms.</p><p>Currently building <strong>Arcesium Intelligence</strong>: AI agents, a firm-wide LLM gateway, and the infrastructure that keeps them running.</p>
+    <div class="fact-grid"><div><span class="fact-value">9+<span> years</span></span><span class="fact-label">BUILDING SOFTWARE</span></div><div><span class="fact-value">BIT <span>Mesra</span></span><span class="fact-label">CLASS OF 2017</span></div></div>
+    <div class="stack-label">THINGS I BUILD WITH</div><div class="tags">{{stack}}</div><p class="end-note"><span>→</span> Start with <button data-command="projects">projects</button>, or take a look at <button data-command="experience">experience</button>.</p>
+  </template>
+  <template id="content-experience">{{experience}}</template>
+  <template id="content-projects">{{projects}}</template>
+  <template id="content-notes"><p class="output-kicker">MY SECOND BRAIN</p><h2>Learn it.<br><span class="highlight-text">Write it down.</span></h2><p>My engineering notes live in the vault: system design, data structures, deep dives, and lessons from production.</p><div class="fact-grid"><div><span class="fact-value">{{docs}}</span><span class="fact-label">WORKED DOCUMENTS</span></div><div><span class="fact-value">{{diagrams}}</span><span class="fact-label">DIAGRAMS</span></div></div><p>Explore core concepts, follow architecture breakdowns, or practice with the built-in learning track.</p><a class="primary-link" href="/vault/">Enter the knowledge vault <span>↗</span></a><p class="end-note">Yes, there's a snake game in there, too.</p></template>
+  <template id="content-education"><p class="output-kicker">WHERE IT STARTED</p><h2>BIT Mesra.<br><span class="highlight-text">Class of 2017.</span></h2><p class="highlight">B.E. · Birla Institute of Technology, Mesra<br>Ranchi, Jharkhand</p><p>Data structures, networks, operating systems — and a lot of ICPC practice. This is where solving problems became thinking in systems.</p><div class="detail-box"><span class="stack-label">COMPETITIVE PROGRAMMING</span><p>ACM ICPC regionals, 2017<br>National rank 57 in preliminaries<br>Codeforces Expert · 1775<br>CodeChef · 5★</p></div></template>
+  <template id="content-hobbies"><p class="output-kicker">AWAY FROM THE KEYBOARD</p><h2>Other kinds of <span class="highlight-text">patterns.</span></h2><div class="hobby"><span class="hobby-symbol">♫</span><div><h3>Music theory</h3><p>Harmony, chord functions, and voice leading. I like figuring out why a progression works, then picking it apart until it makes sense.</p></div></div><div class="hobby"><span class="hobby-symbol">↗</span><div><h3>Football</h3><p>Playing the game and studying the tactics. Pressing triggers, the double pivot, and how a team works as a system.</p></div></div><p class="end-note">Apparently, everything turns into a systems problem.</p></template>
+  <template id="content-contact"><p class="output-kicker">LET'S TALK</p><h2>Good conversations<br><span class="highlight-text">start somewhere.</span></h2><p>Want to talk engineering, AI infrastructure, or something interesting you're building?</p><a class="primary-link" href="mailto:shubhchak@gmail.com">shubhchak@gmail.com <span>↗</span></a><a class="contact-link" href="https://github.com/cartmancodes" target="_blank" rel="noopener noreferrer">github.com/cartmancodes <span>↗</span></a><p class="end-note">Cartman handles the typing. I'll handle the reply.</p></template>
+  <template id="content-help"><p class="output-kicker">MANUAL, BUT MAKE IT SHORT</p><h2>Your command <span class="highlight-text">cheat sheet.</span></h2><p>Click a command below or type it into the terminal.</p><div class="help-list"><button data-command="about"><code>whoami</code><span>A quick introduction</span></button><button data-command="experience"><code>experience</code><span>The career timeline</span></button><button data-command="projects"><code>projects</code><span>Things I've built</span></button><button data-command="notes"><code>notes</code><span>The knowledge vault</span></button><button data-command="education"><code>education</code><span>BIT Mesra & programming</span></button><button data-command="hobbies"><code>hobbies</code><span>Music & football</span></button><button data-command="contact"><code>contact</code><span>Say hello</span></button><button data-command="clear"><code>clear</code><span>Clear the terminal</span></button></div><p class="end-note">Tab completes commands. ↑ and ↓ browse your history.</p></template>
+
+<script src="/assets/portfolio.js" defer></script>
