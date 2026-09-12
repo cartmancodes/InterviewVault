@@ -173,12 +173,12 @@ graph TB
     FS -->|live celebrity GSI query| POSTS
     FS -->|hydrate + merge| C
 
-    style REDISFEED fill:#e1f5ff
-    style POSTS fill:#e1f5ff
-    style FOLLOWS fill:#e1f5ff
-    style SQS fill:#FFE4B5
-    style FS fill:#90EE90
-    style WF fill:#90EE90
+    style REDISFEED fill:#EAF5FD
+    style POSTS fill:#EAF5FD
+    style FOLLOWS fill:#EAF5FD
+    style SQS fill:#FFF6C9
+    style FS fill:#DDF3EC
+    style WF fill:#DDF3EC
 ```
 
 ### Data Model
@@ -342,11 +342,11 @@ graph LR
 
     A --> B --> C --> D --> E
 
-    style A fill:#FFB6C1
-    style B fill:#FFE4B5
-    style C fill:#FFE4B5
-    style D fill:#FFE4B5
-    style E fill:#90EE90
+    style A fill:#FCE5EA
+    style B fill:#FFF6C9
+    style C fill:#FFF6C9
+    style D fill:#FFF6C9
+    style E fill:#DDF3EC
 ```
 
 **Why stages exist:**
@@ -488,9 +488,9 @@ graph LR
     S3 -->|"50K+ follower accounts choke fanout"| S4
     S4 -->|"viral 10M/s reads + global RTT"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0–100 Users (MVP)

@@ -204,11 +204,11 @@ graph TB
     DN -->|GET chunk bytes| CDN
     CDN -->|cache miss| S3
 
-    style S3 fill:#e1f5ff
-    style META fill:#e1f5ff
-    style CDN fill:#f3e5f5
-    style BROKER fill:#FFE4B5
-    style FS fill:#90EE90
+    style S3 fill:#EAF5FD
+    style META fill:#EAF5FD
+    style CDN fill:#EDE8FA
+    style BROKER fill:#FFF6C9
+    style FS fill:#DDF3EC
 ```
 
 **Client layer:**
@@ -371,29 +371,31 @@ sequenceDiagram
 
 **Why CDC survives insertions.** Consider a 1-byte insertion at offset 0. The rolling hash window slides forward through the new byte. Within at most one average-chunk-size worth of bytes downstream from the insertion point, the hash will encounter the same content pattern it encountered before the insertion—because the content there is unchanged. From that re-synchronization point onward, every chunk boundary is identical to the pre-edit chunking. Only the chunk spanning the insertion point has a changed hash. That is typically one chunk re-uploaded, not ten thousand.
 
+**Fixed-size chunking.** Read left to right: inserting a byte shifts every later boundary, so all later chunks must be uploaded.
+
 ```mermaid
 graph LR
-    subgraph "Fixed-size chunking — 1-byte insert at offset 0"
-        F0["insert<br/>byte"] --> F1["chunk 1<br/>SHIFTED"]
-        F1 --> F2["chunk 2<br/>SHIFTED"]
-        F2 --> F3["chunk 3<br/>SHIFTED"]
-        F3 --> F4["...all N<br/>SHIFTED"]
-    end
+    F0["Insert byte<br/>at offset 0"] --> F1["Chunk 1<br/>SHIFTED"]
+    F1 --> F2["Chunk 2<br/>SHIFTED"]
+    F2 --> F3["Chunk 3<br/>SHIFTED"]
+    F3 --> F4["All later chunks<br/>SHIFTED"]
+    style F1 fill:#FCE5EA
+    style F2 fill:#FCE5EA
+    style F3 fill:#FCE5EA
+    style F4 fill:#FCE5EA
+```
 
-    subgraph "Content-defined chunking — same insert"
-        C1["chunk 1<br/>CHANGED"] --> C2["re-sync<br/>boundary"]
-        C2 --> C3["chunk 2<br/>identical"]
-        C3 --> C4["chunk 3<br/>identical"]
-    end
+**Content-defined chunking, same insertion.** After the rolling hash finds a matching boundary, unchanged chunks can be reused.
 
-    style F1 fill:#FFB6C1
-    style F2 fill:#FFB6C1
-    style F3 fill:#FFB6C1
-    style F4 fill:#FFB6C1
-    style C1 fill:#FFB6C1
-    style C2 fill:#FFE4B5
-    style C3 fill:#90EE90
-    style C4 fill:#90EE90
+```mermaid
+graph LR
+    C1["Chunk spanning insert<br/>CHANGED"] --> C2["Matching boundary<br/>RE-SYNCHRONIZE"]
+    C2 --> C3["Next chunk<br/>IDENTICAL"]
+    C3 --> C4["Later chunks<br/>IDENTICAL"]
+    style C1 fill:#FCE5EA
+    style C2 fill:#FFF6C9
+    style C3 fill:#DDF3EC
+    style C4 fill:#DDF3EC
 ```
 
 **Practical boundaries.** CDC sets minimum and maximum chunk sizes (e.g., min 512 KB, max 8 MB) to bound variance. Without a minimum, adversarial or random content could produce many tiny chunks. Without a maximum, content that never hits the boundary pattern would produce one enormous chunk.
@@ -486,9 +488,9 @@ graph LR
     S3 -->|"power users re-upload every chunk"| S4
     S4 -->|"viral shares melt the broker fanout"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0-100 Users (MVP)

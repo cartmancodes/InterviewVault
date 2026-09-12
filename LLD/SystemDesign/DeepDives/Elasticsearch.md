@@ -808,9 +808,9 @@ graph LR
     CDC -->|denormalize + index| ES[(Elasticsearch<br/>search / filter / sort)]
     R[Search Reads] --> ES
 
-    style DB fill:#e1f5ff
-    style CDC fill:#FFE4B5
-    style ES fill:#90EE90
+    style DB fill:#EAF5FD
+    style CDC fill:#FFF6C9
+    style ES fill:#DDF3EC
 ```
 
 > ⚠️ The authoritative data lives in Postgres or DynamoDB, **not** in Elasticsearch. Because the search index is eventually consistent and fed asynchronously, failures in the CDC sync pipeline cause drift between the two stores — one of the most common sources of bugs when using Elasticsearch.

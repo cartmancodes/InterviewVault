@@ -205,13 +205,13 @@ graph TB
     PH -.GET /leaderboard.-> LS
     PH -.GET /heatmap tile.-> CDN
 
-    style KAFKA fill:#FFE4B5
-    style TS fill:#e1f5ff
-    style S3 fill:#e1f5ff
-    style PG fill:#e1f5ff
-    style RS fill:#e1f5ff
-    style CDN fill:#f3e5f5
-    style IS fill:#90EE90
+    style KAFKA fill:#FFF6C9
+    style TS fill:#EAF5FD
+    style S3 fill:#EAF5FD
+    style PG fill:#EAF5FD
+    style RS fill:#EAF5FD
+    style CDN fill:#EDE8FA
+    style IS fill:#DDF3EC
 ```
 
 Three distinct paths with different SLAs:
@@ -258,13 +258,13 @@ graph LR
     PRE --> SPX[Stream Processor<br/>rolling aggregates]
     PRE --> DEM[DEM Enrichment<br/>replace GPS altitude<br/>per bounding box]
 
-    style PH fill:#FFB6C1
-    style K fill:#FFE4B5
-    style PRE fill:#FFE4B5
-    style TSW fill:#e1f5ff
-    style BA fill:#e1f5ff
-    style SPX fill:#90EE90
-    style DEM fill:#90EE90
+    style PH fill:#FCE5EA
+    style K fill:#FFF6C9
+    style PRE fill:#FFF6C9
+    style TSW fill:#EAF5FD
+    style BA fill:#EAF5FD
+    style SPX fill:#DDF3EC
+    style DEM fill:#DDF3EC
 ```
 
 **Tradeoff:** end-to-end latency from phone sample to "queryable on server" is seconds-to-tens-of-seconds, not milliseconds. That's acceptable because the live UX is served by on-device computation — the server doesn't need to be fresh to keep the athlete's phone displaying correct pace.
@@ -382,14 +382,14 @@ graph TB
     AG --> R
     F --> R
 
-    style E fill:#FFE4B5
-    style A fill:#e1f5ff
-    style Y fill:#e1f5ff
-    style M fill:#e1f5ff
-    style G fill:#e1f5ff
-    style AG fill:#e1f5ff
-    style F fill:#e1f5ff
-    style R fill:#90EE90
+    style E fill:#FFF6C9
+    style A fill:#EAF5FD
+    style Y fill:#EAF5FD
+    style M fill:#EAF5FD
+    style G fill:#EAF5FD
+    style AG fill:#EAF5FD
+    style F fill:#EAF5FD
+    style R fill:#DDF3EC
 ```
 3. **"People you follow" leaderboards** require a different approach. Precomputing a sorted set per `(segment_id, user_id)` is a combinatorial explosion. Instead: at write time, when a user completes a segment, fan out a `ZADD` to sorted sets for each of their followers (`lb:{segment_id}:following:{follower_id}`). This mirrors the social feed fan-out pattern — writes are amplified but reads are O(1). For users with massive follower counts, fall back to merge-on-read: fetch the viewing user's follow list and `ZINTERSTORE` their efforts on this segment at query time.
 4. **Yearly / monthly boards** live on per-period keys (`lb:{segment_id}:2026`) so they naturally expire via TTL or get swept at period rollover.
@@ -450,9 +450,9 @@ graph LR
     S3 -->|"consumers CPU-bound on Saturday peak"| S4
     S4 -->|"single-region ingest, cross-Pacific WAN"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0-100 Users (MVP)

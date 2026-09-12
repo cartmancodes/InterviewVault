@@ -124,10 +124,10 @@ graph TB
     Start -->|"Internal, perf-critical<br/>service-to-service"| RPC["RPC / gRPC<br/>action-oriented<br/>faster than REST"]
     REST -->|"Real-time features"| RT["Add WebSockets<br/>or Server-Sent Events<br/>(design core API first)"]
 
-    style REST fill:#90EE90
-    style GQL fill:#FFE4B5
-    style RPC fill:#FFE4B5
-    style RT fill:#e1f5ff
+    style REST fill:#DDF3EC
+    style GQL fill:#FFF6C9
+    style RPC fill:#FFF6C9
+    style RT fill:#EAF5FD
 ```
 
 Don't overthink this. Default to REST unless you have a specific reason not to. For real-time features, you'll also need WebSockets or Server-Sent Events, but design your core API first.

@@ -449,10 +449,10 @@ graph TB
     F -->|Yes| G[Register new series<br/>in Redis] --> E
     F -->|No| H["Drop and increment<br/>dropped_metrics counter"]
 
-    style E fill:#90EE90
-    style H fill:#FFB6C1
-    style D fill:#e1f5ff
-    style F fill:#FFE4B5
+    style E fill:#DDF3EC
+    style H fill:#FCE5EA
+    style D fill:#EAF5FD
+    style F fill:#FFF6C9
 ```
 
 When the cap is hit, the ingestion service fires an alert through our existing notification service so the team knows something is wrong. The dropped metrics counter itself becomes a useful metric to monitor. More monitoring of the monitoring system!

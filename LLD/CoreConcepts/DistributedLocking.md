@@ -50,11 +50,11 @@ graph TB
     NEED --> C4[🗂️ Leader Election<br/>Only one primary at a time]
     NEED --> C5[🔄 Cache Refresh<br/>Only one worker rebuilds]
 
-    style C1 fill:#FFB6C1
-    style C2 fill:#FFE4B5
-    style C3 fill:#FFB6C1
-    style C4 fill:#e1f5ff
-    style C5 fill:#90EE90
+    style C1 fill:#FCE5EA
+    style C2 fill:#FFF6C9
+    style C3 fill:#FCE5EA
+    style C4 fill:#EAF5FD
+    style C5 fill:#DDF3EC
 ```
 
 **Real examples**:
@@ -233,8 +233,8 @@ graph TB
 
     DANGER[Both P1 and P2 hold the lock!]
 
-    style DANGER fill:#FFB6C1
-    style NOTE fill:#FFE4B5
+    style DANGER fill:#FCE5EA
+    style NOTE fill:#FFF6C9
 ```
 
 If Redis fails between acquiring the lock and replicating it, two processes can simultaneously hold the lock.
@@ -261,8 +261,8 @@ graph TB
 
     NOTE[Need majority: 3 out of 5 ✅]
 
-    style R4 fill:#FFB6C1
-    style NOTE fill:#90EE90
+    style R4 fill:#FCE5EA
+    style NOTE fill:#DDF3EC
 ```
 
 **Algorithm**:
@@ -313,9 +313,9 @@ flowchart TB
     MULTIPLE -->|Yes| REDLOCK[Redlock Algorithm<br/>Multi-instance safety]
     MULTIPLE -->|No| ZK[ZooKeeper or etcd<br/>Strong consistency]
 
-    style SINGLE fill:#FFE4B5
-    style REDLOCK fill:#90EE90
-    style ZK fill:#e1f5ff
+    style SINGLE fill:#FFF6C9
+    style REDLOCK fill:#DDF3EC
+    style ZK fill:#EAF5FD
 ```
 
 > **Note**: Martin Kleppmann's critique of Redlock (2016) argues even Redlock isn't safe against process pauses combined with clock skew. For true safety, use **fencing tokens**.
@@ -391,8 +391,8 @@ graph TB
     R -->|Use for| RU[Cache stampede prevention<br/>Rate limiting<br/>Job deduplication]
     Z -->|Use for| ZU[Leader election<br/>Distributed configuration<br/>Service registration<br/>Critical financial ops]
 
-    style R fill:#FFE4B5
-    style Z fill:#90EE90
+    style R fill:#FFF6C9
+    style Z fill:#DDF3EC
 ```
 
 ### ZooKeeper Locking Pattern
@@ -582,9 +582,9 @@ graph TB
     LONG --> L1[❌ Deadlocked if process crashes<br/>❌ Others wait minutes]
     SWEET --> SW1[✅ Buffer for slow operations<br/>✅ Auto-expire on crash<br/>Use heartbeat for long jobs]
 
-    style SHORT fill:#FFB6C1
-    style LONG fill:#FFE4B5
-    style SWEET fill:#90EE90
+    style SHORT fill:#FCE5EA
+    style LONG fill:#FFF6C9
+    style SWEET fill:#DDF3EC
 ```
 
 ### 4. Not Handling Lock Acquisition Failure
@@ -637,10 +637,10 @@ flowchart TB
     Q4 -->|No| ETCD[etcd / ZooKeeper<br/>+ Fencing Tokens]
     Q4 -->|Brief window OK| REDLOCK[Redlock<br/>5 Redis instances]
 
-    style IDEM fill:#90EE90
-    style REDIS fill:#FFE4B5
-    style ETCD fill:#e1f5ff
-    style REDLOCK fill:#FFE4B5
+    style IDEM fill:#DDF3EC
+    style REDIS fill:#FFF6C9
+    style ETCD fill:#EAF5FD
+    style REDLOCK fill:#FFF6C9
 ```
 
 ### Interview Script
@@ -691,28 +691,16 @@ mindmap
 
 ### Production Checklist
 
-```mermaid
-graph TB
-    CHECKLIST[Production Lock Checklist]
+Use this checklist when reviewing a production lock. Grouping by responsibility makes omissions easier to spot.
 
-    CHECKLIST --> C1[✅ Set TTL on every lock]
-    CHECKLIST --> C2[✅ Use unique token per acquisition]
-    CHECKLIST --> C3[✅ Atomic check+release via Lua]
-    CHECKLIST --> C4[✅ Handle lock acquisition failure explicitly]
-    CHECKLIST --> C5[✅ Add lock renewal for long operations]
-    CHECKLIST --> C6[✅ Monitor lock wait times and contention]
-    CHECKLIST --> C7[✅ Consider fencing tokens for critical paths]
-    CHECKLIST --> C8[✅ Test lock behavior during process crash]
-
-    style C1 fill:#90EE90
-    style C2 fill:#90EE90
-    style C3 fill:#90EE90
-    style C4 fill:#90EE90
-    style C5 fill:#90EE90
-    style C6 fill:#90EE90
-    style C7 fill:#90EE90
-    style C8 fill:#90EE90
-```
+| Responsibility | Check |
+| --- | --- |
+| Acquire | Set a TTL on every lock and use a unique token for each acquisition. |
+| Release | Check the ownership token and release atomically, for example with Lua. |
+| Failure handling | Handle acquisition failure explicitly; test behavior during a process crash. |
+| Long operations | Renew the lease while work is running and handle a failed renewal. |
+| Observe | Monitor lock wait time and contention. |
+| Protect critical writes | Consider fencing tokens so the resource can reject stale holders. |
 
 ### Real-World Implementations
 

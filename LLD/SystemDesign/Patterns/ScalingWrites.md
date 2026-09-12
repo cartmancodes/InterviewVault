@@ -65,10 +65,10 @@ graph LR
     S -->|"bursty traffic"| Q["3 · Queues &<br/>load shedding<br/>absorb or drop"]
     Q -->|"still too many<br/>writes"| B["4 · Batching &<br/>hierarchical<br/>aggregation"]
 
-    style V fill:#FFE4B5
-    style S fill:#FFE4B5
-    style Q fill:#FFE4B5
-    style B fill:#90EE90
+    style V fill:#FFF6C9
+    style S fill:#FFF6C9
+    style Q fill:#FFF6C9
+    style B fill:#DDF3EC
 ```
 
 Let's first talk about how we can scale while staying safely in a single-server, single-database architecture before we start to throw more hardware at the problem!
@@ -222,10 +222,10 @@ graph TB
     M --> ME
     M --> A
 
-    style M fill:#FFB6C1
-    style C fill:#e1f5ff
-    style ME fill:#e1f5ff
-    style A fill:#e1f5ff
+    style M fill:#FCE5EA
+    style C fill:#EAF5FD
+    style ME fill:#EAF5FD
+    style A fill:#EAF5FD
 ```
 
 The data modelling challenge is as much about how you logically think about your data as it is about the technical details of where it physically lives in your design!

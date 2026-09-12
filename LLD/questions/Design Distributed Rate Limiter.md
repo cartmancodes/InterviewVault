@@ -167,11 +167,11 @@ graph TB
     GW -->|on allow| BE
     GW -->|on deny| R429
 
-    style REDIS fill:#e1f5ff
-    style RULES fill:#e1f5ff
-    style RC fill:#e1f5ff
-    style GW fill:#90EE90
-    style R429 fill:#FFB6C1
+    style REDIS fill:#EAF5FD
+    style RULES fill:#EAF5FD
+    style RC fill:#EAF5FD
+    style GW fill:#DDF3EC
+    style R429 fill:#FCE5EA
 ```
 
 ---
@@ -245,9 +245,9 @@ graph LR
     Q -->|yes| S1 --> S2
     Q -->|no| A1 --> A2 --> A3
 
-    style S2 fill:#90EE90
-    style A3 fill:#90EE90
-    style Q fill:#FFE4B5
+    style S2 fill:#DDF3EC
+    style A3 fill:#DDF3EC
+    style Q fill:#FFF6C9
 ```
 
 > ⚠️ **Async batching trades accuracy for throughput.** Between flushes a client can overshoot the global limit by up to `M × num_gateway_nodes` requests — e.g., a 100 req/min limit with `M = 5` across 10 gateways permits a worst-case 50-request (50%) overshoot. Tune `M` to your tolerance; for billing-critical limits, reduce `M` or stay on the sync path.
@@ -365,9 +365,9 @@ graph LR
     S3 -->|"Redis CPU pins<br/>at 100%"| S4
     S4 -->|"service goes global:<br/>transatlantic latency"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0 – 100 RPS (MVP)

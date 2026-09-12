@@ -152,11 +152,11 @@ graph TB
     TOPK --> CACHE
     TOPK -.cache miss.-> STORE
 
-    style KAFKA fill:#FFE4B5
-    style FLINK fill:#90EE90
-    style STORE fill:#e1f5ff
-    style CACHE fill:#e1f5ff
-    style CKPT fill:#e1f5ff
+    style KAFKA fill:#FFF6C9
+    style FLINK fill:#DDF3EC
+    style STORE fill:#EAF5FD
+    style CACHE fill:#EAF5FD
+    style CKPT fill:#EAF5FD
 ```
 
 **Write path (view event):** client beacon posts to the Ingest Service, which validates and appends to the `view-events` Kafka topic keyed by `video_id`. Partitioning by video means all events for a video land on the same partition, making downstream aggregation stateful-but-local. Flink consumes the topic and maintains per-window counters, checkpointing state to durable storage.
@@ -228,10 +228,10 @@ graph LR
     SS -->|candidate set| VERIFY
     VERIFY --> HEAP[Min-heap size K<br/>Top-K List]
 
-    style CMS fill:#e1f5ff
-    style SS fill:#90EE90
-    style HEAP fill:#90EE90
-    style VERIFY fill:#FFE4B5
+    style CMS fill:#EAF5FD
+    style SS fill:#DDF3EC
+    style HEAP fill:#DDF3EC
+    style VERIFY fill:#FFF6C9
 ```
 
 ### 3. Streaming Aggregation with Flink
@@ -281,14 +281,14 @@ graph LR
     HR -.sum 24.-> Q2["Query: last 1d"]
     DAY -.sum 30.-> Q3["Query: last 1m"]
 
-    style EV fill:#FFE4B5
-    style MIN fill:#e1f5ff
-    style HR fill:#e1f5ff
-    style DAY fill:#e1f5ff
-    style MON fill:#e1f5ff
-    style Q1 fill:#90EE90
-    style Q2 fill:#90EE90
-    style Q3 fill:#90EE90
+    style EV fill:#FFF6C9
+    style MIN fill:#EAF5FD
+    style HR fill:#EAF5FD
+    style DAY fill:#EAF5FD
+    style MON fill:#EAF5FD
+    style Q1 fill:#DDF3EC
+    style Q2 fill:#DDF3EC
+    style Q3 fill:#DDF3EC
 ```
 
 This buys you three things. First, you can answer the implicit "sliding" semantics (last hour ending now) cheaply by summing a small, bounded number of pre-computed buckets. Second, you amortize writes: 60 events get folded into one per-minute bucket before anything touches the per-hour rollup. Third, old buckets can be evicted or moved to cold storage on a schedule that matches the largest window they feed.
@@ -330,12 +330,12 @@ graph TB
     SH3 -->|partial list| MERGE
     MERGE --> OUT[Global Top-K]
 
-    style COORD fill:#FFE4B5
-    style SH1 fill:#e1f5ff
-    style SH2 fill:#e1f5ff
-    style SH3 fill:#e1f5ff
-    style MERGE fill:#FFE4B5
-    style OUT fill:#90EE90
+    style COORD fill:#FFF6C9
+    style SH1 fill:#EAF5FD
+    style SH2 fill:#EAF5FD
+    style SH3 fill:#EAF5FD
+    style MERGE fill:#FFF6C9
+    style OUT fill:#DDF3EC
 ```
 
 Hot videos — a Mr. Beast launch going viral — can create hot partitions. A single video driving millions of events per second will saturate the Kafka partition and the Flink task that owns its key. Mitigations:
@@ -363,9 +363,9 @@ graph LR
     S3 -->|"RocksDB state + ZSET blow budget"| S4
     S4 -->|"single region + merge bottleneck"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0 to 100 Events/sec

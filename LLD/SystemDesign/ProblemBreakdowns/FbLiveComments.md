@@ -205,10 +205,10 @@ graph LR
     PU --> CO["Multi-server coordination<br/>pub/sub per-channel<br/>hash(liveVideoId) % N"]
     CO --> MS["Mega-stream delivery<br/>sampling + CDN snapshots<br/>pull-based, ~1-2s latency"]
 
-    style P fill:#FFB6C1
-    style PU fill:#90EE90
-    style CO fill:#FFE4B5
-    style MS fill:#90EE90
+    style P fill:#FCE5EA
+    style PU fill:#DDF3EC
+    style CO fill:#FFF6C9
+    style MS fill:#DDF3EC
 ```
 
 ### 1) How can we ensure comments are broadcasted to viewers in real-time?

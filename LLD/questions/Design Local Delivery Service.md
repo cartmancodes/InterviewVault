@@ -197,11 +197,11 @@ graph TB
     OS -->|check + decrement + write| PG
     PG -.->|replication| RR
 
-    style PG fill:#e1f5ff
-    style RR fill:#e1f5ff
-    style TT fill:#f3e5f5
-    style OS fill:#90EE90
-    style AS fill:#90EE90
+    style PG fill:#EAF5FD
+    style RR fill:#EAF5FD
+    style TT fill:#EDE8FA
+    style OS fill:#DDF3EC
+    style AS fill:#DDF3EC
 ```
 
 1. **Availability Service** handles `GET /availability`. It first asks the Nearby Service for DCs whose delivery polygon contains the user's coordinates, then queries inventory for those DCs and aggregates quantities per item.
@@ -231,10 +231,10 @@ graph LR
     S2 --> S3[Stage 3<br/>Travel-Time API<br/>on shortlist only]
     S3 --> R[Eligible DCs<br/>+ true drive-time ETA]
 
-    style S1 fill:#e1f5ff
-    style S2 fill:#FFE4B5
-    style S3 fill:#f3e5f5
-    style R fill:#90EE90
+    style S1 fill:#EAF5FD
+    style S2 fill:#FFF6C9
+    style S3 fill:#EDE8FA
+    style R fill:#DDF3EC
 ```
 
 > ⚠️ **A naive Haversine radius query is wrong.** A DC across a river with no nearby bridge, or on the far side of a divided highway, can show as 0.5 miles away yet be 15 minutes of drive time. Hand-drawn delivery polygons encode road-reachability implicitly; only the surviving shortlist ever hits the external travel-time provider, so cost and latency stay bounded.
@@ -301,11 +301,11 @@ graph TB
     CHECKOUT[Checkout write<br/>POST /orders] -->|bypass cache + replicas| PG
     PG -.->|invalidate keys on commit| CACHE
 
-    style CACHE fill:#e1f5ff
-    style RR fill:#e1f5ff
-    style PG fill:#e1f5ff
-    style BROWSE fill:#FFE4B5
-    style CHECKOUT fill:#90EE90
+    style CACHE fill:#EAF5FD
+    style RR fill:#EAF5FD
+    style PG fill:#EAF5FD
+    style BROWSE fill:#FFF6C9
+    style CHECKOUT fill:#DDF3EC
 ```
 
 > 💡 **Two consistency tiers, one inventory number.** The browse path collapses ~20k QPS to a handful of origin fetches per TTL window and tolerates a 30-second stale count (it commits to nothing). The checkout path bypasses cache and replicas entirely and hits the primary with a strongly consistent write — real money is at stake. On commit, the Orders Service publishes key invalidations so the cache never serves oversold state longer than the TTL.
@@ -350,9 +350,9 @@ graph LR
     S3 -->|"single primary write bottleneck"| S4
     S4 -->|"per-DC write hotspots"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0 to 100 Users (MVP)

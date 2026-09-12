@@ -34,8 +34,8 @@ graph TB
         NOTE1[❌ Must scan ALL rows<br/>❌ Millions of disk reads<br/>❌ Painfully slow]
     end
     
-    style Q1 fill:#FFB6C1
-    style NOTE1 fill:#FFE4B5
+    style Q1 fill:#FCE5EA
+    style NOTE1 fill:#FFF6C9
 ```
 
 **Without indexes**: Database checks each row sequentially - like searching through every book in a library one by one.
@@ -55,9 +55,9 @@ graph TB
         NOTE2[✅ Jump directly to target<br/>✅ 2-3 disk reads only<br/>✅ Lightning fast]
     end
     
-    style Q2 fill:#90EE90
-    style IDX fill:#e1f5ff
-    style NOTE2 fill:#90EE90
+    style Q2 fill:#DDF3EC
+    style IDX fill:#EAF5FD
+    style NOTE2 fill:#DDF3EC
 ```
 
 **With indexes**: Database uses optimized data structures to jump directly to the target - like using a book's index.
@@ -108,9 +108,9 @@ graph TB
         MEM --> RESULT
     end
     
-    style DISK fill:#e1f5ff
-    style INDEX fill:#90EE90
-    style MEM fill:#FFE4B5
+    style DISK fill:#EAF5FD
+    style INDEX fill:#DDF3EC
+    style MEM fill:#FFF6C9
 ```
 
 ### Access Pattern Comparison
@@ -182,10 +182,10 @@ graph TB
     IDX --> CASE2
     IDX --> CASE3
     
-    style IDX fill:#FFE4B5
-    style COST1 fill:#FFB6C1
-    style COST2 fill:#FFB6C1
-    style COST3 fill:#FFB6C1
+    style IDX fill:#FFF6C9
+    style COST1 fill:#FCE5EA
+    style COST2 fill:#FCE5EA
+    style COST3 fill:#FCE5EA
 ```
 
 #### Trade-offs
@@ -278,21 +278,21 @@ graph TB
         L1D --> LEAF10
     end
     
-    style ROOT fill:#e1f5ff
-    style L1A fill:#fff4e1
-    style L1B fill:#fff4e1
-    style L1C fill:#fff4e1
-    style L1D fill:#fff4e1
-    style LEAF1 fill:#90EE90
-    style LEAF2 fill:#90EE90
-    style LEAF3 fill:#90EE90
-    style LEAF4 fill:#90EE90
-    style LEAF5 fill:#90EE90
-    style LEAF6 fill:#90EE90
-    style LEAF7 fill:#90EE90
-    style LEAF8 fill:#90EE90
-    style LEAF9 fill:#90EE90
-    style LEAF10 fill:#90EE90
+    style ROOT fill:#EAF5FD
+    style L1A fill:#FFF6C9
+    style L1B fill:#FFF6C9
+    style L1C fill:#FFF6C9
+    style L1D fill:#FFF6C9
+    style LEAF1 fill:#DDF3EC
+    style LEAF2 fill:#DDF3EC
+    style LEAF3 fill:#DDF3EC
+    style LEAF4 fill:#DDF3EC
+    style LEAF5 fill:#DDF3EC
+    style LEAF6 fill:#DDF3EC
+    style LEAF7 fill:#DDF3EC
+    style LEAF8 fill:#DDF3EC
+    style LEAF9 fill:#DDF3EC
+    style LEAF10 fill:#DDF3EC
 ```
 
 #### Search Example: Finding ID = 350
@@ -327,12 +327,12 @@ graph LR
     PROPS --> P4[💾 Disk-Optimized<br/>Node = 1 disk page 8KB]
     PROPS --> P5[⚖️ Min/Max Keys<br/>m/2 to m keys per node]
     
-    style PROPS fill:#e1f5ff
-    style P1 fill:#90EE90
-    style P2 fill:#90EE90
-    style P3 fill:#90EE90
-    style P4 fill:#90EE90
-    style P5 fill:#90EE90
+    style PROPS fill:#EAF5FD
+    style P1 fill:#DDF3EC
+    style P2 fill:#DDF3EC
+    style P3 fill:#DDF3EC
+    style P4 fill:#DDF3EC
+    style P5 fill:#DDF3EC
 ```
 
 **Rules**:
@@ -373,12 +373,12 @@ flowchart TB
     WHY --> R4[✅ Self-Balancing<br/>Predictable performance]
     WHY --> R5[✅ Disk-Optimized<br/>Minimizes I/O]
     
-    style WHY fill:#e1f5ff
-    style R1 fill:#90EE90
-    style R2 fill:#90EE90
-    style R3 fill:#90EE90
-    style R4 fill:#90EE90
-    style R5 fill:#90EE90
+    style WHY fill:#EAF5FD
+    style R1 fill:#DDF3EC
+    style R2 fill:#DDF3EC
+    style R3 fill:#DDF3EC
+    style R4 fill:#DDF3EC
+    style R5 fill:#DDF3EC
 ```
 
 ✅ **Perfect For**:
@@ -421,10 +421,10 @@ graph TB
         L2 --> FOUND[Found!]
     end
     
-    style WRITE fill:#90EE90
-    style MEM fill:#e1f5ff
-    style READ fill:#FFE4B5
-    style FOUND fill:#90EE90
+    style WRITE fill:#DDF3EC
+    style MEM fill:#EAF5FD
+    style READ fill:#FFF6C9
+    style FOUND fill:#DDF3EC
 ```
 
 #### Write Path (Fast)
@@ -494,8 +494,8 @@ graph LR
     T3 --> COMPACT
     COMPACT --> T4
     
-    style COMPACT fill:#e1f5ff
-    style T4 fill:#90EE90
+    style COMPACT fill:#EAF5FD
+    style T4 fill:#DDF3EC
 ```
 
 #### LSM Tree Trade-offs
@@ -548,11 +548,11 @@ graph TB
     
     NOTE[⚡ O 1 lookup time<br/>❌ No range queries<br/>❌ No sorting]
     
-    style HASH fill:#e1f5ff
-    style BUCKET1 fill:#90EE90
-    style BUCKET2 fill:#90EE90
-    style BUCKET3 fill:#90EE90
-    style NOTE fill:#FFE4B5
+    style HASH fill:#EAF5FD
+    style BUCKET1 fill:#DDF3EC
+    style BUCKET2 fill:#DDF3EC
+    style BUCKET3 fill:#DDF3EC
+    style NOTE fill:#FFF6C9
 ```
 
 #### Query Support
@@ -571,14 +571,14 @@ flowchart TB
     Q3 --> R3[❌ Not Supported<br/>Exact match only]
     Q4 --> R4[❌ Not Supported<br/>No ordering]
     
-    style Q1 fill:#90EE90
-    style Q2 fill:#FFB6C1
-    style Q3 fill:#FFB6C1
-    style Q4 fill:#FFB6C1
-    style R1 fill:#90EE90
-    style R2 fill:#FFB6C1
-    style R3 fill:#FFB6C1
-    style R4 fill:#FFB6C1
+    style Q1 fill:#DDF3EC
+    style Q2 fill:#FCE5EA
+    style Q3 fill:#FCE5EA
+    style Q4 fill:#FCE5EA
+    style R1 fill:#DDF3EC
+    style R2 fill:#FCE5EA
+    style R3 fill:#FCE5EA
+    style R4 fill:#FCE5EA
 ```
 
 #### Real-World Usage
@@ -596,8 +596,8 @@ graph LR
     DB -->|3. Return & cache| REDIS
     REDIS -->|4. Return| APP
     
-    style REDIS fill:#e1f5ff
-    style DB fill:#FFE4B5
+    style REDIS fill:#EAF5FD
+    style DB fill:#FFF6C9
 ```
 
 **Session Storage**:
@@ -636,9 +636,9 @@ graph TB
     
     PROB --> GOOD[✅ With Geo Index<br/>Query only nearby grid cells<br/>Few hundred candidates]
     
-    style PROB fill:#e1f5ff
-    style BAD fill:#FFB6C1
-    style GOOD fill:#90EE90
+    style PROB fill:#EAF5FD
+    style BAD fill:#FCE5EA
+    style GOOD fill:#DDF3EC
 ```
 
 Traditional indexes don't work well for 2D spatial queries:
@@ -668,9 +668,9 @@ graph TB
         SEARCH --> RESULTS[All nearby locations<br/>starting with 9q8]
     end
     
-    style WORLD fill:#e1f5ff
-    style HASH fill:#90EE90
-    style RESULTS fill:#90EE90
+    style WORLD fill:#EAF5FD
+    style HASH fill:#DDF3EC
+    style RESULTS fill:#DDF3EC
 ```
 
 **Geohash Example**:
@@ -705,12 +705,12 @@ graph TB
     
     NW_NW --> POINTS1[Points<br/>Restaurants here]
     
-    style ROOT fill:#e1f5ff
-    style NW fill:#fff4e1
-    style NE fill:#fff4e1
-    style SW fill:#fff4e1
-    style SE fill:#fff4e1
-    style POINTS1 fill:#90EE90
+    style ROOT fill:#EAF5FD
+    style NW fill:#FFF6C9
+    style NE fill:#FFF6C9
+    style SW fill:#FFF6C9
+    style SE fill:#FFF6C9
+    style POINTS1 fill:#DDF3EC
 ```
 
 **How Quadtree Works**:
@@ -737,13 +737,13 @@ graph TB
     
     NOTE_R[Similar to B-Tree but<br/>groups by geographic proximity]
     
-    style ROOT_R fill:#e1f5ff
-    style BB1 fill:#fff4e1
-    style BB2 fill:#fff4e1
-    style BB3 fill:#fff4e1
-    style LEAF1 fill:#90EE90
-    style LEAF2 fill:#90EE90
-    style LEAF3 fill:#90EE90
+    style ROOT_R fill:#EAF5FD
+    style BB1 fill:#FFF6C9
+    style BB2 fill:#FFF6C9
+    style BB3 fill:#FFF6C9
+    style LEAF1 fill:#DDF3EC
+    style LEAF2 fill:#DDF3EC
+    style LEAF3 fill:#DDF3EC
 ```
 
 #### Comparison
@@ -803,12 +803,12 @@ graph TB
     DOC3 --> WORD3
     DOC3 --> WORD6
     
-    style WORD1 fill:#90EE90
-    style WORD2 fill:#90EE90
-    style WORD3 fill:#90EE90
-    style WORD4 fill:#90EE90
-    style WORD5 fill:#90EE90
-    style WORD6 fill:#90EE90
+    style WORD1 fill:#DDF3EC
+    style WORD2 fill:#DDF3EC
+    style WORD3 fill:#DDF3EC
+    style WORD4 fill:#DDF3EC
+    style WORD5 fill:#DDF3EC
+    style WORD6 fill:#DDF3EC
 ```
 
 #### Search Query Example
@@ -846,14 +846,14 @@ graph LR
         TERM2 --> POST6[Doc 9, positions: 1, 8, 14]
     end
     
-    style TERM fill:#e1f5ff
-    style TERM2 fill:#e1f5ff
-    style POST1 fill:#90EE90
-    style POST2 fill:#90EE90
-    style POST3 fill:#90EE90
-    style POST4 fill:#90EE90
-    style POST5 fill:#90EE90
-    style POST6 fill:#90EE90
+    style TERM fill:#EAF5FD
+    style TERM2 fill:#EAF5FD
+    style POST1 fill:#DDF3EC
+    style POST2 fill:#DDF3EC
+    style POST3 fill:#DDF3EC
+    style POST4 fill:#DDF3EC
+    style POST5 fill:#DDF3EC
+    style POST6 fill:#DDF3EC
 ```
 
 **Positions enable**:
@@ -873,12 +873,12 @@ graph TB
     FEATURES --> F4[🔍 Fuzzy Matching<br/>databse → database]
     FEATURES --> F5[🌍 Language Analysis<br/>Multi-language support]
     
-    style FEATURES fill:#e1f5ff
-    style F1 fill:#90EE90
-    style F2 fill:#90EE90
-    style F3 fill:#90EE90
-    style F4 fill:#90EE90
-    style F5 fill:#90EE90
+    style FEATURES fill:#EAF5FD
+    style F1 fill:#DDF3EC
+    style F2 fill:#DDF3EC
+    style F3 fill:#DDF3EC
+    style F4 fill:#DDF3EC
+    style F5 fill:#DDF3EC
 ```
 
 ✅ **Use Cases**:
@@ -919,10 +919,10 @@ graph TB
         QUERY2 --> FAST[✅ Both conditions use index<br/>Much faster!]
     end
     
-    style I1 fill:#FFE4B5
-    style I2 fill:#FFE4B5
-    style CI fill:#90EE90
-    style FAST fill:#90EE90
+    style I1 fill:#FFF6C9
+    style I2 fill:#FFF6C9
+    style CI fill:#DDF3EC
+    style FAST fill:#DDF3EC
 ```
 
 #### Column Order Matters
@@ -952,12 +952,12 @@ flowchart TB
     Q2 --> IDX2
     Q3 --> IDX2
     
-    style R1 fill:#90EE90
-    style R2 fill:#90EE90
-    style R3 fill:#FFB6C1
-    style R4 fill:#90EE90
-    style R5 fill:#FFB6C1
-    style R6 fill:#90EE90
+    style R1 fill:#DDF3EC
+    style R2 fill:#DDF3EC
+    style R3 fill:#FCE5EA
+    style R4 fill:#DDF3EC
+    style R5 fill:#FCE5EA
+    style R6 fill:#DDF3EC
 ```
 
 **Rule**: Composite index `(A, B, C)` can be used for queries on:
@@ -1021,8 +1021,8 @@ graph LR
     REG -->|Slower| RESULT[Query Result]
     COV -->|Faster| RESULT
     
-    style REG fill:#FFE4B5
-    style COV fill:#90EE90
+    style REG fill:#FFF6C9
+    style COV fill:#DDF3EC
 ```
 
 ✅ **Use When**:
@@ -1056,13 +1056,13 @@ flowchart TB
     Q3 -->|Small dataset| HASH[✅ Hash Index]
     Q3 -->|Large dataset| BTREE2[✅ B-Tree]
     
-    style START fill:#e1f5ff
-    style SKIP fill:#FFB6C1
-    style BTREE fill:#90EE90
-    style BTREE2 fill:#90EE90
-    style INVERTED fill:#90EE90
-    style GEO fill:#90EE90
-    style HASH fill:#90EE90
+    style START fill:#EAF5FD
+    style SKIP fill:#FCE5EA
+    style BTREE fill:#DDF3EC
+    style BTREE2 fill:#DDF3EC
+    style INVERTED fill:#DDF3EC
+    style GEO fill:#DDF3EC
+    style HASH fill:#DDF3EC
 ```
 
 ### Interview Checklist
@@ -1102,12 +1102,12 @@ graph TB
     MISTAKES --> M4[Forgetting Covering Indexes<br/>For frequent queries]
     MISTAKES --> M5[Not Monitoring Usage<br/>Unused indexes waste space]
     
-    style MISTAKES fill:#FFB6C1
-    style M1 fill:#FFE4B5
-    style M2 fill:#FFE4B5
-    style M3 fill:#FFE4B5
-    style M4 fill:#FFE4B5
-    style M5 fill:#FFE4B5
+    style MISTAKES fill:#FCE5EA
+    style M1 fill:#FFF6C9
+    style M2 fill:#FFF6C9
+    style M3 fill:#FFF6C9
+    style M4 fill:#FFF6C9
+    style M5 fill:#FFF6C9
 ```
 
 ### Decision Matrix
@@ -1140,11 +1140,11 @@ graph TB
     
     CORE --> K4[🔧 Optimization<br/>Composite indexes<br/>Covering indexes<br/>Match access patterns]
     
-    style CORE fill:#e1f5ff
-    style K1 fill:#90EE90
-    style K2 fill:#90EE90
-    style K3 fill:#FFE4B5
-    style K4 fill:#90EE90
+    style CORE fill:#EAF5FD
+    style K1 fill:#DDF3EC
+    style K2 fill:#DDF3EC
+    style K3 fill:#FFF6C9
+    style K4 fill:#DDF3EC
 ```
 
 ### Interview Strategy
@@ -1347,8 +1347,8 @@ graph TB
 
     TOTAL[Total: 6 I/Os for 1 logical write]
 
-    style WRITE fill:#e1f5ff
-    style TOTAL fill:#FFB6C1
+    style WRITE fill:#EAF5FD
+    style TOTAL fill:#FCE5EA
 ```
 
 **Production rule**: Don't index columns you don't query. A write-heavy table with 10 indexes can be 5x slower than the same table with 2 indexes.

@@ -52,6 +52,10 @@ flowchart LR
     Q["FIFO queue"] --> S
 ```
 
+![BFS traverses A, B, C, D while marking vertices on enqueue.](../content/visuals/bfs-queue-layers.svg)
+
+*Both B and C reach D, but marking D when B discovers it prevents a duplicate enqueue. Queue snapshots list the front on the left. The optional walkthrough highlights the authored steps; the complete static figure is shown above.*
+
 With multiple sources, enqueue every source with distance zero. This is equivalent to
 adding a virtual super-source with a zero-cost edge to each real source. Each state then
 receives its distance from the nearest source.

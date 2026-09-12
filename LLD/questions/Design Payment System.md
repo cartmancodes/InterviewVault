@@ -251,13 +251,13 @@ graph TB
     OBX --> KAFKA
     KAFKA --> DS
 
-    style PAY fill:#90EE90
-    style LED fill:#90EE90
-    style IDEM fill:#e1f5ff
-    style PGDB fill:#e1f5ff
-    style OBX fill:#e1f5ff
-    style KAFKA fill:#FFE4B5
-    style PSP fill:#f3e5f5
+    style PAY fill:#DDF3EC
+    style LED fill:#DDF3EC
+    style IDEM fill:#EAF5FD
+    style PGDB fill:#EAF5FD
+    style OBX fill:#EAF5FD
+    style KAFKA fill:#FFF6C9
+    style PSP fill:#EDE8FA
 ```
 
 - **API Gateway** terminates TLS, enforces mTLS for merchant traffic, rate-limits by API key, and routes to the Payment Service.
@@ -517,9 +517,9 @@ graph LR
     S3 -->|"single primary chokes @1B rows"| S4
     S4 -->|"region outage + data residency"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0 to 100 Transactions/day (MVP)

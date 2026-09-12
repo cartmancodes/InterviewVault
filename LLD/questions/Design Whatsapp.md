@@ -350,14 +350,14 @@ graph TB
     DB -.-> T4
     DB -.-> T5
     
-    style LB fill:#e1f5ff
-    style CS1 fill:#e1f5ff
-    style CS2 fill:#e1f5ff
-    style CS3 fill:#e1f5ff
-    style AS fill:#e1f5ff
-    style PS fill:#fff4e1
-    style DB fill:#e8f5e9
-    style S3 fill:#e8f5e9
+    style LB fill:#EAF5FD
+    style CS1 fill:#EAF5FD
+    style CS2 fill:#EAF5FD
+    style CS3 fill:#EAF5FD
+    style AS fill:#EAF5FD
+    style PS fill:#FFF6C9
+    style DB fill:#DDF3EC
+    style S3 fill:#DDF3EC
 ```
 
 ### 1) Users should be able to start group chats with multiple participants (limit 100)
@@ -424,9 +424,9 @@ graph TB
     Q2[Query: Get all chats<br/>for userId] --> GSI
     Q3[Query: Get chat details<br/>by chatId] --> CT
     
-    style CT fill:#e1f5ff
-    style CPT fill:#e1f5ff
-    style GSI fill:#fff4e1
+    style CT fill:#EAF5FD
+    style CPT fill:#EAF5FD
+    style GSI fill:#FFF6C9
 ```
 
 ---
@@ -453,7 +453,7 @@ graph LR
     U2[User B<br/>WebSocket] -.->|connected| HM
     U3[User C<br/>WebSocket] -.->|connected| HM
     
-    style HM fill:#e1f5ff
+    style HM fill:#EAF5FD
 ```
 
 **To send a message:**
@@ -513,8 +513,8 @@ graph TB
     Online -->|6. ACK| CS
     CS -->|7. Delete from inbox| IT
     
-    style MT fill:#e1f5ff
-    style IT fill:#fff4e1
+    style MT fill:#EAF5FD
+    style IT fill:#FFF6C9
 ```
 
 #### Send a Message Flow
@@ -704,9 +704,9 @@ graph TB
     CS1 -.->|How to route?| CS2
     CS1 -.->|How to route?| CS3
     
-    style CS1 fill:#FFB6C1
-    style CS2 fill:#FFB6C1
-    style CS3 fill:#FFB6C1
+    style CS1 fill:#FCE5EA
+    style CS2 fill:#FCE5EA
+    style CS3 fill:#FCE5EA
 ```
 
 **The issue is one of routing**: we're going to need to route messages to the right Chat Servers in order to deliver them.
@@ -730,9 +730,9 @@ graph LR
     CS1 -.->|No routing mechanism| CS2
     CS2 -.->|No routing mechanism| CS3
     
-    style CS1 fill:#FFB6C1
-    style CS2 fill:#FFB6C1
-    style CS3 fill:#FFB6C1
+    style CS1 fill:#FCE5EA
+    style CS2 fill:#FCE5EA
+    style CS3 fill:#FCE5EA
 ```
 
 ##### ⚠️ Bad Solution: Keep a Kafka topic per user
@@ -758,12 +758,12 @@ graph TB
     CS -.->|Unmanageable at scale| T4
     CS -.->|Unmanageable at scale| T5
     
-    style T1 fill:#FFB6C1
-    style T2 fill:#FFB6C1
-    style T3 fill:#FFB6C1
-    style T4 fill:#FFB6C1
-    style T5 fill:#FFB6C1
-    style CS fill:#FFB6C1
+    style T1 fill:#FCE5EA
+    style T2 fill:#FCE5EA
+    style T3 fill:#FCE5EA
+    style T4 fill:#FCE5EA
+    style T5 fill:#FCE5EA
+    style CS fill:#FCE5EA
 ```
 
 ##### ✅ Good Solution: Consistent Hashing of Chat Servers
@@ -796,10 +796,10 @@ graph TB
     CS2 <-.->|Route messages| CS3
     CS3 <-.->|Route messages| CS1
     
-    style CS1 fill:#fff4e1
-    style CS2 fill:#fff4e1
-    style CS3 fill:#fff4e1
-    style ZK fill:#e1f5ff
+    style CS1 fill:#FFF6C9
+    style CS2 fill:#FFF6C9
+    style CS3 fill:#FFF6C9
+    style ZK fill:#EAF5FD
 ```
 
 ##### 🌟 Great Solution: Offload to Pub/Sub
@@ -848,15 +848,15 @@ graph TB
     CS1 -->|4. Send via WebSocket| UB
     CS3 -->|4. Send via WebSocket| UC
     
-    style CS1 fill:#e1f5ff
-    style CS2 fill:#e1f5ff
-    style CS3 fill:#e1f5ff
-    style T1 fill:#fff4e1
-    style T2 fill:#fff4e1
-    style T3 fill:#fff4e1
-    style T4 fill:#fff4e1
-    style T5 fill:#fff4e1
-    style T6 fill:#fff4e1
+    style CS1 fill:#EAF5FD
+    style CS2 fill:#EAF5FD
+    style CS3 fill:#EAF5FD
+    style T1 fill:#FFF6C9
+    style T2 fill:#FFF6C9
+    style T3 fill:#FFF6C9
+    style T4 fill:#FFF6C9
+    style T5 fill:#FFF6C9
+    style T6 fill:#FFF6C9
 ```
 
 ```mermaid
@@ -947,8 +947,8 @@ graph TB
     IT -.->|A2 inbox: empty| L
     IT -.->|"A3 inbox: [msg1, msg2]"| T
     
-    style CT fill:#e1f5ff
-    style IT fill:#fff4e1
+    style CT fill:#EAF5FD
+    style IT fill:#FFF6C9
 ```
 
 ```mermaid
@@ -1024,20 +1024,20 @@ graph LR
     S3 --> ST3
     S4 --> ST4
     
-    style M1 fill:#e8f5e9
-    style M2 fill:#e8f5e9
-    style M3 fill:#e8f5e9
-    style M4 fill:#e8f5e9
+    style M1 fill:#DDF3EC
+    style M2 fill:#DDF3EC
+    style M3 fill:#DDF3EC
+    style M4 fill:#DDF3EC
     
-    style S1 fill:#e1f5ff
-    style S2 fill:#e1f5ff
-    style S3 fill:#e1f5ff
-    style S4 fill:#e1f5ff
+    style S1 fill:#EAF5FD
+    style S2 fill:#EAF5FD
+    style S3 fill:#EAF5FD
+    style S4 fill:#EAF5FD
     
-    style ST1 fill:#fff4e1
-    style ST2 fill:#fff4e1
-    style ST3 fill:#fff4e1
-    style ST4 fill:#fff4e1
+    style ST1 fill:#FFF6C9
+    style ST2 fill:#FFF6C9
+    style ST3 fill:#FFF6C9
+    style ST4 fill:#FFF6C9
 ```
 
 ### Mid-level
@@ -1170,71 +1170,53 @@ graph LR
 
 ## 🔄 Complete Message Flow Diagram
 
+**1. Accept and persist.** Upload optional attachments, store the message and create the per-client inbox entries before publishing notifications.
+
 ```mermaid
 flowchart TB
-    Start([User sends message]) --> A{Message has<br/>attachments?}
-    
-    A -->|Yes| B[Upload to S3 via<br/>Attachment Service]
-    B --> C[Get attachmentId]
-    C --> D[Send message with attachmentId]
-    
-    A -->|No| D
-    
-    D --> E[Chat Server receives message]
-    E --> F[Write to Message Table]
-    E --> G[Lookup participants<br/>from ChatParticipant Table]
-    
-    F --> H[Transaction: Write to<br/>Inbox for each client]
+    Start(["User sends message"]) --> A{"Attachments?"}
+    A -->|"Yes"| B["Upload to S3 via Attachment Service"]
+    B --> C["Get attachmentId"]
+    C --> D["Send message with attachmentId"]
+    A -->|"No"| D
+    D --> E["Chat Server receives message"]
+    E --> F["Write Message Table"]
+    E --> G["Look up participants in ChatParticipant Table"]
+    F --> H["Transaction: write Inbox for each client"]
     G --> H
-    
-    H --> I[Publish to Pub/Sub topics<br/>for each user]
-    
-    I --> J{Chat Servers<br/>subscribed to topics}
-    
-    J --> K[Chat Server 1<br/>receives notification]
-    J --> L[Chat Server 2<br/>receives notification]
-    J --> M[Chat Server N<br/>receives notification]
-    
-    K --> N{Client<br/>online?}
-    L --> O{Client<br/>online?}
-    M --> P{Client<br/>online?}
-    
-    N -->|Yes| Q[Deliver via WebSocket]
-    N -->|No| R[Keep in Inbox]
-    
-    O -->|Yes| S[Deliver via WebSocket]
-    O -->|No| T[Keep in Inbox]
-    
-    P -->|Yes| U[Deliver via WebSocket]
-    P -->|No| V[Keep in Inbox]
-    
-    Q --> W[Receive ACK]
-    S --> X[Receive ACK]
-    U --> Y[Receive ACK]
-    
-    W --> Z[Delete from Inbox]
-    X --> Z
-    Y --> Z
-    
-    R --> AA[Deliver on reconnect]
-    T --> AA
-    V --> AA
-    
-    AA --> AB[User connects]
-    AB --> AC[Fetch from Inbox]
-    AC --> AD[Deliver messages]
-    AD --> AE[Receive ACK]
-    AE --> Z
-    
-    Z --> End([Message delivered])
-    
-    style Start fill:#e8f5e9
-    style End fill:#e8f5e9
-    style A fill:#fff4e1
-    style N fill:#fff4e1
-    style O fill:#fff4e1
-    style P fill:#fff4e1
-    style I fill:#e1f5ff
+    H --> I["Publish to each user's Pub/Sub topic"]
+    style Start fill:#DDF3EC
+    style H fill:#DDF3EC
+    style I fill:#EDE8FA
+```
+
+**2. Deliver to connected clients.** Repeat this branch on every subscribed chat server (server 1 through server N), for each recipient client. An ACK removes that client's inbox entry, not other clients' pending messages.
+
+```mermaid
+flowchart LR
+    I["Pub/Sub notification"] --> S["Subscribed Chat Server"]
+    S --> O{"Client online?"}
+    O -->|"Yes"| W["Deliver via WebSocket"]
+    W --> A["Receive client ACK"]
+    A --> D["Delete this client's Inbox entry"]
+    O -->|"No"| K["Keep in Inbox for reconnect"]
+    style I fill:#EDE8FA
+    style D fill:#DDF3EC
+    style K fill:#FFF6C9
+```
+
+**3. Catch up after reconnect.** A retained inbox entry survives the offline period. Delivery completes for that client only after acknowledgment.
+
+```mermaid
+flowchart LR
+    K["Pending Inbox entries"] --> C["User reconnects"]
+    C --> F["Fetch from Inbox"]
+    F --> M["Deliver pending messages"]
+    M --> A["Receive client ACK"]
+    A --> D["Delete acknowledged Inbox entry"]
+    D --> End(["Delivered to this client"])
+    style K fill:#FFF6C9
+    style End fill:#DDF3EC
 ```
 
 ## 📝 Summary

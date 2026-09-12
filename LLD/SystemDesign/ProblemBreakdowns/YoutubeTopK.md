@@ -116,12 +116,12 @@ graph LR
     D --> E["Per-window<br/>aggregate tables"]
     E --> F["Approximation<br/>Count-Min Sketch"]
 
-    style A fill:#FFE4B5
-    style B fill:#FFE4B5
-    style C fill:#90EE90
-    style D fill:#90EE90
-    style E fill:#90EE90
-    style F fill:#e1f5ff
+    style A fill:#FFF6C9
+    style B fill:#FFF6C9
+    style C fill:#DDF3EC
+    style D fill:#DDF3EC
+    style E fill:#DDF3EC
+    style F fill:#EAF5FD
 ```
 
 ### [Defining the Core Entities](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery#core-entities-2-minutes)
@@ -330,9 +330,9 @@ graph LR
     S["Single Postgres<br/>~700k tps to<br/>one node"] -->|"shard by videoId"| SH["~70 shards<br/>~10k tps each"]
     SH -->|"batch with Flink<br/>1-hour tumbling window"| BA["5-10 shards<br/>bulk hourly writes"]
 
-    style S fill:#FFB6C1
-    style SH fill:#FFE4B5
-    style BA fill:#90EE90
+    style S fill:#FCE5EA
+    style SH fill:#FFF6C9
+    style BA fill:#DDF3EC
 ```
 
 ### 3) How do we optimize our top K queries?
@@ -517,11 +517,11 @@ graph LR
     EST --> Z["ZADD to sorted set<br/>trim to top 1000"]
     Z --> Q["Read path:<br/>top K from<br/>sorted set"]
 
-    style V fill:#f3e5f5
-    style ADD fill:#e1f5ff
-    style EST fill:#e1f5ff
-    style Z fill:#e1f5ff
-    style Q fill:#90EE90
+    style V fill:#EDE8FA
+    style ADD fill:#EAF5FD
+    style EST fill:#EAF5FD
+    style Z fill:#EAF5FD
+    style Q fill:#DDF3EC
 ```
 
 In order to solve our tumbling window top-K problem, we just need to keep sketches and sorted lists for each window that we want to query. There's two practical ways for us to do this in our design:

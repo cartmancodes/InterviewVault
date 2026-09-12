@@ -181,9 +181,9 @@ graph TB
     DEC -->|any rule exceeded| BLOCK["Reject with 429"]
     DEC -->|all within limits| PASS["Allow request"]
 
-    style DEC fill:#FFE4B5
-    style BLOCK fill:#FFB6C1
-    style PASS fill:#90EE90
+    style DEC fill:#FFF6C9
+    style BLOCK fill:#FCE5EA
+    style PASS fill:#DDF3EC
 ```
 
 ### 2) The system should limit requests based on configurable rules

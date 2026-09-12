@@ -146,11 +146,11 @@ graph TB
     WP -->|ZADD on ACCEPTED| LB
     BR -.poll GET /submissions/id.-> GW
 
-    style WP fill:#90EE90
-    style Q fill:#FFE4B5
-    style PS fill:#e1f5ff
-    style SUB fill:#e1f5ff
-    style LB fill:#e1f5ff
+    style WP fill:#DDF3EC
+    style Q fill:#FFF6C9
+    style PS fill:#EAF5FD
+    style SUB fill:#EAF5FD
+    style LB fill:#EAF5FD
 ```
 
 Request flow for a submission:
@@ -234,9 +234,9 @@ graph LR
     N -->|shares host, no isolation| D
     D -->|shared kernel: CVE = cross-tenant escape| V
 
-    style N fill:#FFB6C1
-    style D fill:#FFE4B5
-    style V fill:#90EE90
+    style N fill:#FCE5EA
+    style D fill:#FFF6C9
+    style V fill:#DDF3EC
 ```
 
 **Naive: run in the API process.** Immediately disqualifying. A malicious submission can `rm -rf /`, exfiltrate environment variables (including database credentials and cloud IAM tokens), launch outbound network connections from the API server's identity, or fork-bomb the host. There is no recovery path from this design.
@@ -338,9 +338,9 @@ graph LR
     S3 -->|container escape + cold starts| S4
     S4 -->|single-region blast radius| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0 to 100 Users (MVP)

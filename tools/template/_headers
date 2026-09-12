@@ -8,6 +8,12 @@
   Cache-Control: public, max-age=3600
 /assets/doc.js
   Cache-Control: public, max-age=3600
+/assets/figures.js
+  Cache-Control: public, max-age=3600
+/assets/figures.css
+  Cache-Control: public, max-age=3600
+/assets/docs/*
+  Cache-Control: public, max-age=3600
 /*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin

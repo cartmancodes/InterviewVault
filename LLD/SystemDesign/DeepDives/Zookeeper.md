@@ -300,10 +300,10 @@ graph TB
     F["If server1 fails →<br/>node-0000000001 disappears<br/>server2 notified → new LEADER"]
     N1 -.->|"session ends"| F
 
-    style N1 fill:#90EE90
-    style N2 fill:#FFE4B5
-    style N3 fill:#FFE4B5
-    style F fill:#FFB6C1
+    style N1 fill:#DDF3EC
+    style N2 fill:#FFF6C9
+    style N3 fill:#FFF6C9
+    style F fill:#FCE5EA
 ```
 
 The same approach is used in systems like [HBase](https://hbase.apache.org/), where one server must coordinate schema changes, and in [Kafka's earlier versions](https://www.hellointerview.com/learn/system-design/deep-dives/kafka), where a controller broker manages partition leadership.

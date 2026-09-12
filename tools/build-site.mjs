@@ -7,12 +7,15 @@ import { marked } from 'marked';
 import { hashOf, extractMermaid } from './render-diagrams.mjs';
 import { buildChallenges } from './gen-challenges.mjs';
 import { DSA_TOPICS } from './dsa-config.mjs';
+import { renderFigure, sectionAt, extractSvgLabels } from './figure-markup.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, '..');
 const SITE = path.join(REPO, 'site');
 const TPL = path.join(__dirname, 'template');
 const DIAGRAMS = path.join(SITE, 'assets', 'diagrams');
+const walkthroughs = JSON.parse(readFileSync(path.join(REPO, 'content/visuals/walkthroughs.json'), 'utf8'));
+const walkthroughByAsset = new Map(walkthroughs.map(item => [item.asset, item]));
 
 /* ── collections: repo dir -> site section ─────────────── */
 const COLLECTIONS = [
@@ -151,9 +154,20 @@ function renderDoc(doc) {
 
   // pull mermaid out before parsing; re-inject rendered SVG after
   const diagrams = [];
-  md = md.replace(/```mermaid\n([\s\S]*?)```/g, (_, src) => {
+  const diagramTitles = new Map();
+  const diagramGuides = new Map();
+  let figureNumber = 0;
+  const originalMarkdown = md;
+  md = md.replace(/```mermaid\n([\s\S]*?)```/g, (_, src, offset) => {
     const h = hashOf(src);
     diagrams.push(h);
+    diagramTitles.set(h, sectionAt(originalMarkdown, offset, doc.title));
+    const guide = /sequenceDiagram/.test(src) ? ['Sequence diagram', 'Read messages from top to bottom. Each vertical line follows one participant.']
+      : /erDiagram/.test(src) ? ['Entity relationships', 'Each box is an entity. Connector ends show relationship cardinality.']
+      : /stateDiagram/.test(src) ? ['State transitions', 'Follow the labelled arrows to see which events change the state.']
+      : /mindmap/.test(src) ? ['Concept map', 'Start at the root topic, then follow each branch to its related concepts.']
+      : ['Flow diagram', 'Follow the arrowheads. Read branch labels to distinguish alternative paths.'];
+    diagramGuides.set(h, guide);
     return `\n<div class="diagram" data-diagram="${h}"></div>\n`;
   });
 
@@ -171,14 +185,29 @@ function renderDoc(doc) {
     return `<h${lvl} id="${id}">${inner}</h${lvl}>`;
   });
 
-  // images -> copied assets
-  html = html.replace(/<img([^>]*?)src="([^"]+)"([^>]*)>/g, (m, pre, src, post) => {
-    if (/^(https?:)?\/\//.test(src) || src.startsWith('data:')) return m;
-    const repoRel = path.normalize(path.join(docDir, decodeURIComponent(src))).split(path.sep).join('/');
-    const newSrc = copyAsset(repoRel);
-    if (!newSrc) return m;
-    const alt = (m.match(/alt="([^"]*)"/) || [, ''])[1];
-    return `<figure class="fig"><img${pre}src="${newSrc}"${post} loading="lazy">${alt ? `<figcaption>${alt}</figcaption>` : ''}</figure>`;
+  // Give every image the same reading surface. Authored walkthrough SVGs are
+  // inline so their explicit step groups can be focused without fetching scripts.
+  const imageHtml = html;
+  html = html.replace(/<img([^>]*?)src="([^"]+)"([^>]*)>/g, (m, pre, src, post, offset) => {
+    const external = /^(https?:)?\/\//.test(src) || src.startsWith('data:');
+    const repoRel = external ? null : path.normalize(path.join(docDir, decodeURIComponent(src))).split(path.sep).join('/');
+    const newSrc = external ? src : copyAsset(repoRel);
+    if (!newSrc) throw new Error(`${doc.rel}: missing image ${src}`);
+    const alt = decodeEnt((m.match(/alt="([^"]*)"/) || [, ''])[1]);
+    const context = [...imageHtml.slice(0, offset).matchAll(/<h[234][^>]*>([\s\S]*?)<\/h[234]>/g)].at(-1)?.[1];
+    const section = context ? stripEmoji(decodeEnt(context.replace(/<[^>]*>/g, ''))) : doc.title;
+    const walkthrough = walkthroughByAsset.get(repoRel);
+    const assetSvg = repoRel?.endsWith('.svg') ? readFileSync(path.join(REPO, repoRel), 'utf8') : null;
+    const title = walkthrough?.title || (alt && alt.length <= 90 && !/^(image|diagram|screenshot)(?: \d+)?$/i.test(alt) ? alt : section);
+    return renderFigure({ id: `figure-image-${++figureNumber}`, title, src: newSrc, alt,
+      kind: walkthrough ? 'Interactive explanation' : /\.svg$/i.test(src) ? 'Diagram' : 'Reference image',
+      svg: walkthrough ? assetSvg : null, labels: assetSvg ? extractSvgLabels(assetSvg) : [], walkthrough });
+  });
+  // Markdown image paragraphs must not wrap block-level figures. Split mixed
+  // image/text paragraphs so the HTML parser cannot silently rearrange the page.
+  html = html.replace(/<p>((?:(?!<\/p>)[\s\S])*<figure\b(?:(?!<\/p>)[\s\S])*)<\/p>/g, (_, body) => {
+    return body.split(/(<figure\b[\s\S]*?<\/figure>)/g)
+      .map(part => !part.trim() ? '' : part.startsWith('<figure') ? part : `<p>${part}</p>`).join('');
   });
 
   // internal .md links -> site urls
@@ -198,8 +227,11 @@ function renderDoc(doc) {
   // inject pre-rendered diagrams
   html = html.replace(/<div class="diagram" data-diagram="([0-9a-f]+)"><\/div>/g, (m, h) => {
     const f = path.join(DIAGRAMS, `${h}.svg`);
-    if (!existsSync(f)) return `<div class="diagram"><p class="empty">Diagram unavailable.</p></div>`;
-    return `<div class="diagram">${readFileSync(f, 'utf8')}</div>`;
+    if (!existsSync(f)) throw new Error(`${doc.rel}: diagram ${h} is missing. Run node tools/render-diagrams.mjs first.`);
+    return renderFigure({ id: `figure-diagram-${++figureNumber}`, title: diagramTitles.get(h) || doc.title,
+      src: `/assets/diagrams/${h}.svg`, svg: readFileSync(f, 'utf8'), kind: diagramGuides.get(h)?.[0] || 'Diagram',
+      alt: diagramGuides.get(h)?.[1] || diagramTitles.get(h) || doc.title,
+      labels: extractSvgLabels(readFileSync(f, 'utf8')) });
   });
 
   if (doc.col.key === 'dsa') html = decorateDsaSections(html);
@@ -250,6 +282,7 @@ function page({ title, desc, body, active, cls = '', chrome = true }) {
 <meta property="og:type" content="website">
 ${FONTS}
 <link rel="stylesheet" href="/assets/site.css">
+<link rel="stylesheet" href="/assets/figures.css">
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 </head>
 <body class="${cls}">
@@ -321,7 +354,8 @@ ${next ? `<a class="nx" href="${next.url}"><span>Next</span><b>${esc(next.title)
 ${rail}
 </div>
 ${sheetBtn}
-<script src="/assets/doc.js" defer></script>${vaultScript}`;
+<script src="/assets/doc.js" defer></script>
+<script src="/assets/figures.js" defer></script>${vaultScript}`;
 
   mkdirSync(path.dirname(doc.out), { recursive: true });
   writeFileSync(doc.out, page({
@@ -915,6 +949,7 @@ function build() {
   copyFileSync(path.join(TPL, 'home.js'), path.join(SITE, 'assets', 'home.js'));
   copyFileSync(path.join(TPL, 'game.js'), path.join(SITE, 'assets', 'game.js'));
   copyFileSync(path.join(TPL, 'doc.js'), path.join(SITE, 'assets', 'doc.js'));
+  for (const file of ['figures.css', 'figures.js']) copyFileSync(path.join(TPL, file), path.join(SITE, 'assets', file));
   copyFileSync(path.join(TPL, 'vault.js'), path.join(SITE, 'assets', 'vault.js'));
   copyFileSync(path.join(TPL, 'progress.js'), path.join(SITE, 'assets', 'progress.js'));
   copyFileSync(path.join(TPL, 'portfolio.js'), path.join(SITE, 'assets', 'portfolio.js'));

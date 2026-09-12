@@ -139,12 +139,12 @@ graph TB
     I1 -->|one merged query| DB
     I2 -->|one merged query| DB
 
-    style C fill:#FFB6C1
-    style API fill:#f3e5f5
-    style R fill:#FFE4B5
-    style I1 fill:#90EE90
-    style I2 fill:#90EE90
-    style DB fill:#e1f5ff
+    style C fill:#FCE5EA
+    style API fill:#EDE8FA
+    style R fill:#FFF6C9
+    style I1 fill:#DDF3EC
+    style I2 fill:#DDF3EC
+    style DB fill:#EAF5FD
 ```
 
 Once the requests met in the same process, the data service could apply [request coalescing](https://www.hellointerview.com/learn/system-design/patterns/scaling-reads#how-do-you-handle-millions-of-concurrent-reads-for-the-same-cached-data).
@@ -194,10 +194,10 @@ graph LR
     S --> A
     D --> A
 
-    style B fill:#FFB6C1
-    style S fill:#FFE4B5
-    style D fill:#FFE4B5
-    style A fill:#90EE90
+    style B fill:#FCE5EA
+    style S fill:#FFF6C9
+    style D fill:#FFF6C9
+    style A fill:#DDF3EC
 ```
 
 [Read the original at Discord Engineering](https://discord.com/blog/how-discord-stores-trillions-of-messages)

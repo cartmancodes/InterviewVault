@@ -181,13 +181,13 @@ graph LR
     BF -->|"bloom: maybe"| READ[Read SSTable block]
     READ --> R
 
-    style Q fill:#FFE4B5
-    style M fill:#e1f5ff
-    style IM fill:#e1f5ff
-    style BF fill:#e1f5ff
-    style READ fill:#FFE4B5
-    style SKIP fill:#FFB6C1
-    style R fill:#90EE90
+    style Q fill:#FFF6C9
+    style M fill:#EAF5FD
+    style IM fill:#EAF5FD
+    style BF fill:#EAF5FD
+    style READ fill:#FFF6C9
+    style SKIP fill:#FCE5EA
+    style R fill:#DDF3EC
 ```
 
 *A single key lookup may touch many files — bloom filters and sparse indexes let the engine skip most SSTables without reading them.*

@@ -51,9 +51,9 @@ graph LR
     O -->|"still &gt;50–100K RPS"| H["2 · Scale horizontally<br/>read replicas<br/>sharding"]
     H -->|"skewed hot data"| C["3 · External caching<br/>Redis / Memcached<br/>CDN edge"]
 
-    style O fill:#e8f5e9
-    style H fill:#FFE4B5
-    style C fill:#90EE90
+    style O fill:#DDF3EC
+    style H fill:#FFF6C9
+    style C fill:#DDF3EC
 ```
 
 Here's how each works.

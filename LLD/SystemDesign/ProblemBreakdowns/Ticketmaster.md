@@ -286,10 +286,10 @@ graph LR
     B --> C["Short txns on two<br/>attributes: available<br/>OR reservation expired"]
     C --> D["Redis distributed lock<br/>SET NX EX + TTL<br/>auto-expiry"]
 
-    style A fill:#FFB6C1
-    style B fill:#FFE4B5
-    style C fill:#FFE4B5
-    style D fill:#90EE90
+    style A fill:#FCE5EA
+    style B fill:#FFF6C9
+    style C fill:#FFF6C9
+    style D fill:#DDF3EC
 ```
 
 In this case, let's go with the great solution and use distributed lock. We can now update our design to support this flow.

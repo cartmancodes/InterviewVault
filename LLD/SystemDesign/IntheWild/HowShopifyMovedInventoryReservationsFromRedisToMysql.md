@@ -125,10 +125,10 @@ graph TB
     REP["Replenishment process<br/>refills pool when low"] -->|"insert rows"| RU
     INLINE["Inline refill fallback<br/>single lock, then retry"] -->|"pool drained<br/>mid-rush"| RU
 
-    style RU fill:#e1f5ff
-    style RQ fill:#e1f5ff
-    style REP fill:#FFE4B5
-    style INLINE fill:#FFB6C1
+    style RU fill:#EAF5FD
+    style RQ fill:#EAF5FD
+    style REP fill:#FFF6C9
+    style INLINE fill:#FCE5EA
 ```
 
 > ⚠️ **The post doesn't say** how much latency this inline-refill fallback adds, or how Shopify handles orders larger than the 1,000-row pool.

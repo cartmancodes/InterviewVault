@@ -323,10 +323,10 @@ graph LR
     A["Write every like<br/>1 write per like"] --> B["Batch over a window<br/>~30s, 1 write per window"]
     B --> C["Milestone writes<br/>only at powers of 2 or 10"]
     C --> D["Two-stage re-rank<br/>approx index, then fresh<br/>Like Service lookup"]
-    style A fill:#FFB6C1
-    style B fill:#FFE4B5
-    style C fill:#FFE4B5
-    style D fill:#90EE90
+    style A fill:#FCE5EA
+    style B fill:#FFF6C9
+    style C fill:#FFF6C9
+    style D fill:#DDF3EC
 ```
 
 One approach we can take is to batch the writes for likes. Instead of writing every like update to our indexes, we can batch likes for a given postId over a period (like 30 seconds). Then, instead of needing to write 500 times for a particularly viral post, we can make 1 update with an increment of 500.

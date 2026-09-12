@@ -51,10 +51,10 @@ graph LR
     C -->|Yes| S["Stay simple<br/>single DB + replicas<br/>cache only if needed"]
     C -->|No| X["Scale out<br/>shard · queue ·<br/>more instances"]
 
-    style E fill:#FFE4B5
-    style C fill:#e1f5ff
-    style S fill:#90EE90
-    style X fill:#FFB6C1
+    style E fill:#FFF6C9
+    style C fill:#EAF5FD
+    style S fill:#DDF3EC
+    style X fill:#FCE5EA
 ```
 
 ### 🗄️ Caching

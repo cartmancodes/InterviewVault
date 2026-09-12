@@ -51,8 +51,8 @@ stateDiagram-v2
     Done --> [*]
     PermanentlyFailed --> [*]: repaired by hand
 
-    classDef bad fill:#FFB6C1
-    classDef good fill:#90EE90
+    classDef bad fill:#FCE5EA
+    classDef good fill:#DDF3EC
     class PermanentlyFailed bad
     class Done good
 ```
