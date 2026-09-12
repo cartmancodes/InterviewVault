@@ -231,14 +231,14 @@ graph TB
     AM --> NW
     NW --> PGW
 
-    style REDIS fill:#e1f5ff
-    style PGP fill:#e1f5ff
-    style PGW fill:#e1f5ff
-    style TSDB fill:#e1f5ff
-    style KAFKA fill:#FFE4B5
-    style PROXY fill:#f3e5f5
-    style SPROC fill:#90EE90
-    style AM fill:#90EE90
+    style REDIS fill:#EAF5FD
+    style PGP fill:#EAF5FD
+    style PGW fill:#EAF5FD
+    style TSDB fill:#EAF5FD
+    style KAFKA fill:#FFF6C9
+    style PROXY fill:#EDE8FA
+    style SPROC fill:#DDF3EC
+    style AM fill:#DDF3EC
 ```
 
 Key flows:
@@ -423,9 +423,9 @@ graph LR
     S3 -->|"TSDB write ceiling<br/>+ alert latency spikes"| S4
     S4 -->|"catalog + watcher index<br/>outgrow single cluster"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0 - 100 Products Tracked

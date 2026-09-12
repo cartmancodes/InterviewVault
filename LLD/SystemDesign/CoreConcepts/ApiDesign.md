@@ -131,9 +131,9 @@ graph LR
     REQ --> Q["Query param<br/>?notify=true<br/>optional modifier"]
     REQ --> B["Request body<br/>tickets, payment_method<br/>the payload"]
 
-    style P fill:#e1f5ff
-    style Q fill:#FFE4B5
-    style B fill:#90EE90
+    style P fill:#EAF5FD
+    style Q fill:#FFF6C9
+    style B fill:#DDF3EC
 ```
 
 #### Returning Data

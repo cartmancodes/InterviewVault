@@ -44,11 +44,11 @@ graph LR
     C -->|"add/remove a node<br/>reshuffles ~all keys"| D["Consistent<br/>Hash Ring<br/>walk clockwise"]
     D -->|"one neighbor<br/>gets overloaded"| E["Virtual Nodes<br/>even load spread"]
 
-    style A fill:#e1f5ff
-    style B fill:#FFE4B5
-    style C fill:#FFB6C1
-    style D fill:#FFE4B5
-    style E fill:#90EE90
+    style A fill:#EAF5FD
+    style B fill:#FFF6C9
+    style C fill:#FCE5EA
+    style D fill:#FFF6C9
+    style E fill:#DDF3EC
 ```
 
 Let's build up our intuition via a motivating example.
@@ -190,10 +190,10 @@ graph TB
     HK --> S2["Key-space Salting<br/>taylor-swift-{0..9}<br/>scatter + aggregate"]
     HK --> S3["Adaptive Rebalancing<br/>move hot ranges<br/>off busy nodes"]
 
-    style HK fill:#FFB6C1
-    style S1 fill:#90EE90
-    style S2 fill:#FFE4B5
-    style S3 fill:#FFE4B5
+    style HK fill:#FCE5EA
+    style S1 fill:#DDF3EC
+    style S2 fill:#FFF6C9
+    style S3 fill:#FFF6C9
 ```
 
 In an interview, the key distinction to make is: virtual nodes prevent structural imbalance (uneven key distribution), while replication and key salting prevent workload imbalance (uneven traffic).

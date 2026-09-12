@@ -43,11 +43,11 @@ graph LR
     C --> P["Post-filter<br/>exact distance /<br/>geometry math"]
     P --> A["Final answer<br/>nearby drivers"]
 
-    style Q fill:#FFB6C1
-    style I fill:#FFE4B5
-    style C fill:#e1f5ff
-    style P fill:#FFE4B5
-    style A fill:#90EE90
+    style Q fill:#FCE5EA
+    style I fill:#FFF6C9
+    style C fill:#EAF5FD
+    style P fill:#FFF6C9
+    style A fill:#DDF3EC
 ```
 
 ## 🌳 Custom Spatial Trees
@@ -60,10 +60,10 @@ graph LR
     K -->|"pointers don't map<br/>onto disk pages"| B["BKD tree<br/>points packed into<br/>page-sized blocks"]
     B -->|"needs shapes +<br/>cheap updates"| R["R-tree / R*-tree<br/>minimum bounding<br/>rectangles"]
 
-    style Q fill:#FFB6C1
-    style K fill:#FFE4B5
-    style B fill:#FFE4B5
-    style R fill:#90EE90
+    style Q fill:#FCE5EA
+    style K fill:#FFF6C9
+    style B fill:#FFF6C9
+    style R fill:#DDF3EC
 ```
 
 ### Quadtrees
@@ -181,12 +181,12 @@ graph TB
     T3 --> F["Index hands you candidates →<br/>always post-filter by<br/>exact distance / geometry"]
     E3 --> F
 
-    style D fill:#FFE4B5
-    style T fill:#f3e5f5
-    style E fill:#e1f5ff
-    style T3 fill:#f3e5f5
-    style E3 fill:#e1f5ff
-    style F fill:#90EE90
+    style D fill:#FFF6C9
+    style T fill:#EDE8FA
+    style E fill:#EAF5FD
+    style T3 fill:#EDE8FA
+    style E3 fill:#EAF5FD
+    style F fill:#DDF3EC
 ```
 
 Reach for a custom spatial tree when your data is geometric, full of polygons, roads, delivery zones, and questions of containment or intersection. You need the database to understand shapes, and you're willing to pay for a spatial extension and pricier writes to get it. PostGIS, with its R-tree-style GiST index, is the usual default, and an R-tree handles points, lines, and polygons alike. The catch is writes. Rebalancing rectangles is real work, and the BKD variant Elasticsearch uses is essentially write-once, so neither loves data that churns.

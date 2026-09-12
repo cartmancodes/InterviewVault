@@ -161,13 +161,13 @@ graph TB
     QS --> HOT
     QS --> COLD
 
-    style KAFKA fill:#FFE4B5
-    style HOT fill:#e1f5ff
-    style COLD fill:#e1f5ff
-    style SA fill:#FFE4B5
-    style QS fill:#90EE90
-    style AE fill:#90EE90
-    style OUT fill:#f3e5f5
+    style KAFKA fill:#FFF6C9
+    style HOT fill:#EAF5FD
+    style COLD fill:#EAF5FD
+    style SA fill:#FFF6C9
+    style QS fill:#DDF3EC
+    style AE fill:#DDF3EC
+    style OUT fill:#EDE8FA
 ```
 
 ---
@@ -251,10 +251,10 @@ graph LR
     QP -->|days| M1
     QP -->|months| H1
 
-    style RAW fill:#e1f5ff
-    style M1 fill:#FFE4B5
-    style H1 fill:#f3e5f5
-    style QP fill:#90EE90
+    style RAW fill:#EAF5FD
+    style M1 fill:#FFF6C9
+    style H1 fill:#EDE8FA
+    style QP fill:#DDF3EC
 ```
 
 **The percentile trap.** You cannot average percentiles. If you want a p99 over a 1-hour window from 1-minute rollups, you cannot just take the average of 60 p99 values - it is mathematically wrong. The fix is to store **histograms** (t-digest or HDR) per window, not scalar percentiles, and merge histograms at query time. This is why Prometheus exposes `histogram_quantile()` over bucket counts rather than pre-aggregated percentiles. t-digest offers better accuracy at the tails with smaller memory footprint; HDR histogram offers exact accuracy within configurable precision. The choice depends on whether you need exact SLA compliance data (HDR) or operational approximations (t-digest).
@@ -356,9 +356,9 @@ graph LR
     S3 -->|"single region = blind spot"| S4
     S4 -->|"data residency + global users"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0-10K Data Points/sec (MVP)

@@ -226,9 +226,9 @@ The nearby-DC lookup evolves in three steps, each fixing the weakness of the las
 graph LR
     P["Straight-line distance<br/>Euclidean / Haversine<br/>ignores traffic and roads"] --> Q["Sync DC table to memory<br/>call travel-time service<br/>for every DC"]
     Q -->|"too many external calls"| R["Prune by fixed radius<br/>~60 miles, then travel-time<br/>only on candidate DCs"]
-    style P fill:#FFB6C1
-    style Q fill:#FFE4B5
-    style R fill:#90EE90
+    style P fill:#FCE5EA
+    style Q fill:#FFF6C9
+    style R fill:#DDF3EC
 ```
 
 ### 📈 2) Make availability lookups fast and scalable
@@ -251,9 +251,9 @@ The scaling journey for availability reads walks from hitting the database direc
 graph LR
     A["Query Postgres directly<br/>~20k queries/sec"] -->|"heavy DB load"| B["Add Redis cache<br/>low TTL ~1 min<br/>Order Service expires entries"]
     B --> C["Partition by region ID<br/>first 3 zip digits<br/>+ read replicas for availability"]
-    style A fill:#FFB6C1
-    style B fill:#FFE4B5
-    style C fill:#90EE90
+    style A fill:#FCE5EA
+    style B fill:#FFF6C9
+    style C fill:#DDF3EC
 ```
 
 Local delivery services like Gopuff demonstrate classic **scaling reads** patterns where inventory queries vastly outnumber actual purchases. With 20k queries/second for availability checks but only occasional inventory updates, aggressive caching with short TTLs becomes critical.

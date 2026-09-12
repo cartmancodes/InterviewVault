@@ -367,10 +367,10 @@ graph TB
     NI --> R
     CI --> R
 
-    style LI fill:#e1f5ff
-    style NI fill:#e1f5ff
-    style CI fill:#e1f5ff
-    style R fill:#90EE90
+    style LI fill:#EAF5FD
+    style NI fill:#EAF5FD
+    style CI fill:#EAF5FD
+    style R fill:#DDF3EC
 ```
 
 There are several technologies which support all three of these indexing strategies (and more). One common example is [Elasticsearch](https://www.hellointerview.com/learn/system-design/deep-dives/elasticsearch).
@@ -426,9 +426,9 @@ graph LR
     Q --> CO["Consumer"]
     CO -->|"apply same changes"| ES[("Elasticsearch<br/>search index")]
 
-    style DB fill:#e1f5ff
-    style Q fill:#FFE4B5
-    style ES fill:#f3e5f5
+    style DB fill:#EAF5FD
+    style Q fill:#FFF6C9
+    style ES fill:#EDE8FA
 ```
 
 One way we can get around the consistency issue all together is to just use Postgres with the appropriate extensions enabled.

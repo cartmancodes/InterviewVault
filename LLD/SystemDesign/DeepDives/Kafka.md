@@ -111,12 +111,12 @@ graph TB
     PA1 --> C2
     PA2 --> C3
 
-    style PA0 fill:#e1f5ff
-    style PA1 fill:#e1f5ff
-    style PA2 fill:#e1f5ff
-    style C1 fill:#90EE90
-    style C2 fill:#90EE90
-    style C3 fill:#90EE90
+    style PA0 fill:#EAF5FD
+    style PA1 fill:#EAF5FD
+    style PA2 fill:#EAF5FD
+    style C1 fill:#DDF3EC
+    style C2 fill:#DDF3EC
+    style C3 fill:#DDF3EC
 ```
 
 ## 🔬 How Kafka Works
@@ -296,9 +296,9 @@ graph TB
     L -->|replicate| F2
     Cons[Consumer] -->|read| L
 
-    style L fill:#90EE90
-    style F1 fill:#e1f5ff
-    style F2 fill:#e1f5ff
+    style L fill:#DDF3EC
+    style F1 fill:#EAF5FD
+    style F2 fill:#EAF5FD
 ```
 
 **But what happens when a consumer goes down?**
@@ -311,6 +311,10 @@ What is far more relevant and likely is that a consumer goes down. When a consum
 2. **Rebalancing**: When part of a consumer group, if one consumer goes down, Kafka will redistribute the partitions among the remaining consumers so that all partitions are still being processed.
 
 The trade-off you may need to consider in an interview is when to commit offsets. In [Design a Web Crawler](https://www.hellointerview.com/learn/system-design/problem-breakdowns/web-crawler), for example, you want to be careful not to commit the offset until you're sure the raw HTML has been stored in your blob storage. The more work a consumer has to do, the more likely you are to have to redo work if the consumer fails. For this reason, keeping the work of the consumer as small as possible is a good strategy -- as was the case in Web Crawler where we broke the crawler into 2 phases: downloading the HTML and then parsing it.
+
+![Kafka delivery, successful offset commit, and crash replay of record 42.](../../../content/visuals/kafka-offset-replay.svg)
+
+*Committing offset 43 after processing record 42 records the next read position. A crash before that commit can replay 42 and repeat its effect. The optional walkthrough highlights the authored steps; the complete static figure is shown above.*
 
 ### ⚠️ Handling Retries and Errors
 

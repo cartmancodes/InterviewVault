@@ -226,10 +226,10 @@ graph LR
     B -->|"identical timestamps<br/>leave gaps"| C["Composite cursor<br/>(published_at, article_id)"]
     C -->|"plan IDs up front"| D["Monotonic ID cursor<br/>ULID / auto-increment<br/>article_id &lt; cursor"]
 
-    style A fill:#FFB6C1
-    style B fill:#FFE4B5
-    style C fill:#FFE4B5
-    style D fill:#90EE90
+    style A fill:#FCE5EA
+    style B fill:#FFF6C9
+    style C fill:#FFF6C9
+    style D fill:#DDF3EC
 ```
 
 ### 2) How do we achieve low latency (< 200ms) feed requests?
@@ -344,11 +344,11 @@ graph TB
     WH --> PIPE
     PIPE --> DB[(Database)]
 
-    style RSS fill:#FFE4B5
-    style SCR fill:#FFE4B5
-    style WH fill:#90EE90
-    style PIPE fill:#e8f5e9
-    style DB fill:#e1f5ff
+    style RSS fill:#FFF6C9
+    style SCR fill:#FFF6C9
+    style WH fill:#DDF3EC
+    style PIPE fill:#DDF3EC
+    style DB fill:#EAF5FD
 ```
 
 ### 4) How do we handle media content (images/videos) efficiently?

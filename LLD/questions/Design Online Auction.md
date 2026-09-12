@@ -219,11 +219,11 @@ graph TB
     AC -->|ZRANGEBYSCORE + lease| REDIS
     AC --> PG
 
-    style BS fill:#90EE90
-    style REDIS fill:#e1f5ff
-    style PG fill:#e1f5ff
-    style KAFKA fill:#FFE4B5
-    style FS fill:#90EE90
+    style BS fill:#DDF3EC
+    style REDIS fill:#EAF5FD
+    style PG fill:#EAF5FD
+    style KAFKA fill:#FFF6C9
+    style FS fill:#DDF3EC
 ```
 
 1. **API Gateway** terminates HTTP and WebSocket connections and routes by `auctionId`. For WebSocket traffic, it uses consistent hashing on `auctionId` so all viewers of the same auction end up on the same pool of servers, which keeps fanout local.
@@ -434,9 +434,9 @@ graph LR
     S3 -->|"row lock caps<br/>~200-300 tps"| S4
     S4 -->|"regional outage;<br/>hot shard >100k ops/s"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0 to 100 Users (MVP)

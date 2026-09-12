@@ -277,14 +277,14 @@ graph LR
     H -. "collisions grow with n<br/>needs retries + checks" .-> X3["△"]
     C -. "each value unique<br/>no checks needed" .-> X4["✓"]
 
-    style P fill:#FFB6C1
-    style R fill:#FFB6C1
-    style H fill:#FFE4B5
-    style C fill:#90EE90
-    style X1 fill:#FFB6C1
-    style X2 fill:#FFB6C1
-    style X3 fill:#FFE4B5
-    style X4 fill:#90EE90
+    style P fill:#FCE5EA
+    style R fill:#FCE5EA
+    style H fill:#FFF6C9
+    style C fill:#DDF3EC
+    style X1 fill:#FCE5EA
+    style X2 fill:#FCE5EA
+    style X3 fill:#FFF6C9
+    style X4 fill:#DDF3EC
 ```
 
 ### ⚡ 2) How can we ensure that redirects are fast?

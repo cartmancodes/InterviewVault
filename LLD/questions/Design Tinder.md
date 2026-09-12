@@ -222,13 +222,13 @@ graph TB
     MD -->|match confirmed| KAFKA
     KAFKA --> NS
 
-    style DECK fill:#e1f5ff
-    style CASS fill:#e1f5ff
-    style PDB fill:#e1f5ff
-    style ES fill:#e1f5ff
-    style MD fill:#90EE90
-    style KAFKA fill:#FFE4B5
-    style NS fill:#f3e5f5
+    style DECK fill:#EAF5FD
+    style CASS fill:#EAF5FD
+    style PDB fill:#EAF5FD
+    style ES fill:#EAF5FD
+    style MD fill:#DDF3EC
+    style KAFKA fill:#FFF6C9
+    style NS fill:#EDE8FA
 ```
 
 Why split the services and stores:
@@ -365,13 +365,13 @@ graph TB
         PGE --> DBZ --> KFK -->|"1-2s"| ES
     end
 
-    style DECK fill:#e1f5ff
-    style BLOOM fill:#e1f5ff
-    style PC fill:#e1f5ff
-    style ES fill:#e1f5ff
-    style PGE fill:#e1f5ff
-    style KFK fill:#FFE4B5
-    style FS fill:#90EE90
+    style DECK fill:#EAF5FD
+    style BLOOM fill:#EAF5FD
+    style PC fill:#EAF5FD
+    style ES fill:#EAF5FD
+    style PGE fill:#EAF5FD
+    style KFK fill:#FFF6C9
+    style FS fill:#DDF3EC
 ```
 
 **Ranking signals.** The deck-builder scores candidates on: (1) inverse distance — closer users rank higher; (2) activity recency — users active in the last 24 hours rank substantially higher than inactive users; (3) preference match quality — a user whose stated preferences closely match the querying user's profile ranks higher; (4) ELO-style desirability score (see Insider Tips). The exact weighting is tunable and can be A/B tested without changing the architecture.
@@ -431,9 +431,9 @@ graph LR
     S3 -->|"LWT latency + ES sync lag<br/>+ hot partitions"| S4
     S4 -->|"cross-region RTT +<br/>melting celeb shards"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0–100 Users (MVP)

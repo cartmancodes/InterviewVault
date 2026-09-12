@@ -141,9 +141,9 @@ stateDiagram-v2
     Ended --> [*]: result written, ELO applied
     Expired --> [*]
 
-    classDef good fill:#90EE90
-    classDef bad fill:#FFB6C1
-    classDef step fill:#FFE4B5
+    classDef good fill:#DDF3EC
+    classDef bad fill:#FCE5EA
+    classDef step fill:#FFF6C9
     class Ended good
     class Paused bad
     class Expired bad

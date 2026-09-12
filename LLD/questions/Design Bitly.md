@@ -159,12 +159,12 @@ graph TB
     RS -->|2 . miss| DB
     DB -->|fill cache -> 302| CACHE
 
-    style CDN fill:#f3e5f5
-    style COUNTER fill:#e1f5ff
-    style CACHE fill:#e1f5ff
-    style DB fill:#e1f5ff
-    style RS fill:#90EE90
-    style WS fill:#FFE4B5
+    style CDN fill:#EDE8FA
+    style COUNTER fill:#EAF5FD
+    style CACHE fill:#EAF5FD
+    style DB fill:#EAF5FD
+    style RS fill:#DDF3EC
+    style WS fill:#FFF6C9
 ```
 
 **Writes** are rare and can do extra work: generate a short code (counter INCR or hash), persist with a UNIQUE constraint as the final correctness guarantee, and optionally pre-populate the cache. **Reads** must be cheap — ideally a single memory lookup before returning 302. The two sides are scaled independently (different service fleets) because their QPS profiles differ by three orders of magnitude.
@@ -187,10 +187,10 @@ graph LR
     H -->|prefer| C
     C -->|XOR w/ 64-bit secret| SAFE["Codes stay unique<br/>but look random<br/>defeats enumeration"]
 
-    style N fill:#FFB6C1
-    style H fill:#FFE4B5
-    style C fill:#90EE90
-    style SAFE fill:#90EE90
+    style N fill:#FCE5EA
+    style H fill:#FFF6C9
+    style C fill:#DDF3EC
+    style SAFE fill:#DDF3EC
 ```
 
 **Solution:** Three candidates, evaluated in order.
@@ -252,11 +252,11 @@ graph TB
     REP -->|fill cache -> 302| L1
     PRIM -.async replication.-> REP
 
-    style EDGE fill:#f3e5f5
-    style L1 fill:#90EE90
-    style REP fill:#e1f5ff
-    style PRIM fill:#e1f5ff
-    style REQ fill:#FFE4B5
+    style EDGE fill:#EDE8FA
+    style L1 fill:#DDF3EC
+    style REP fill:#EAF5FD
+    style PRIM fill:#EAF5FD
+    style REQ fill:#FFF6C9
 ```
 
 1. **B-tree index on `short_code`** (free if it's the PK) — O(log n) lookup; at 1B rows this is ~30 comparisons even before any caching. Required baseline; costs nothing beyond making `short_code` the primary key.
@@ -347,9 +347,9 @@ graph LR
     S3 -->|"global users see 200-400ms redirects"| S4
     S4 -->|"corpus crosses 10B, index off-memory"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0-100 Users (MVP)

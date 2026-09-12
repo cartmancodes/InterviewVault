@@ -145,10 +145,10 @@ graph TB
     RT -.->|4. push SSE events| VW
     VW -->|late joiner: GET /comments backfill| GW
 
-    style DDB fill:#e1f5ff
-    style BROKER fill:#FFE4B5
-    style CS fill:#90EE90
-    style RT fill:#90EE90
+    style DDB fill:#EAF5FD
+    style BROKER fill:#FFF6C9
+    style CS fill:#DDF3EC
+    style RT fill:#DDF3EC
 ```
 
 1. Commenter POSTs. The Comment Service writes to DynamoDB (or a similar KV/NoSQL store; the schema is `PK=liveVideoId, SK=commentId`).
@@ -307,9 +307,9 @@ graph LR
     RT -->|final hop| RP[(Redis Pub/Sub<br/>sub-ms, ephemeral<br/>channel per liveVideoId)]
     RP -.->|push| V[SSE connections]
 
-    style K fill:#FFE4B5
-    style RP fill:#e1f5ff
-    style RT fill:#90EE90
+    style K fill:#FFF6C9
+    style RP fill:#EAF5FD
+    style RT fill:#DDF3EC
 ```
 
 **Scaling Redis Pub/Sub:**
@@ -382,9 +382,9 @@ graph LR
     S3 -->|"Redis egress + fanout CPU @100K"| S4
     S4 -->|"cross-region RTT > 200ms"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0–100 Viewers per stream (MVP)

@@ -57,10 +57,10 @@ graph LR
     SA -->|"store the stream<br/>of events, not state"| EC["Event-driven<br/>choreography<br/>(durable log · Kafka)"]
     EC -->|"want central control<br/>+ visibility"| WO["Workflow<br/>orchestration<br/>(Temporal ·<br/>Step Functions)"]
 
-    style S fill:#FFB6C1
-    style SA fill:#FFE4B5
-    style EC fill:#FFE4B5
-    style WO fill:#90EE90
+    style S fill:#FCE5EA
+    style SA fill:#FFF6C9
+    style EC fill:#FFF6C9
+    style WO fill:#DDF3EC
 ```
 
 ### Single Server Primitives

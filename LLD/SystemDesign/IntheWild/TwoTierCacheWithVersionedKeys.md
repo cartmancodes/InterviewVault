@@ -41,9 +41,9 @@ flowchart LR
     B["Replica B cache<br/>still stale"] -.->|"until TTL, up to 1.7h"| S["Serves old aggregates"]
     C["Replica C cache<br/>still stale"] -.-> S
 
-    classDef bad fill:#FFB6C1
-    classDef good fill:#90EE90
-    classDef store fill:#e1f5ff
+    classDef bad fill:#FCE5EA
+    classDef good fill:#DDF3EC
+    classDef store fill:#EAF5FD
     class B,C,S bad
     class A good
     class DB store
@@ -108,9 +108,9 @@ flowchart TD
     L2 -->|"miss"| ORI["Single-flight to origin<br/>run the SQL"]
     ORI --> SET["SET in L2 with envelope,<br/>set in L1, return"]
 
-    classDef good fill:#90EE90
-    classDef warn fill:#FFE4B5
-    classDef store fill:#e1f5ff
+    classDef good fill:#DDF3EC
+    classDef warn fill:#FFF6C9
+    classDef store fill:#EAF5FD
     class RET,SEED good
     class SWR,ORI warn
     class L2,MG store
@@ -161,9 +161,9 @@ flowchart TD
     LOCK -->|"lost"| SKIP2["Another worker has it"]
     LOCK -->|"won"| REC["Recompute, CAS-set, publish status"]
 
-    classDef good fill:#90EE90
-    classDef warn fill:#FFE4B5
-    classDef bad fill:#FFB6C1
+    classDef good fill:#DDF3EC
+    classDef warn fill:#FFF6C9
+    classDef bad fill:#FCE5EA
     class F,REC good
     class ST,BG warn
     class NOL1,SKIP,SKIP2 bad
@@ -202,9 +202,9 @@ flowchart TB
     LUA -.->|"on Redis failure"| RQ["Bounded retry queue<br/>10k cap, drop oldest"]
     RQ -.->|"drainer, exp backoff"| LUA
 
-    classDef good fill:#90EE90
-    classDef warn fill:#FFE4B5
-    classDef store fill:#e1f5ff
+    classDef good fill:#DDF3EC
+    classDef warn fill:#FFF6C9
+    classDef store fill:#EAF5FD
     class S1,S2,LUA good
     class RQ warn
     class DB,CH store
@@ -271,9 +271,9 @@ flowchart TD
     WAIT -->|"body present"| SRV["Serve"]
     WAIT -->|"err, CAS reject, timeout"| FALL["Fall through:<br/>compute locally"]
 
-    classDef good fill:#90EE90
-    classDef warn fill:#FFE4B5
-    classDef infra fill:#e1f5ff
+    classDef good fill:#DDF3EC
+    classDef warn fill:#FFF6C9
+    classDef infra fill:#EAF5FD
     class CMP,SRV good
     class FALL warn
     class SF,SUB infra

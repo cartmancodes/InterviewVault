@@ -114,12 +114,12 @@ graph LR
     H --> L["Extract linked URLs"]
     L -->|"add back to frontier"| F
 
-    style F fill:#e1f5ff
-    style D fill:#f3e5f5
-    style H fill:#f3e5f5
-    style T fill:#FFE4B5
-    style S fill:#90EE90
-    style L fill:#FFE4B5
+    style F fill:#EAF5FD
+    style D fill:#EDE8FA
+    style H fill:#EDE8FA
+    style T fill:#FFF6C9
+    style S fill:#DDF3EC
+    style L fill:#FFF6C9
 ```
 
 > Note that this is simple, we will improve upon as we go, but it's important to start simple and build up from there.

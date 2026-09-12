@@ -176,12 +176,12 @@ graph TB
     KAFKA --> ML
     ML -->|flip status / decrement| PG
 
-    style REDIS fill:#e1f5ff
-    style ES fill:#e1f5ff
-    style PG fill:#e1f5ff
-    style S3 fill:#f3e5f5
-    style KAFKA fill:#FFE4B5
-    style SS fill:#90EE90
+    style REDIS fill:#EAF5FD
+    style ES fill:#EAF5FD
+    style PG fill:#EAF5FD
+    style S3 fill:#EDE8FA
+    style KAFKA fill:#FFF6C9
+    style SS fill:#DDF3EC
 ```
 
 Photos upload directly to S3 via presigned URLs, so the API servers never see the bytes. CDC from Postgres flows through Kafka to indexers that update Elasticsearch and Redis. Spam detection runs synchronously (lightweight heuristics) and asynchronously (ML) before a review becomes publicly trusted.
@@ -261,11 +261,11 @@ graph LR
     CAND --> HAV["Exact filter<br/>Haversine / ST_DWithin<br/>drop false positives"]
     HAV --> RES["Nearby businesses<br/>within radius"]
 
-    style Q fill:#FFE4B5
-    style GH fill:#e1f5ff
-    style CAND fill:#FFE4B5
-    style HAV fill:#e1f5ff
-    style RES fill:#90EE90
+    style Q fill:#FFF6C9
+    style GH fill:#EAF5FD
+    style CAND fill:#FFF6C9
+    style HAV fill:#EAF5FD
+    style RES fill:#DDF3EC
 ```
 
 1. **Coarse filter via geohash cells.** Encode each business's lat/lng as a base-32 geohash string where a shared prefix implies spatial proximity. The geohash is indexed as a string column. To search within radius, compute the geohash cell of the center point at the appropriate precision, then query that cell plus the 8 neighboring cells. This is an O(1) indexed key lookup per cell — 9 total — and eliminates the full-scan portion of the query.
@@ -502,9 +502,9 @@ graph LR
     S3 -->|"hot-city spikes melt single ES"| S4
     S4 -->|"cross-ocean latency + data residency"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0 to 100 Users

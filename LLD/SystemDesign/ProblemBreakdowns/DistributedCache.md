@@ -329,11 +329,11 @@ graph LR
     C --> D["Hot-key handling<br/>read copies, write batching<br/>key sharding"]
     D --> E["Performance<br/>connection pooling<br/>request batching"]
 
-    style A fill:#FFB6C1
-    style B fill:#FFE4B5
-    style C fill:#FFE4B5
-    style D fill:#FFE4B5
-    style E fill:#90EE90
+    style A fill:#FCE5EA
+    style B fill:#FFF6C9
+    style C fill:#FFF6C9
+    style D fill:#FFF6C9
+    style E fill:#DDF3EC
 ```
 
 ### 1) How do we ensure our cache is highly available and fault tolerant?

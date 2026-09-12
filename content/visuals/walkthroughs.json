@@ -1,0 +1,171 @@
+[
+  {
+    "id": "shards-and-replicas",
+    "title": "Shards versus replicas",
+    "description": "Separate dataset ownership from redundant copies.",
+    "sourceDoc": "LLD/SystemDesign/CoreConcepts/Sharding.md",
+    "asset": "content/visuals/shards-and-replicas.svg",
+    "steps": [
+      {
+        "title": "Route one key",
+        "description": "The example range map sends order 42 to shard A. A request for order 142 would go to shard B.",
+        "focus": [
+          "route"
+        ]
+      },
+      {
+        "title": "Split rows across shards",
+        "description": "The two primaries own disjoint order ranges. Adding a shard can add capacity, but requires a plan to redistribute rows.",
+        "focus": [
+          "shards"
+        ]
+      },
+      {
+        "title": "Copy each shard",
+        "description": "Replica A copies A, and replica B copies B. Replication supplies redundant copies rather than a new partition of the dataset.",
+        "focus": [
+          "replicas"
+        ]
+      },
+      {
+        "title": "Place copies independently",
+        "description": "Each replica represents another storage instance. Use separate failure domains when resilience is the goal; copying onto the same failed machine would not help.",
+        "focus": [
+          "placement",
+          "replicas"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "cache-aside-tiers",
+    "title": "Cache-aside read paths",
+    "description": "Choose a hit or a miss, then follow the application\u2019s work.",
+    "sourceDoc": "LLD/SystemDesign/CoreConcepts/Caching.md",
+    "asset": "content/visuals/cache-aside-tiers.svg",
+    "steps": [
+      {
+        "title": "Check Redis",
+        "description": "The application looks up the profile key in the memory cache before querying the database.",
+        "focus": [
+          "lookup"
+        ]
+      },
+      {
+        "title": "Hit: finish early",
+        "description": "If a usable cached value exists, return it to the caller. No database read is required on this branch.",
+        "focus": [
+          "hit",
+          "lookup"
+        ]
+      },
+      {
+        "title": "Miss: read durable storage",
+        "description": "If the key is absent or expired, the application queries the database. This is an alternative to the hit branch.",
+        "focus": [
+          "miss"
+        ]
+      },
+      {
+        "title": "Fill and return",
+        "description": "After a successful database read, the application writes the value to Redis with its chosen TTL and returns it. The upward connector represents application-coordinated cache population.",
+        "focus": [
+          "fill",
+          "tiers"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "kafka-offset-replay",
+    "title": "Delivery, commit and replay",
+    "description": "An explicit consumer failure timeline, with offset commits as progress acknowledgments.",
+    "sourceDoc": "LLD/SystemDesign/DeepDives/Kafka.md",
+    "asset": "content/visuals/kafka-offset-replay.svg",
+    "steps": [
+      {
+        "title": "Deliver record 42",
+        "description": "Assume the committed next offset is 42. The consumer fetches record 42 and performs its effect, such as storing downloaded HTML.",
+        "focus": [
+          "deliver"
+        ]
+      },
+      {
+        "title": "Successful path: commit 43",
+        "description": "Only after successful processing, commit 43 as the next offset. This acknowledges consumer progress; it is separate from producer acknowledgment settings.",
+        "focus": [
+          "commit"
+        ]
+      },
+      {
+        "title": "Alternative: crash before commit",
+        "description": "If the effect succeeds but the consumer crashes before the commit, Kafka still records 42 as the next offset.",
+        "focus": [
+          "crash"
+        ]
+      },
+      {
+        "title": "Replay can repeat effects",
+        "description": "The replacement fetches 42 again. An idempotent effect or deduplication with a stable event ID prevents an unwanted duplicate effect.",
+        "focus": [
+          "replay"
+        ]
+      },
+      {
+        "title": "Processing errors need a policy",
+        "description": "Crash replay differs from retrying a processing error. A retry topic, backoff and eventual dead-letter handling require application logic.",
+        "focus": [
+          "retry"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "bfs-queue-layers",
+    "title": "BFS queue trace",
+    "description": "Watch first discovery determine distance and prevent duplicate queue entries.",
+    "sourceDoc": "DSA/BFS.md",
+    "asset": "content/visuals/bfs-queue-layers.svg",
+    "steps": [
+      {
+        "title": "Seed the source",
+        "description": "Set distance[A] to zero, mark A visited and enqueue it. The queue contains discovered but unprocessed vertices.",
+        "focus": [
+          "source",
+          "seed"
+        ]
+      },
+      {
+        "title": "Expand A",
+        "description": "Pop A, then discover B and C in that order. Mark each on enqueue and set both distances to one.",
+        "focus": [
+          "layer-one",
+          "expand-a"
+        ]
+      },
+      {
+        "title": "Expand B",
+        "description": "Pop B. D is unvisited, so mark and enqueue D with distance two. C stays ahead of D in the FIFO queue.",
+        "focus": [
+          "layer-two",
+          "expand-b"
+        ]
+      },
+      {
+        "title": "Expand C",
+        "description": "Pop C. Its neighbor D was marked when B discovered it, so D is not added a second time.",
+        "focus": [
+          "layer-two",
+          "expand-c"
+        ]
+      },
+      {
+        "title": "Finish the layer",
+        "description": "Pop D. No unvisited neighbors remain and the queue empties. Every vertex was enqueued only once, in nondecreasing distance order.",
+        "focus": [
+          "done"
+        ]
+      }
+    ]
+  }
+]

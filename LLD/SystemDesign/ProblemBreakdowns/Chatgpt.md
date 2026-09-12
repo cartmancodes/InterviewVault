@@ -238,11 +238,11 @@ graph LR
     SSE -->|"stateless tier pins<br/>client to one instance"| PS["Redis Pub/Sub<br/>decouple via runId channel"]
     PS -->|"fire-and-forget<br/>drops tokens on reconnect"| RS["Redis Stream<br/>replayable, gapless"]
 
-    style P fill:#FFB6C1
-    style WS fill:#FFE4B5
-    style SSE fill:#FFE4B5
-    style PS fill:#FFE4B5
-    style RS fill:#90EE90
+    style P fill:#FCE5EA
+    style WS fill:#FFF6C9
+    style SSE fill:#FFF6C9
+    style PS fill:#FFF6C9
+    style RS fill:#DDF3EC
 ```
 
 After applying both "Great" solutions, here's the full flow on a send:
@@ -363,10 +363,10 @@ graph LR
     T -->|"assistant becomes<br/>obviously forgetful"| PC["Prefix caching<br/>reuse KV cache for<br/>stable prompt prefix"]
     PC --> RS["Rolling summary<br/>compress old turns,<br/>keep recent verbatim"]
 
-    style F fill:#FFB6C1
-    style T fill:#FFE4B5
-    style PC fill:#90EE90
-    style RS fill:#90EE90
+    style F fill:#FCE5EA
+    style T fill:#FFF6C9
+    style PC fill:#DDF3EC
+    style RS fill:#DDF3EC
 ```
 
 #### 🛑 Cancelling a run and reclaiming the GPU

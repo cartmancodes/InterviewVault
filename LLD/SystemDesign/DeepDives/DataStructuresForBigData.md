@@ -58,11 +58,11 @@ graph TB
     Q -->|"How many UNIQUE<br/>items are there?"| HLL["HyperLogLog<br/>cardinality estimation"]
     Q -->|"What's the p95 /<br/>distribution?"| AQ["Approximate Quantiles<br/>bucketed histograms"]
 
-    style Q fill:#FFE4B5
-    style BF fill:#90EE90
-    style CMS fill:#90EE90
-    style HLL fill:#90EE90
-    style AQ fill:#90EE90
+    style Q fill:#FFF6C9
+    style BF fill:#DDF3EC
+    style CMS fill:#DDF3EC
+    style HLL fill:#DDF3EC
+    style AQ fill:#DDF3EC
 ```
 
 > 💡 While occasionally useful for mid-level system design interviews, I would not recommend starting here if you're relatively new to system design. There is much higher ROI in mastering core concepts and key technologies first. A candidate who nails the implementation of Count-Min Sketch but hasn't internalized things like caching, load balancing, and partitioning is going to struggle to design a performant system architecture. Don't stress out about these details!
@@ -197,11 +197,11 @@ graph LR
     C -->|"miss"| E
     E --> Store["Store result<br/>in cache"] --> Ret
 
-    style BF fill:#FFE4B5
-    style C fill:#e1f5ff
-    style E fill:#FFB6C1
-    style Ret fill:#90EE90
-    style Store fill:#e1f5ff
+    style BF fill:#FFF6C9
+    style C fill:#EAF5FD
+    style E fill:#FCE5EA
+    style Ret fill:#DDF3EC
+    style Store fill:#EAF5FD
 ```
 
 > Two things should be noted here. First: most caches support an eviction policy like a Time to Live ( TTL ). Our bloom filter explicitly does not support removal of items so will become less accurate over time. Secondly: most caches have multiple clients/writers. If we're using a bloom filter to shortcut cache checks, we may be missing out on potential cache hits where other clients have already written the result to the cache. Tradeoffs!

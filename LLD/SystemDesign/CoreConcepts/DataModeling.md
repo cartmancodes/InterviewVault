@@ -315,12 +315,12 @@ graph LR
     D --> E["5 · Denormalize<br/>only if needed"]
     E --> F["6 · Shard by primary<br/>access pattern"]
 
-    style A fill:#e1f5ff
-    style B fill:#e8f5e9
-    style C fill:#e8f5e9
-    style D fill:#FFE4B5
-    style E fill:#FFE4B5
-    style F fill:#90EE90
+    style A fill:#EAF5FD
+    style B fill:#DDF3EC
+    style C fill:#DDF3EC
+    style D fill:#FFF6C9
+    style E fill:#FFF6C9
+    style F fill:#DDF3EC
 ```
 
 Answer the question below to find your gaps.

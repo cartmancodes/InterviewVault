@@ -36,10 +36,10 @@ graph LR
     F --> Q
     K --> M["Peer mock<br/>under time pressure"]
 
-    style F fill:#FFE4B5
-    style Q fill:#e1f5ff
-    style A fill:#FFE4B5
-    style M fill:#90EE90
+    style F fill:#FFF6C9
+    style Q fill:#EAF5FD
+    style A fill:#FFF6C9
+    style M fill:#DDF3EC
 ```
 
 ## 🎯 Learn the Fundamentals

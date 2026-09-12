@@ -159,12 +159,12 @@ graph TB
     CLIENT -->|GET manifest + segments| CDN
     CDN -->|origin fetch| S3
 
-    style META fill:#e1f5ff
-    style CACHE fill:#e1f5ff
-    style S3 fill:#e1f5ff
-    style ORCH fill:#f3e5f5
-    style CDN fill:#FFE4B5
-    style API fill:#90EE90
+    style META fill:#EAF5FD
+    style CACHE fill:#EAF5FD
+    style S3 fill:#EAF5FD
+    style ORCH fill:#EDE8FA
+    style CDN fill:#FFF6C9
+    style API fill:#DDF3EC
 ```
 
 - **Video API**: stateless HTTP service. Issues presigned URLs, writes metadata rows, reads them back for playback. Horizontally scaled behind a load balancer.
@@ -265,10 +265,10 @@ graph LR
     SEGMENT --> AUX
     AUX --> OUT
 
-    style SRC fill:#e1f5ff
-    style OUT fill:#e1f5ff
-    style T1 fill:#FFE4B5
-    style PKG fill:#90EE90
+    style SRC fill:#EAF5FD
+    style OUT fill:#EAF5FD
+    style T1 fill:#FFF6C9
+    style PKG fill:#DDF3EC
 ```
 
 **Why a DAG helps**
@@ -373,11 +373,11 @@ graph TB
     E3 -->|miss| SHIELD
     SHIELD -->|single fetch| ORIGIN
 
-    style E1 fill:#90EE90
-    style E2 fill:#90EE90
-    style E3 fill:#90EE90
-    style SHIELD fill:#FFE4B5
-    style ORIGIN fill:#e1f5ff
+    style E1 fill:#DDF3EC
+    style E2 fill:#DDF3EC
+    style E3 fill:#DDF3EC
+    style SHIELD fill:#FFF6C9
+    style ORIGIN fill:#EAF5FD
 ```
 
 > 💡 **Origin shielding turns a stampede into a trickle.** Without it, a cold-cache event for a popular video at 100 edge POPs triggers 100 simultaneous S3 fetches. Funnel all POPs in a region through one shield and S3 sees exactly one request per region per cache miss — cutting origin traffic by 90%+ on popular content.
@@ -453,9 +453,9 @@ graph LR
     S3 -->|"viral miss stampedes origin"| S4
     S4 -->|"live premiere saturates transit"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0-100 Users (MVP)

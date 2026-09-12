@@ -75,11 +75,11 @@ graph LR
     OCC -->|"conflict spans<br/>rows that never collide"| SI["Serializable Isolation<br/>DB tracks read-write<br/>dependencies"]
     SI -->|"hold must outlive<br/>a transaction"| DL["Distributed Lock<br/>lease with TTL<br/>across steps / services"]
 
-    style CW fill:#90EE90
-    style PL fill:#e8f5e9
-    style OCC fill:#FFE4B5
-    style SI fill:#FFE4B5
-    style DL fill:#f3e5f5
+    style CW fill:#DDF3EC
+    style PL fill:#DDF3EC
+    style OCC fill:#FFF6C9
+    style SI fill:#FFF6C9
+    style DL fill:#EDE8FA
 ```
 
 ### Conditional Writes
@@ -319,12 +319,12 @@ graph TB
     Q3 -->|Yes| SI["SERIALIZABLE<br/>or materialize onto<br/>one lockable row"]
     Q3 -->|"No, hold outlives<br/>the transaction"| DL["Distributed Lock<br/>lease across a wait,<br/>call, or steps"]
 
-    style Start fill:#e1f5ff
-    style CW fill:#90EE90
-    style PL fill:#90EE90
-    style OCC fill:#FFE4B5
-    style SI fill:#FFE4B5
-    style DL fill:#f3e5f5
+    style Start fill:#EAF5FD
+    style CW fill:#DDF3EC
+    style PL fill:#DDF3EC
+    style OCC fill:#FFF6C9
+    style SI fill:#FFF6C9
+    style DL fill:#EDE8FA
 ```
 
 **Your check is a predicate on the row you're writing:** Use a conditional `UPDATE` and gate any follow-up work on the affected row count, whether that's a counter decrement, a status flip, or claiming a row. No explicit lock needed since the write is atomic on its own. It's the simplest thing that works, so reach for it first.

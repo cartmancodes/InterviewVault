@@ -152,11 +152,11 @@ graph LR
     MS -.orchestrates.-> LR
     MS -.orchestrates.-> RT
 
-    style LB fill:#e1f5ff
-    style LR fill:#FFE4B5
-    style RT fill:#f3e5f5
-    style MS fill:#FFE4B5
-    style Ready fill:#90EE90
+    style LB fill:#EAF5FD
+    style LR fill:#FFF6C9
+    style RT fill:#EDE8FA
+    style MS fill:#FFF6C9
+    style Ready fill:#DDF3EC
 ```
 
 The key is recognizing which patterns apply to your specific problem and understanding their trade-offs. Start with simpler approaches (polling, single-server orchestration) and only add complexity when you have specific requirements that demand it.

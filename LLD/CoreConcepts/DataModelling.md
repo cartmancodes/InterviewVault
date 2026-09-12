@@ -40,8 +40,8 @@ graph TB
     CE --> HLD
     HLD --> SD
     
-    style CE fill:#e1f5ff
-    style SD fill:#fff4e1
+    style CE fill:#EAF5FD
+    style SD fill:#FFF6C9
 ```
 
 1. **Requirements Gathering**: Identify core entities (usually map 1:1 with tables)
@@ -85,11 +85,11 @@ graph LR
     WC --> REC4[⚠️ Very Specific]
     GRAPH --> REC5[❌ Almost Never]
     
-    style SQL fill:#90EE90
-    style DOC fill:#FFE4B5
-    style KV fill:#FFE4B5
-    style WC fill:#FFE4B5
-    style GRAPH fill:#FFB6C1
+    style SQL fill:#DDF3EC
+    style DOC fill:#FFF6C9
+    style KV fill:#FFF6C9
+    style WC fill:#FFF6C9
+    style GRAPH fill:#FCE5EA
 ```
 
 > **💡 Interview Tip**: Default to PostgreSQL unless requirements clearly signal a specialized model.
@@ -186,7 +186,7 @@ flowchart TB
     Q3 -->|Yes| SQL
     Q3 -->|No| MAYBE
     
-    style SQL fill:#90EE90
+    style SQL fill:#DDF3EC
 ```
 
 ✅ **Best For**:
@@ -237,8 +237,8 @@ graph TB
     U1POSTS --> POST1
     U1POSTS --> POST2
     
-    style USER1 fill:#e1f5ff
-    style U1POSTS fill:#fff4e1
+    style USER1 fill:#EAF5FD
+    style U1POSTS fill:#FFF6C9
 ```
 
 #### Sample Document
@@ -302,9 +302,9 @@ graph LR
     APP -->|SET key, value| K2
     APP -->|GET key| K3
     
-    style K1 fill:#e1f5ff
-    style K2 fill:#e1f5ff
-    style K3 fill:#e1f5ff
+    style K1 fill:#EAF5FD
+    style K2 fill:#EAF5FD
+    style K3 fill:#EAF5FD
 ```
 
 #### Common Pattern: Cache + SQL
@@ -374,9 +374,9 @@ graph TB
         CF2 --> A3[2024-01-03:comment]
     end
     
-    style ROW fill:#e1f5ff
-    style CF1 fill:#fff4e1
-    style CF2 fill:#fff4e1
+    style ROW fill:#EAF5FD
+    style CF1 fill:#FFF6C9
+    style CF2 fill:#FFF6C9
 ```
 
 #### When to Use
@@ -414,10 +414,10 @@ graph TB
     U3 -->|follows| U4
     U4 -->|follows| U1
     
-    style U1 fill:#e1f5ff
-    style U2 fill:#e1f5ff
-    style U3 fill:#e1f5ff
-    style U4 fill:#e1f5ff
+    style U1 fill:#EAF5FD
+    style U2 fill:#EAF5FD
+    style U3 fill:#EAF5FD
+    style U4 fill:#EAF5FD
 ```
 
 #### When to Use
@@ -457,10 +457,10 @@ flowchart TB
     CONS --> CON1[ACID guarantees needed?]
     CONS --> CON2[Eventual consistency OK?]
     
-    style REQ fill:#e1f5ff
-    style VOL fill:#fff4e1
-    style ACCESS fill:#90EE90
-    style CONS fill:#FFE4B5
+    style REQ fill:#EAF5FD
+    style VOL fill:#FFF6C9
+    style ACCESS fill:#DDF3EC
+    style CONS fill:#FFF6C9
 ```
 
 #### Three Key Factors
@@ -563,10 +563,10 @@ graph TB
         NOTE[Rare - usually merge tables]
     end
     
-    style U1 fill:#e1f5ff
-    style UA fill:#e1f5ff
-    style UB fill:#e1f5ff
-    style UC fill:#e1f5ff
+    style U1 fill:#EAF5FD
+    style UA fill:#EAF5FD
+    style UB fill:#EAF5FD
+    style UC fill:#EAF5FD
 ```
 
 **Types**:
@@ -612,10 +612,10 @@ graph TB
     Q2 --> I2[Index: posts.created_at]
     Q3 --> I3[Composite Index:<br/>posts.user_id, created_at]
     
-    style Q fill:#e1f5ff
-    style I1 fill:#90EE90
-    style I2 fill:#90EE90
-    style I3 fill:#FFE4B5
+    style Q fill:#EAF5FD
+    style I1 fill:#DDF3EC
+    style I2 fill:#DDF3EC
+    style I3 fill:#FFF6C9
 ```
 
 #### How Indexes Work
@@ -666,8 +666,8 @@ graph TB
     NORM --> NORMP[✅ No duplication<br/>✅ Consistent updates<br/>❌ JOINs needed]
     DENORM --> DENORMP[✅ Fast reads<br/>❌ Update complexity<br/>❌ Consistency risk]
     
-    style NORM fill:#90EE90
-    style DENORM fill:#FFE4B5
+    style NORM fill:#DDF3EC
+    style DENORM fill:#FFF6C9
 ```
 
 #### Normalized Schema
@@ -721,13 +721,13 @@ flowchart TB
     Q4 -->|Search Systems| DENORM3[✅ Denormalize<br/>Read-optimized]
     Q4 -->|General Use| NORM3[❌ Stay Normalized]
     
-    style NORM1 fill:#FFB6C1
-    style NORM2 fill:#FFB6C1
-    style NORM3 fill:#FFB6C1
-    style CACHE fill:#90EE90
-    style DENORM1 fill:#FFE4B5
-    style DENORM2 fill:#FFE4B5
-    style DENORM3 fill:#FFE4B5
+    style NORM1 fill:#FCE5EA
+    style NORM2 fill:#FCE5EA
+    style NORM3 fill:#FCE5EA
+    style CACHE fill:#DDF3EC
+    style DENORM1 fill:#FFF6C9
+    style DENORM2 fill:#FFF6C9
+    style DENORM3 fill:#FFF6C9
 ```
 
 #### Interview Strategy
@@ -763,11 +763,11 @@ graph TB
         LB --> S3
     end
     
-    style SD fill:#FFB6C1
-    style LB fill:#e1f5ff
-    style S1 fill:#90EE90
-    style S2 fill:#90EE90
-    style S3 fill:#90EE90
+    style SD fill:#FCE5EA
+    style LB fill:#EAF5FD
+    style S1 fill:#DDF3EC
+    style S2 fill:#DDF3EC
+    style S3 fill:#DDF3EC
 ```
 
 #### Shard Key Selection
@@ -786,9 +786,9 @@ flowchart TB
     TIME --> TIMEP[✅ Recent data queries fast<br/>❌ User data scattered]
     GEO --> GEOP[✅ Regional queries fast<br/>❌ Global queries expensive]
     
-    style USER fill:#90EE90
-    style TIME fill:#FFE4B5
-    style GEO fill:#FFE4B5
+    style USER fill:#DDF3EC
+    style TIME fill:#FFF6C9
+    style GEO fill:#FFF6C9
 ```
 
 #### Cross-Shard Query Problem
@@ -854,13 +854,13 @@ flowchart TB
     S5 --> S5A[Only for performance]
     S6 --> S6A[Shard key matches access pattern]
     
-    style START fill:#e1f5ff
-    style S1 fill:#90EE90
-    style S2 fill:#90EE90
-    style S3 fill:#90EE90
-    style S4 fill:#90EE90
-    style S5 fill:#FFE4B5
-    style S6 fill:#FFE4B5
+    style START fill:#EAF5FD
+    style S1 fill:#DDF3EC
+    style S2 fill:#DDF3EC
+    style S3 fill:#DDF3EC
+    style S4 fill:#DDF3EC
+    style S5 fill:#FFF6C9
+    style S6 fill:#FFF6C9
 ```
 
 ### Final Whiteboard Example
@@ -932,12 +932,12 @@ graph TB
     M5 --> M5A[Match access patterns]
     M6 --> M6A[Even Facebook uses MySQL]
     
-    style M1 fill:#FFB6C1
-    style M2 fill:#FFB6C1
-    style M3 fill:#FFB6C1
-    style M4 fill:#FFB6C1
-    style M5 fill:#FFB6C1
-    style M6 fill:#FFB6C1
+    style M1 fill:#FCE5EA
+    style M2 fill:#FCE5EA
+    style M3 fill:#FCE5EA
+    style M4 fill:#FCE5EA
+    style M5 fill:#FCE5EA
+    style M6 fill:#FCE5EA
 ```
 
 ---
@@ -1022,7 +1022,7 @@ graph LR
         C6[🌟 Best of both worlds]
     end
 
-    style C6 fill:#90EE90
+    style C6 fill:#DDF3EC
 ```
 
 **Production recommendation**: Use **UUID v7** (time-ordered UUID) for new systems. It's globally unique (safe for sharding), roughly sequential (good for B-tree inserts), and sortable. Available in PostgreSQL 17+ and most modern UUIDs libraries.
@@ -1081,10 +1081,10 @@ graph LR
 
     P1 --> P2 --> P3 --> P4
 
-    style P1 fill:#e1f5ff
-    style P2 fill:#FFE4B5
-    style P3 fill:#FFE4B5
-    style P4 fill:#90EE90
+    style P1 fill:#EAF5FD
+    style P2 fill:#FFF6C9
+    style P3 fill:#FFF6C9
+    style P4 fill:#DDF3EC
 ```
 
 ```sql
@@ -1164,8 +1164,8 @@ graph LR
         NOTE2[Replay events to get current state<br/>Full audit trail built-in]
     end
 
-    style NOTE1 fill:#FFE4B5
-    style NOTE2 fill:#90EE90
+    style NOTE1 fill:#FFF6C9
+    style NOTE2 fill:#DDF3EC
 ```
 
 ```sql
@@ -1212,8 +1212,8 @@ graph TB
 
     NOTE[Writes: consistent, normalized<br/>Reads: fast, denormalized<br/>Eventually consistent]
 
-    style WRITE_DB fill:#e1f5ff
-    style READ_DB fill:#90EE90
+    style WRITE_DB fill:#EAF5FD
+    style READ_DB fill:#DDF3EC
 ```
 
 **Twitter's feed**: Writes go to a normalized DB. A background fan-out process writes tweet IDs to each follower's timeline cache (Redis sorted set). Reads come from the cache, not the DB. This is CQRS in practice.

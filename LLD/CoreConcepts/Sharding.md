@@ -32,11 +32,11 @@ graph TB
     PROB3 --> SOLUTION
     PROB4 --> SOLUTION
     
-    style PROB1 fill:#FFB6C1
-    style PROB2 fill:#FFB6C1
-    style PROB3 fill:#FFB6C1
-    style PROB4 fill:#FFB6C1
-    style SOLUTION fill:#90EE90
+    style PROB1 fill:#FCE5EA
+    style PROB2 fill:#FCE5EA
+    style PROB3 fill:#FCE5EA
+    style PROB4 fill:#FCE5EA
+    style SOLUTION fill:#DDF3EC
 ```
 
 ### Evolution of Database Scaling
@@ -52,10 +52,10 @@ graph LR
     VERTICAL -->|Add replicas| REPLICAS
     REPLICAS -->|Split data| SHARD
     
-    style SINGLE fill:#FFE4B5
-    style VERTICAL fill:#FFE4B5
-    style REPLICAS fill:#FFE4B5
-    style SHARD fill:#90EE90
+    style SINGLE fill:#FFF6C9
+    style VERTICAL fill:#FFF6C9
+    style REPLICAS fill:#FFF6C9
+    style SHARD fill:#DDF3EC
 ```
 
 ---
@@ -100,8 +100,8 @@ graph TB
     QUERY[Query: Orders from 2023]
     QUERY -->|Only scans| P4
     
-    style TABLE fill:#e1f5ff
-    style P4 fill:#90EE90
+    style TABLE fill:#EAF5FD
+    style P4 fill:#DDF3EC
 ```
 
 #### Horizontal Partitioning
@@ -118,10 +118,10 @@ graph LR
     
     NOTE[Same columns<br/>Different rows]
     
-    style FULL fill:#e1f5ff
-    style H1 fill:#90EE90
-    style H2 fill:#90EE90
-    style H3 fill:#90EE90
+    style FULL fill:#EAF5FD
+    style H1 fill:#DDF3EC
+    style H2 fill:#DDF3EC
+    style H3 fill:#DDF3EC
 ```
 
 #### Vertical Partitioning
@@ -137,9 +137,9 @@ graph LR
     
     NOTE[Same rows<br/>Different columns]
     
-    style FULL fill:#e1f5ff
-    style V1 fill:#90EE90
-    style V2 fill:#90EE90
+    style FULL fill:#EAF5FD
+    style V1 fill:#DDF3EC
+    style V2 fill:#DDF3EC
 ```
 
 **Benefits**:
@@ -169,11 +169,11 @@ graph TB
     
     NOTE[Each shard = separate<br/>CPU, Memory, Storage]
     
-    style ROUTER fill:#e1f5ff
-    style S1 fill:#90EE90
-    style S2 fill:#90EE90
-    style S3 fill:#90EE90
-    style S4 fill:#90EE90
+    style ROUTER fill:#EAF5FD
+    style S1 fill:#DDF3EC
+    style S2 fill:#DDF3EC
+    style S3 fill:#DDF3EC
+    style S4 fill:#DDF3EC
 ```
 
 **Key Difference**:
@@ -209,10 +209,10 @@ flowchart TB
     Q3 -->|No| BAD3[❌ Bad Choice<br/>Many cross-shard queries]
     Q3 -->|Yes| GOOD[✅ Good Shard Key!]
     
-    style BAD1 fill:#FFB6C1
-    style BAD2 fill:#FFB6C1
-    style BAD3 fill:#FFB6C1
-    style GOOD fill:#90EE90
+    style BAD1 fill:#FCE5EA
+    style BAD2 fill:#FCE5EA
+    style BAD3 fill:#FCE5EA
+    style GOOD fill:#DDF3EC
 ```
 
 #### Characteristics of Good Shard Keys
@@ -250,10 +250,10 @@ graph LR
     KEY --> C2[✅ Even Distribution<br/>Users spread naturally]
     KEY --> C3[✅ Query Alignment<br/>Get user profile<br/>Get user orders<br/>All hit 1 shard]
     
-    style KEY fill:#90EE90
-    style C1 fill:#90EE90
-    style C2 fill:#90EE90
-    style C3 fill:#90EE90
+    style KEY fill:#DDF3EC
+    style C1 fill:#DDF3EC
+    style C2 fill:#DDF3EC
+    style C3 fill:#DDF3EC
 ```
 
 **🟢 order_id for E-commerce**:
@@ -265,10 +265,10 @@ graph LR
     KEY --> C2[✅ Even Distribution<br/>Orders over time]
     KEY --> C3[✅ Query Alignment<br/>Get order details<br/>Update order status<br/>All scoped to 1 order]
     
-    style KEY fill:#90EE90
-    style C1 fill:#90EE90
-    style C2 fill:#90EE90
-    style C3 fill:#90EE90
+    style KEY fill:#DDF3EC
+    style C1 fill:#DDF3EC
+    style C2 fill:#DDF3EC
+    style C3 fill:#DDF3EC
 ```
 
 #### Bad Shard Key Examples
@@ -283,9 +283,9 @@ graph TB
     
     NOTE[❌ Only 2 shards possible<br/>❌ Massive imbalance<br/>❌ Defeats purpose]
     
-    style KEY fill:#FFB6C1
-    style S1 fill:#FFE4B5
-    style S2 fill:#FFB6C1
+    style KEY fill:#FCE5EA
+    style S1 fill:#FFF6C9
+    style S2 fill:#FCE5EA
 ```
 
 **🔴 created_at for Growing Table**:
@@ -352,11 +352,11 @@ graph TB
     
     ROUTER -.->|Routes to| S1
     
-    style ROUTER fill:#e1f5ff
-    style S1 fill:#90EE90
-    style S2 fill:#FFE4B5
-    style S3 fill:#FFE4B5
-    style S4 fill:#FFE4B5
+    style ROUTER fill:#EAF5FD
+    style S1 fill:#DDF3EC
+    style S2 fill:#FFF6C9
+    style S3 fill:#FFF6C9
+    style S4 fill:#FFF6C9
 ```
 
 #### How It Works
@@ -412,10 +412,10 @@ graph TB
     WRITES[New Orders]
     WRITES -->|100%| S4
     
-    style S1 fill:#e1f5ff
-    style S2 fill:#e1f5ff
-    style S3 fill:#e1f5ff
-    style S4 fill:#FFB6C1
+    style S1 fill:#EAF5FD
+    style S2 fill:#EAF5FD
+    style S3 fill:#EAF5FD
+    style S4 fill:#FCE5EA
 ```
 
 ✅ **Pros**:
@@ -454,11 +454,11 @@ graph TB
     R3 --> S1[(Shard 1)]
     R4 --> S0[(Shard 0)]
     
-    style HASH fill:#e1f5ff
-    style S0 fill:#90EE90
-    style S1 fill:#90EE90
-    style S2 fill:#90EE90
-    style S3 fill:#90EE90
+    style HASH fill:#EAF5FD
+    style S0 fill:#DDF3EC
+    style S1 fill:#DDF3EC
+    style S2 fill:#DDF3EC
+    style S3 fill:#DDF3EC
 ```
 
 #### Hash Distribution
@@ -493,10 +493,10 @@ graph LR
     
     NOTE[✅ Even distribution<br/>✅ No hotspots]
     
-    style S1 fill:#90EE90
-    style S2 fill:#90EE90
-    style S3 fill:#90EE90
-    style S4 fill:#90EE90
+    style S1 fill:#DDF3EC
+    style S2 fill:#DDF3EC
+    style S3 fill:#DDF3EC
+    style S4 fill:#DDF3EC
 ```
 
 #### The Resharding Problem
@@ -529,10 +529,10 @@ graph TB
     SIMPLE --> BAD[❌ 90% data moves<br/>when adding shard]
     CONSISTENT --> GOOD[✅ Only 1/N data moves<br/>when adding shard]
     
-    style SIMPLE fill:#FFB6C1
-    style CONSISTENT fill:#90EE90
-    style BAD fill:#FFB6C1
-    style GOOD fill:#90EE90
+    style SIMPLE fill:#FCE5EA
+    style CONSISTENT fill:#DDF3EC
+    style BAD fill:#FCE5EA
+    style GOOD fill:#DDF3EC
 ```
 
 ✅ **Pros**:
@@ -573,8 +573,8 @@ graph TB
     DIR -.-> S3
     DIR -.-> S4
     
-    style DIR fill:#e1f5ff
-    style S1 fill:#90EE90
+    style DIR fill:#EAF5FD
+    style S1 fill:#DDF3EC
 ```
 
 #### Lookup Table
@@ -631,10 +631,10 @@ graph TB
     
     NOTE[❌ Directory down = System down<br/>Even though shards are healthy!]
     
-    style DIR fill:#FFB6C1
-    style S1 fill:#90EE90
-    style S2 fill:#90EE90
-    style S3 fill:#90EE90
+    style DIR fill:#FCE5EA
+    style S1 fill:#DDF3EC
+    style S2 fill:#DDF3EC
+    style S3 fill:#DDF3EC
 ```
 
 ✅ **Pros**:
@@ -695,10 +695,10 @@ graph TB
     
     NOTE[❌ Shard 3 is bottleneck<br/>❌ Other shards underutilized<br/>❌ Defeats sharding purpose]
     
-    style S1 fill:#90EE90
-    style S2 fill:#90EE90
-    style S3 fill:#FFB6C1
-    style S4 fill:#90EE90
+    style S1 fill:#DDF3EC
+    style S2 fill:#DDF3EC
+    style S3 fill:#FCE5EA
+    style S4 fill:#DDF3EC
 ```
 
 #### The Celebrity Problem
@@ -734,10 +734,10 @@ flowchart TB
     S2 --> S2A[hash user_id + date<br/>Spread over time]
     S3 --> S3A[Auto-split hot shards<br/>MongoDB balancer]
     
-    style HOTSPOT fill:#FFB6C1
-    style S1 fill:#90EE90
-    style S2 fill:#90EE90
-    style S3 fill:#90EE90
+    style HOTSPOT fill:#FCE5EA
+    style S1 fill:#DDF3EC
+    style S2 fill:#DDF3EC
+    style S3 fill:#DDF3EC
 ```
 
 **Solutions**:
@@ -803,10 +803,10 @@ graph TB
     GOOD --> FAST[Fast: 10ms]
     BAD --> SLOW[Slow: 40ms+]
     
-    style GOOD fill:#90EE90
-    style BAD fill:#FFB6C1
-    style FAST fill:#90EE90
-    style SLOW fill:#FFB6C1
+    style GOOD fill:#DDF3EC
+    style BAD fill:#FCE5EA
+    style FAST fill:#DDF3EC
+    style SLOW fill:#FCE5EA
 ```
 
 #### Solution Strategies
@@ -824,10 +824,10 @@ flowchart TB
     CACHE --> CACHE2[First query expensive<br/>Next 1000 hit cache]
     PRECOMP --> PRECOMP2[Update every 5 min<br/>Serve from cache]
     
-    style CROSS fill:#FFB6C1
-    style CACHE fill:#90EE90
-    style PRECOMP fill:#90EE90
-    style ACCEPT fill:#FFE4B5
+    style CROSS fill:#FCE5EA
+    style CACHE fill:#DDF3EC
+    style PRECOMP fill:#DDF3EC
+    style ACCEPT fill:#FFF6C9
 ```
 
 **Solutions**:
@@ -945,9 +945,9 @@ graph TB
     
     BAD --> PROBLEM[Wrong shard key choice<br/>Redesign needed]
     
-    style GOOD fill:#90EE90
-    style BAD fill:#FFB6C1
-    style EX1 fill:#90EE90
+    style GOOD fill:#DDF3EC
+    style BAD fill:#FCE5EA
+    style EX1 fill:#DDF3EC
 ```
 
 **Solutions**:
@@ -990,15 +990,15 @@ graph TB
     CLOUD --> C1[AWS Aurora<br/>Built-in sharding]
     CLOUD --> C2[Google Spanner<br/>Global distribution]
     
-    style MANUAL fill:#FFB6C1
-    style AUTO fill:#90EE90
-    style N1 fill:#90EE90
-    style N2 fill:#90EE90
-    style N3 fill:#90EE90
-    style S1 fill:#90EE90
-    style S2 fill:#90EE90
-    style C1 fill:#90EE90
-    style C2 fill:#90EE90
+    style MANUAL fill:#FCE5EA
+    style AUTO fill:#DDF3EC
+    style N1 fill:#DDF3EC
+    style N2 fill:#DDF3EC
+    style N3 fill:#DDF3EC
+    style S1 fill:#DDF3EC
+    style S2 fill:#DDF3EC
+    style C1 fill:#DDF3EC
+    style C2 fill:#DDF3EC
 ```
 
 ### Database-Specific Approaches
@@ -1039,7 +1039,7 @@ graph TB
         BIT64 --> B3[Bits 9-0: Sequence<br/>10 bits = 1024/ms/shard]
     end
 
-    style NOTE fill:#90EE90
+    style NOTE fill:#DDF3EC
 ```
 
 **The key insight**: The shard ID is baked into every primary key. You never need a separate lookup table — just extract bits from the ID to find the shard.
@@ -1075,8 +1075,8 @@ graph TB
         HOT --> SOL[Solution: Local in-process cache per gateway server<br/>+ dedicated Cassandra nodes for largest guilds]
     end
 
-    style FAST fill:#90EE90
-    style HOT fill:#FFB6C1
+    style FAST fill:#DDF3EC
+    style HOT fill:#FCE5EA
 ```
 
 **Discord's lesson**: Sharding by `channel_id` means all reads for a channel hit one Cassandra partition. Perfect for the "get latest messages" query. But massive public channels (game announcements, etc.) create hot partitions.
@@ -1104,7 +1104,7 @@ graph TB
         SMALL[Small merchants: 1K shops<br/>shared shard]
     end
 
-    style NOTE fill:#90EE90
+    style NOTE fill:#DDF3EC
 ```
 
 **Key trick**: Shopify allocates small merchants to shared shards but moves large merchants to dedicated shards. This prevents one Gymshark Black Friday event from killing other merchants.
@@ -1162,8 +1162,8 @@ graph TB
 
     NOTE[Logical shard assignments change<br/>but NO DATA MOVES between formats<br/>Just update the routing table]
 
-    style M5 fill:#90EE90
-    style NOTE fill:#90EE90
+    style M5 fill:#DDF3EC
+    style NOTE fill:#DDF3EC
 ```
 
 **Companies that do this**: DynamoDB (auto-partitions), MongoDB (configurable chunk count), Cassandra (token ranges).
@@ -1182,11 +1182,11 @@ graph TB
     MONITOR --> M4[📈 Connection Count per Shard<br/>Alert if near max_connections]
     MONITOR --> M5[💾 Storage per Shard<br/>Alert if > 70% full]
 
-    style M1 fill:#e1f5ff
-    style M2 fill:#FFE4B5
-    style M3 fill:#FFB6C1
-    style M4 fill:#FFE4B5
-    style M5 fill:#FFB6C1
+    style M1 fill:#EAF5FD
+    style M2 fill:#FFF6C9
+    style M3 fill:#FCE5EA
+    style M4 fill:#FFF6C9
+    style M5 fill:#FCE5EA
 ```
 
 ```bash
@@ -1233,11 +1233,11 @@ graph TB
 
     ANTI --> A5[❌ Too few shards<br/>'We'll start with 4 and add more'<br/>Fix: Start with 64+ for any serious system]
 
-    style A1 fill:#FFB6C1
-    style A2 fill:#FFE4B5
-    style A3 fill:#FFB6C1
-    style A4 fill:#FFB6C1
-    style A5 fill:#FFE4B5
+    style A1 fill:#FCE5EA
+    style A2 fill:#FFF6C9
+    style A3 fill:#FCE5EA
+    style A4 fill:#FCE5EA
+    style A5 fill:#FFF6C9
 ```
 
 ---
@@ -1264,8 +1264,8 @@ flowchart TB
     Q2 -->|No| CHECK
     Q3 -->|No| CHECK
     
-    style SHARD fill:#90EE90
-    style CHECK fill:#FFE4B5
+    style SHARD fill:#DDF3EC
+    style CHECK fill:#FFF6C9
 ```
 
 **Common Mistake**: ❌ Introducing sharding before proving it's necessary
@@ -1295,11 +1295,11 @@ graph TB
     STEP4 --> D4[Cross-shard queries?<br/>Hot spots?]
     STEP5 --> D5[Start with N shards<br/>Resharding plan]
     
-    style STEP1 fill:#e1f5ff
-    style STEP2 fill:#e1f5ff
-    style STEP3 fill:#90EE90
-    style STEP4 fill:#FFE4B5
-    style STEP5 fill:#FFE4B5
+    style STEP1 fill:#EAF5FD
+    style STEP2 fill:#EAF5FD
+    style STEP3 fill:#DDF3EC
+    style STEP4 fill:#FFF6C9
+    style STEP5 fill:#FFF6C9
 ```
 
 ### Example Interview Script
@@ -1370,9 +1370,9 @@ flowchart TB
     
     HASH --> IMPL[Modern DB:<br/>MongoDB/DynamoDB/Vitess]
     
-    style Q fill:#e1f5ff
-    style HASH fill:#90EE90
-    style IMPL fill:#90EE90
+    style Q fill:#EAF5FD
+    style HASH fill:#DDF3EC
+    style IMPL fill:#DDF3EC
 ```
 
 ---
@@ -1397,8 +1397,8 @@ graph LR
     CONS --> C3[Consistency challenges]
     CONS --> C4[Operational overhead]
     
-    style PROS fill:#90EE90
-    style CONS fill:#FFB6C1
+    style PROS fill:#DDF3EC
+    style CONS fill:#FCE5EA
 ```
 
 ### Remember
