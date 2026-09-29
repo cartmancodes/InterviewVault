@@ -142,15 +142,15 @@ graph TB
     SPARK -.->|"drift > 0.01% alert"| DASH
     OLAP --> DASH
 
-    style CP fill:#90EE90
-    style REDIS fill:#e1f5ff
-    style KAFKA fill:#FFE4B5
-    style FLINK fill:#90EE90
-    style OLAP fill:#e1f5ff
-    style S3 fill:#e1f5ff
-    style SPARK fill:#90EE90
-    style FRAUD fill:#f3e5f5
-    style FLABELS fill:#FFE4B5
+    style CP fill:#DDF3EC
+    style REDIS fill:#EAF5FD
+    style KAFKA fill:#FFF6C9
+    style FLINK fill:#DDF3EC
+    style OLAP fill:#EAF5FD
+    style S3 fill:#EAF5FD
+    style SPARK fill:#DDF3EC
+    style FRAUD fill:#EDE8FA
+    style FLABELS fill:#FFF6C9
 ```
 
 The ingest side is tuned for never losing a click: the stream is the source of truth, Redis only exists to drop near-duplicates, and the OLAP store is a materialized view that can always be rebuilt from the lake. The query side is deliberately boring: serve pre-aggregated minute rows out of an OLAP engine that already handles time-series scans efficiently. Billing always uses the batch-reconciled exact tier, never the streaming approximate tier.
@@ -232,10 +232,10 @@ graph LR
     W -->|No: batch handles correctly| SIDE
     SIDE --> SPARK
 
-    style UPD fill:#90EE90
-    style SIDE fill:#FFE4B5
-    style SPARK fill:#90EE90
-    style W fill:#FFE4B5
+    style UPD fill:#DDF3EC
+    style SIDE fill:#FFF6C9
+    style SPARK fill:#DDF3EC
+    style W fill:#FFF6C9
 ```
 
 The key insight: the streaming layer handles the common case cheaply; the batch layer handles the tail case correctly. Neither layer needs to handle both.
@@ -277,9 +277,9 @@ graph TB
     AN -->|strip suffix| MERGE
     MERGE --> OUT
 
-    style HOT fill:#FFB6C1
-    style MERGE fill:#90EE90
-    style OUT fill:#e1f5ff
+    style HOT fill:#FCE5EA
+    style MERGE fill:#DDF3EC
+    style OUT fill:#EAF5FD
 ```
 
 OLAP-side hotspots are handled by sharding on `advertiser_id` rather than `ad_id`, which naturally distributes load since a single advertiser runs many ads with different popularity profiles. The metrics API layer fans out queries across shards and merges results.
@@ -318,10 +318,10 @@ graph LR
     FIN --> DIFF
     DIFF -.->|"drift > 0.01% - alert / pause billing"| SP
 
-    style EST fill:#FFE4B5
-    style FIN fill:#90EE90
-    style S3 fill:#e1f5ff
-    style DIFF fill:#FFB6C1
+    style EST fill:#FFF6C9
+    style FIN fill:#DDF3EC
+    style S3 fill:#EAF5FD
+    style DIFF fill:#FCE5EA
 ```
 
 Discrepancies between the two layers are a monitoring signal. A continuous diff job compares streaming counts to batch counts for each `(ad_id, minute_bucket)`. Discrepancies above 0.01% trigger alerts and can pause billing exports before incorrect invoices go out. This is not redundant work — it is the audit trail that catches silent streaming bugs before they compound.
@@ -351,9 +351,9 @@ graph LR
     S3 -->|"viral ad pins 1 partition"| S4
     S4 -->|"single-region blast radius"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0 to 100 Clicks/sec (MVP)

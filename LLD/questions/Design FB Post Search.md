@@ -172,12 +172,12 @@ graph TB
     SS -->|posting-list lookup| IDX
     SS -->|hydrate bodies| PS
 
-    style IDX fill:#e1f5ff
-    style PDB fill:#e1f5ff
-    style LDB fill:#e1f5ff
-    style KAFKA fill:#FFE4B5
-    style IW fill:#FFE4B5
-    style SS fill:#90EE90
+    style IDX fill:#EAF5FD
+    style PDB fill:#EAF5FD
+    style LDB fill:#EAF5FD
+    style KAFKA fill:#FFF6C9
+    style IW fill:#FFF6C9
+    style SS fill:#DDF3EC
 ```
 
 The inverted index itself is the load-bearing design choice. Each token (word in a post) maps to a posting list of post IDs. Two parallel structures are kept per token:
@@ -195,8 +195,8 @@ graph LR
     TOK --> REC
     TOK --> LIK
 
-    style REC fill:#e1f5ff
-    style LIK fill:#e1f5ff
+    style REC fill:#EAF5FD
+    style LIK fill:#EAF5FD
 ```
 
 Maintaining both structures avoids expensive request-time sorting: if you only stored post IDs unordered, a query for a popular keyword might require pulling tens of millions of IDs, hydrating them, and sorting in memory, blowing the 500ms budget.
@@ -360,9 +360,9 @@ graph LR
     S3 -->|"single ES node caps ~50–100GB"| S4
     S4 -->|"long-tail + cross-region latency"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0-100 Users

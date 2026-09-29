@@ -261,10 +261,10 @@ graph LR
     F --> BG["3 · Background Writer<br/>dirty pages → data files<br/>async / batched"]
     B --> IX["4 · Index Updates<br/>also written via WAL"]
 
-    style B fill:#e1f5ff
-    style F fill:#FFB6C1
-    style BG fill:#e8f5e9
-    style IX fill:#FFE4B5
+    style B fill:#EAF5FD
+    style F fill:#FCE5EA
+    style BG fill:#DDF3EC
+    style IX fill:#FFF6C9
 ```
 
 > This architecture is why PostgreSQL can be fast for writes - most of the work happens in memory, while ensuring durability through the WAL. The actual writing of data pages to disk happens later and is optimized for batch operations.
@@ -315,11 +315,11 @@ graph LR
     WO --> PA["Table Partitioning<br/>split by range<br/>(e.g. by month)"]
     PA --> SH["Sharding<br/>distribute writes<br/>across nodes"]
 
-    style V fill:#e8f5e9
-    style BA fill:#e8f5e9
-    style WO fill:#FFE4B5
-    style PA fill:#FFE4B5
-    style SH fill:#90EE90
+    style V fill:#DDF3EC
+    style BA fill:#DDF3EC
+    style WO fill:#FFF6C9
+    style PA fill:#FFF6C9
+    style SH fill:#DDF3EC
 ```
 
 **1. Vertical Scaling**
@@ -401,9 +401,9 @@ graph TB
     P -->|"synchronous<br/>wait for ack"| R1
     P -->|"asynchronous<br/>background"| R2
 
-    style P fill:#90EE90
-    style R1 fill:#e1f5ff
-    style R2 fill:#e1f5ff
+    style P fill:#DDF3EC
+    style R1 fill:#EAF5FD
+    style R2 fill:#EAF5FD
 ```
 
 > Many organizations use a hybrid approach: keeping a small number of synchronous replicas for stronger consistency while maintaining additional asynchronous replicas for read scaling. PostgreSQL allows you to specify which replicas should be synchronous.

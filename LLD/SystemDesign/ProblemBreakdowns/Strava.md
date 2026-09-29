@@ -401,9 +401,9 @@ The leaderboard design evolves through three stages, each addressing the weaknes
 graph LR
     N["Naive query<br/>GROUP BY + SUM over<br/>millions of activities"] -->|"slow, high DB load"| P["Periodic aggregation<br/>pre-computed table<br/>daily batch job"]
     P -->|"stale, eventual<br/>consistency"| R["Redis Sorted Sets<br/>ZINCRBY on write<br/>ZRANGE on read"]
-    style N fill:#FFB6C1
-    style P fill:#FFE4B5
-    style R fill:#90EE90
+    style N fill:#FCE5EA
+    style P fill:#FFF6C9
+    style R fill:#DDF3EC
 ```
 
 This approach faces significant scalability issues. As the number of activities increases, query performance will degrade rapidly. The system would need to scan and aggregate millions of records for each leaderboard request, leading to high latency and increased database load. Additionally, this method doesn't account for the dynamic nature of leaderboards, where rankings can change frequently as new activities are logged.

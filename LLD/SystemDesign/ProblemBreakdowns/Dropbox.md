@@ -195,9 +195,9 @@ graph LR
     A["Upload to backend<br/>store on local disk<br/>won't scale, not reliable"] -->|"offload storage"| B["Upload to backend<br/>then to Blob Storage<br/>file uploaded twice"]
     B -->|"skip the backend hop"| C["Presigned URL<br/>client uploads direct to S3<br/>backend saves metadata via S3 notification"]
 
-    style A fill:#FFB6C1
-    style B fill:#FFE4B5
-    style C fill:#90EE90
+    style A fill:#FCE5EA
+    style B fill:#FFF6C9
+    style C fill:#DDF3EC
 ```
 
 ### 2) Users should be able to download a file from any device

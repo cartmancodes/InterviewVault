@@ -197,8 +197,8 @@ stateDiagram-v2
     DLQ --> Pending: Manual fix &<br/>re-enqueue
     DLQ --> [*]: Human<br/>investigation
 
-    classDef good fill:#90EE90
-    classDef bad fill:#FFB6C1
+    classDef good fill:#DDF3EC
+    classDef bad fill:#FCE5EA
     class Completed good
     class DLQ bad
 ```

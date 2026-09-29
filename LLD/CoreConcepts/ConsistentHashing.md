@@ -31,9 +31,9 @@ graph TB
     PROBLEM --> BAD[❌ Simple Modulo:<br/>90% data moves]
     PROBLEM --> GOOD[✅ Consistent Hashing:<br/>Only 1/N data moves]
     
-    style PROBLEM fill:#FFB6C1
-    style BAD fill:#FFB6C1
-    style GOOD fill:#90EE90
+    style PROBLEM fill:#FCE5EA
+    style BAD fill:#FCE5EA
+    style GOOD fill:#DDF3EC
 ```
 
 ### Evolution of Data Distribution
@@ -47,9 +47,9 @@ graph LR
     SINGLE -->|Scale up| MODULO
     MODULO -->|Resharding problem| CONSISTENT
     
-    style SINGLE fill:#FFE4B5
-    style MODULO fill:#FFB6C1
-    style CONSISTENT fill:#90EE90
+    style SINGLE fill:#FFF6C9
+    style MODULO fill:#FCE5EA
+    style CONSISTENT fill:#DDF3EC
 ```
 
 ---
@@ -90,7 +90,7 @@ graph LR
     CLIENT3 --> SERVER
     SERVER --> DB
     
-    style DB fill:#90EE90
+    style DB fill:#DDF3EC
 ```
 
 **Works great initially!** ✅
@@ -110,7 +110,7 @@ graph TB
     
     QUESTION[❓ Which events<br/>go to which database?]
     
-    style QUESTION fill:#FFE4B5
+    style QUESTION fill:#FFF6C9
 ```
 
 ---
@@ -127,8 +127,8 @@ graph TB
     HASH --> MODULO[Modulo Operation<br/>987654 % 3 = ?]
     MODULO --> RESULT[Result: 1<br/>Store in Database 1]
     
-    style HASH fill:#e1f5ff
-    style RESULT fill:#90EE90
+    style HASH fill:#EAF5FD
+    style RESULT fill:#DDF3EC
 ```
 
 **Formula**: `database_id = hash(event_id) % number_of_databases`
@@ -147,9 +147,9 @@ graph LR
     E2 --> DB0[(DB 0)]
     E3 --> DB2[(DB 2)]
     
-    style DB0 fill:#90EE90
-    style DB1 fill:#90EE90
-    style DB2 fill:#90EE90
+    style DB0 fill:#DDF3EC
+    style DB1 fill:#DDF3EC
+    style DB2 fill:#DDF3EC
 ```
 
 ```
@@ -213,8 +213,8 @@ graph TB
     
     NOTE[90% of data must move!<br/>💥 Database overload<br/>😞 Slow response times]
     
-    style ADD fill:#FFB6C1
-    style NOTE fill:#FFB6C1
+    style ADD fill:#FCE5EA
+    style NOTE fill:#FCE5EA
 ```
 
 ---
@@ -259,9 +259,9 @@ graph TB
     MOVE3 --> IMPACT
     MOVE4 --> IMPACT
     
-    style FAILURE fill:#FFB6C1
-    style CHANGE fill:#FFB6C1
-    style IMPACT fill:#FFB6C1
+    style FAILURE fill:#FCE5EA
+    style CHANGE fill:#FCE5EA
+    style IMPACT fill:#FCE5EA
 ```
 
 ---
@@ -288,11 +288,11 @@ graph TB
     
     NOTE[Move clockwise to find<br/>next database]
     
-    style RING fill:#e1f5ff
-    style P0 fill:#90EE90
-    style P25 fill:#90EE90
-    style P50 fill:#90EE90
-    style P75 fill:#90EE90
+    style RING fill:#EAF5FD
+    style P0 fill:#DDF3EC
+    style P25 fill:#DDF3EC
+    style P50 fill:#DDF3EC
+    style P75 fill:#DDF3EC
 ```
 
 ### Hash Ring Visualization
@@ -318,10 +318,10 @@ graph TB
     E2[Event at position 40<br/>→ Next DB clockwise = DB3]
     E3[Event at position 85<br/>→ Next DB clockwise = DB1]
     
-    style TOP fill:#e1f5ff
-    style RIGHT fill:#90EE90
-    style BOTTOM fill:#FFE4B5
-    style LEFT fill:#FFB6C1
+    style TOP fill:#EAF5FD
+    style RIGHT fill:#DDF3EC
+    style BOTTOM fill:#FFF6C9
+    style LEFT fill:#FCE5EA
 ```
 
 ### How Assignment Works
@@ -380,8 +380,8 @@ graph TB
     
     NOTE[✅ Only 15% of data moves!<br/>From DB4 to DB5<br/>All other DBs untouched]
     
-    style ADD fill:#90EE90
-    style NOTE fill:#90EE90
+    style ADD fill:#DDF3EC
+    style NOTE fill:#DDF3EC
 ```
 
 #### Impact Analysis
@@ -396,12 +396,12 @@ graph LR
     IMPACT --> STAY3[DB3: 100% stays ✅]
     IMPACT --> PARTIAL[DB4: ~70% stays ✅<br/>~30% moves to DB5]
     
-    style IMPACT fill:#e1f5ff
-    style MOVE fill:#FFE4B5
-    style STAY1 fill:#90EE90
-    style STAY2 fill:#90EE90
-    style STAY3 fill:#90EE90
-    style PARTIAL fill:#FFE4B5
+    style IMPACT fill:#EAF5FD
+    style MOVE fill:#FFF6C9
+    style STAY1 fill:#DDF3EC
+    style STAY2 fill:#DDF3EC
+    style STAY3 fill:#DDF3EC
+    style PARTIAL fill:#FFF6C9
 ```
 
 **Result**: Only ~15% of total data needs to move!
@@ -449,11 +449,11 @@ graph TB
     
     NOTE[✅ Only 1/N data moves<br/>⚠️ Load imbalance issue]
     
-    style REMOVE fill:#FFB6C1
-    style UNCHANGED1 fill:#90EE90
-    style UNCHANGED2 fill:#90EE90
-    style AFFECTED fill:#FFE4B5
-    style LOAD fill:#FFB6C1
+    style REMOVE fill:#FCE5EA
+    style UNCHANGED1 fill:#DDF3EC
+    style UNCHANGED2 fill:#DDF3EC
+    style AFFECTED fill:#FFF6C9
+    style LOAD fill:#FCE5EA
 ```
 
 ---
@@ -474,10 +474,10 @@ graph LR
     
     NOTE[❌ DB3 has 2x load<br/>❌ Uneven distribution<br/>❌ Potential bottleneck]
     
-    style DB1 fill:#90EE90
-    style DB3 fill:#FFB6C1
-    style DB4 fill:#90EE90
-    style NOTE fill:#FFB6C1
+    style DB1 fill:#DDF3EC
+    style DB3 fill:#FCE5EA
+    style DB4 fill:#DDF3EC
+    style NOTE fill:#FCE5EA
 ```
 
 ---
@@ -506,9 +506,9 @@ graph TB
     
     NOTE[Each DB appears<br/>multiple times on ring]
     
-    style DB1 fill:#e1f5ff
-    style DB2 fill:#e1f5ff
-    style DB3 fill:#e1f5ff
+    style DB1 fill:#EAF5FD
+    style DB2 fill:#EAF5FD
+    style DB3 fill:#EAF5FD
 ```
 
 ### How Virtual Nodes Work
@@ -527,37 +527,7 @@ DB1-vn3 → hash("DB1-vn3") = position 85
 
 ### Hash Ring with Virtual Nodes
 
-```mermaid
-%%{init: {'theme':'base'}}%%
-graph TB
-    subgraph "Ring with Virtual Nodes"
-        P5[DB2-vn1<br/>pos 5]
-        P15[DB1-vn1<br/>pos 15]
-        P25[DB3-vn1<br/>pos 25]
-        P35[DB2-vn2<br/>pos 35]
-        P45[DB1-vn2<br/>pos 45]
-        P55[DB3-vn2<br/>pos 55]
-        P65[DB2-vn3<br/>pos 65]
-        P85[DB1-vn3<br/>pos 85]
-        P95[DB3-vn3<br/>pos 95]
-        
-        P5 -.-> P15 -.-> P25 -.-> P35
-        P35 -.-> P45 -.-> P55 -.-> P65
-        P65 -.-> P85 -.-> P95 -.-> P5
-    end
-    
-    NOTE[Virtual nodes<br/>naturally intermixed<br/>around the ring]
-    
-    style P5 fill:#FFB6C1
-    style P35 fill:#FFB6C1
-    style P65 fill:#FFB6C1
-    style P15 fill:#e1f5ff
-    style P45 fill:#e1f5ff
-    style P85 fill:#e1f5ff
-    style P25 fill:#90EE90
-    style P55 fill:#90EE90
-    style P95 fill:#90EE90
-```
+![Virtual-node ownership: hash the key and choose the first node clockwise, wrapping around the end of the ring when needed.](../../content/visuals/virtual-node-ring.svg)
 
 ---
 
@@ -612,12 +582,12 @@ graph TB
     W3 --> NOTE1
     V3 --> NOTE2
     
-    style W3 fill:#FFB6C1
-    style NOTE1 fill:#FFB6C1
-    style V1 fill:#90EE90
-    style V3 fill:#90EE90
-    style V4 fill:#90EE90
-    style NOTE2 fill:#90EE90
+    style W3 fill:#FCE5EA
+    style NOTE1 fill:#FCE5EA
+    style V1 fill:#DDF3EC
+    style V3 fill:#DDF3EC
+    style V4 fill:#DDF3EC
+    style NOTE2 fill:#DDF3EC
 ```
 
 ### Benefits of Virtual Nodes
@@ -664,13 +634,13 @@ graph TB
     
     BROKER --> B1[Kafka<br/>Partition assignment]
     
-    style CH fill:#e1f5ff
-    style DB1 fill:#90EE90
-    style DB2 fill:#90EE90
-    style C1 fill:#90EE90
-    style C2 fill:#90EE90
-    style CDN1 fill:#90EE90
-    style B1 fill:#90EE90
+    style CH fill:#EAF5FD
+    style DB1 fill:#DDF3EC
+    style DB2 fill:#DDF3EC
+    style C1 fill:#DDF3EC
+    style C2 fill:#DDF3EC
+    style CDN1 fill:#DDF3EC
+    style B1 fill:#DDF3EC
 ```
 
 ### Example: Apache Cassandra
@@ -691,8 +661,8 @@ graph TB
     
     NOTE[Data automatically<br/>rebalanced on node<br/>addition/removal]
     
-    style RING fill:#e1f5ff
-    style N3 fill:#90EE90
+    style RING fill:#EAF5FD
+    style N3 fill:#DDF3EC
 ```
 
 ### Example: Amazon DynamoDB
@@ -745,8 +715,8 @@ graph TB
 
     NOTE[Each of N1, N2, N3 gives<br/>~64 tokens to N4<br/>Total moved: ~25% of data]
 
-    style N4 fill:#90EE90
-    style NOTE fill:#e1f5ff
+    style N4 fill:#DDF3EC
+    style NOTE fill:#EAF5FD
 ```
 
 ### DynamoDB: Automatic Partition Splits
@@ -863,9 +833,9 @@ flowchart TB
     
     MENTION --> M1[DynamoDB/Cassandra<br/>uses consistent hashing]
     
-    style DEEP fill:#FFE4B5
-    style MENTION fill:#90EE90
-    style SKIP fill:#e1f5ff
+    style DEEP fill:#FFF6C9
+    style MENTION fill:#DDF3EC
+    style SKIP fill:#EAF5FD
 ```
 
 ### Interview Scenarios
@@ -947,8 +917,8 @@ graph TB
         CH --> CH4[✅ Even distribution]
     end
     
-    style SM fill:#FFB6C1
-    style CH fill:#90EE90
+    style SM fill:#FCE5EA
+    style CH fill:#DDF3EC
 ```
 
 ### Performance Metrics
@@ -1005,10 +975,10 @@ flowchart TB
     CLOCKWISE --> SERVER[First Server Found]
     SERVER --> STORE[Store/Retrieve Data]
     
-    style START fill:#e1f5ff
-    style HASH fill:#FFE4B5
-    style SERVER fill:#90EE90
-    style STORE fill:#90EE90
+    style START fill:#EAF5FD
+    style HASH fill:#FFF6C9
+    style SERVER fill:#DDF3EC
+    style STORE fill:#DDF3EC
 ```
 
 ### Quick Reference
@@ -1046,11 +1016,11 @@ graph LR
     SIMPLE --> SIMPLE_ISSUE[90% data moves<br/>System overload]
     ELEGANT --> ELEGANT_WIN[1/N data moves<br/>Minimal disruption]
     
-    style PROBLEM fill:#e1f5ff
-    style SIMPLE fill:#FFB6C1
-    style ELEGANT fill:#90EE90
-    style SIMPLE_ISSUE fill:#FFB6C1
-    style ELEGANT_WIN fill:#90EE90
+    style PROBLEM fill:#EAF5FD
+    style SIMPLE fill:#FCE5EA
+    style ELEGANT fill:#DDF3EC
+    style SIMPLE_ISSUE fill:#FCE5EA
+    style ELEGANT_WIN fill:#DDF3EC
 ```
 
 ### Core Principles
@@ -1097,9 +1067,9 @@ graph TB
     
     BRIEF -->|No| SKIP[Skip entirely]
     
-    style DEEP fill:#FFE4B5
-    style MENTION fill:#90EE90
-    style SKIP fill:#e1f5ff
+    style DEEP fill:#FFF6C9
+    style MENTION fill:#DDF3EC
+    style SKIP fill:#EAF5FD
 ```
 
 > **Interview Wisdom**: Most interviews just need you to know that DynamoDB and Cassandra handle this for you. Save the deep dive for infrastructure-focused roles!

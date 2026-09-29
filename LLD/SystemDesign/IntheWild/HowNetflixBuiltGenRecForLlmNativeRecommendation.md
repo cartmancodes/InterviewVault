@@ -43,15 +43,15 @@ graph LR
     E --> H
     H --> O
 
-    style L fill:#f3e5f5
-    style M fill:#e1f5ff
-    style R fill:#f3e5f5
-    style C fill:#FFE4B5
-    style G fill:#90EE90
-    style P fill:#FFE4B5
-    style H fill:#90EE90
-    style E fill:#e1f5ff
-    style O fill:#90EE90
+    style L fill:#EDE8FA
+    style M fill:#EAF5FD
+    style R fill:#EDE8FA
+    style C fill:#FFF6C9
+    style G fill:#DDF3EC
+    style P fill:#FFF6C9
+    style H fill:#DDF3EC
+    style E fill:#EAF5FD
+    style O fill:#DDF3EC
 ```
 
 ## ⚠️ The Problem
@@ -116,11 +116,11 @@ graph LR
     D --> P
     P --> Q
 
-    style R fill:#f3e5f5
-    style K fill:#FFE4B5
-    style D fill:#FFE4B5
-    style P fill:#e1f5ff
-    style Q fill:#90EE90
+    style R fill:#EDE8FA
+    style K fill:#FFF6C9
+    style D fill:#FFF6C9
+    style P fill:#EAF5FD
+    style Q fill:#DDF3EC
 ```
 
 ### Train in two phases
@@ -144,12 +144,12 @@ graph TB
     C --> P2
     P2 --> R
 
-    style O fill:#f3e5f5
-    style N fill:#e1f5ff
-    style P1 fill:#FFE4B5
-    style C fill:#e1f5ff
-    style P2 fill:#FFE4B5
-    style R fill:#90EE90
+    style O fill:#EDE8FA
+    style N fill:#EAF5FD
+    style P1 fill:#FFF6C9
+    style C fill:#EAF5FD
+    style P2 fill:#FFF6C9
+    style R fill:#DDF3EC
 ```
 
 This split creates two operating cadences. Durable domain understanding belongs in the slower foundation cycle. Fast-moving catalog and preference information belongs in the cheaper ranking cycle. In system-design terms, it isolates a stable dependency from a volatile one.

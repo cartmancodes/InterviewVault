@@ -220,14 +220,14 @@ graph TB
     QS --> REDIS_Q
     PG -->|CDC: outbox → Debezium → Kafka| ELASTIC
 
-    style BS fill:#90EE90
-    style PG fill:#e1f5ff
-    style ELASTIC fill:#e1f5ff
-    style REDIS_H fill:#e1f5ff
-    style REDIS_C fill:#e1f5ff
-    style REDIS_Q fill:#e1f5ff
-    style STRIPE fill:#f3e5f5
-    style CDN fill:#f3e5f5
+    style BS fill:#DDF3EC
+    style PG fill:#EAF5FD
+    style ELASTIC fill:#EAF5FD
+    style REDIS_H fill:#EAF5FD
+    style REDIS_C fill:#EAF5FD
+    style REDIS_Q fill:#EAF5FD
+    style STRIPE fill:#EDE8FA
+    style CDN fill:#EDE8FA
 ```
 
 - **API Gateway** terminates TLS, authenticates, rate-limits per user/IP, fans out to services.
@@ -375,10 +375,10 @@ graph LR
 
     PG --> DBZ --> K --> IDX --> ES
 
-    style PG fill:#e1f5ff
-    style DBZ fill:#FFE4B5
-    style K fill:#FFE4B5
-    style ES fill:#90EE90
+    style PG fill:#EAF5FD
+    style DBZ fill:#FFF6C9
+    style K fill:#FFF6C9
+    style ES fill:#DDF3EC
 ```
 
 **Shard ES by `event_id`**, not by venue or category, to keep the write path simple. Hot events get disproportionate query traffic; ES shard routing by `event_id` contains this load to one shard.
@@ -413,9 +413,9 @@ graph LR
     S3 -->|"2M clients, no admission control"| S4
     S4 -->|"single primary + regional outage"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0 to 100 Users (MVP)

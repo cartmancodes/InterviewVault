@@ -225,10 +225,10 @@ graph TB
     CO --> PR
     CO -->|transformed op + revision| WS
 
-    style CO fill:#90EE90
-    style OL fill:#e1f5ff
-    style SN fill:#e1f5ff
-    style PR fill:#FFE4B5
+    style CO fill:#DDF3EC
+    style OL fill:#EAF5FD
+    style SN fill:#EAF5FD
+    style PR fill:#FFF6C9
 ```
 
 The critical invariant is that all operations on a given document flow through one place - a single-writer coordinator - because concurrent independent transforms on two servers would diverge. The rest of the system (snapshots, presence fan-out, WebSocket termination) can be horizontally scaled freely.
@@ -381,11 +381,11 @@ graph TB
     CO2 --> LOG
     CO1 -.replay from snapshot on failover.-> SNAP
 
-    style CO1 fill:#90EE90
-    style CO2 fill:#90EE90
-    style ZK fill:#FFE4B5
-    style LOG fill:#e1f5ff
-    style SNAP fill:#e1f5ff
+    style CO1 fill:#DDF3EC
+    style CO2 fill:#DDF3EC
+    style ZK fill:#FFF6C9
+    style LOG fill:#EAF5FD
+    style SNAP fill:#EAF5FD
 ```
 
 > ⚠️ **Failover correctness is about stopping the old writer, not electing fast.** The dangerous case is a coordinator that is slow to die — paused by a GC or stuck behind a network partition — racing its successor. A fencing token (a monotonically increasing epoch) lets the new coordinator reject any late write carrying a stale epoch, so two coordinators can never both commit to the same document and fork its revision sequence.
@@ -422,9 +422,9 @@ graph LR
     S3 -->|"cross-region 200ms RTT, hot-doc overload"| S4
     S4 -->|"ZooKeeper metadata bottleneck"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0 to 100 Users (MVP)

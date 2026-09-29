@@ -295,9 +295,9 @@ graph LR
     A["Poll DB directly<br/>query + sort per request"] -->|"high DB load,<br/>does not scale"| B["Cache leaderboard in Redis<br/>refresh every ~30s"]
     B -->|"not real-time,<br/>race conditions"| C["Redis Sorted Set<br/>ZADD on submission,<br/>ZRANGE top N"]
 
-    style A fill:#FFB6C1
-    style B fill:#FFE4B5
-    style C fill:#90EE90
+    style A fill:#FCE5EA
+    style B fill:#FFF6C9
+    style C fill:#DDF3EC
 ```
 
 This is what we have now in the high-level design. We store all submission results in the main database. Clients poll the server every few seconds, and on each poll, the server queries the database for the top N users, sorts them, and returns the result. We'd then keep the data fresh by having the client poll every 5 seconds. While this works better if we switched to a relational database, it still has significant shortcomings.

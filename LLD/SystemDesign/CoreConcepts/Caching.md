@@ -53,11 +53,11 @@ graph TB
 
     EXT -->|"miss"| DB[("Database<br/>disk · source of truth")]
 
-    style CS fill:#e1f5ff
-    style CDN fill:#f3e5f5
-    style IP fill:#e1f5ff
-    style EXT fill:#90EE90
-    style DB fill:#FFB6C1
+    style CS fill:#EAF5FD
+    style CDN fill:#EDE8FA
+    style IP fill:#EAF5FD
+    style EXT fill:#DDF3EC
+    style DB fill:#FCE5EA
 ```
 
 Let's look at the main places you can cache data, why each one exists, and when it makes sense to use it.
@@ -138,6 +138,10 @@ How it works:
 3. If not, fetch from the database, store it in the cache, and return it.
 
 ![Cache-Aside](assets/rps7cY2Z78dC.2hte0db5lfbvr.svg)
+
+![Cache-aside hit and miss paths across memory and durable storage.](../../../content/visuals/cache-aside-tiers.svg)
+
+*A hit returns directly. On a miss, the application reads the database, fills the cache with a TTL, and returns the value. The optional walkthrough highlights the authored steps; the complete static figure is shown above.*
 
 Cache-aside only caches data when needed, which keeps the cache lean. The downside is that a cache miss causes extra latency.
 
@@ -287,11 +291,11 @@ graph LR
     S3 --> S4["4 · Set eviction<br/>policy<br/>LRU + TTL"]
     S4 --> S5["5 · Address<br/>downsides<br/>invalidation · failures · stampede"]
 
-    style S1 fill:#FFB6C1
-    style S2 fill:#FFE4B5
-    style S3 fill:#FFE4B5
-    style S4 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S2 fill:#FFF6C9
+    style S3 fill:#FFF6C9
+    style S4 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 **1. Identify the bottleneck**

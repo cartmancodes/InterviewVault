@@ -264,8 +264,8 @@ So here's practical advice: start simple. Counter-intuitively, you probably don'
 graph LR
     A["Start here<br/>pgvector · ES kNN<br/>Redis · S3 Vector"] -->|"~100M+ vectors,<br/>or scale/features demand"| B["Purpose-built vector DB<br/>Pinecone · Weaviate<br/>Milvus · Qdrant · Chroma"]
 
-    style A fill:#90EE90
-    style B fill:#FFE4B5
+    style A fill:#DDF3EC
+    style B fill:#FFF6C9
 ```
 
 ### Vector Extensions for Traditional DBs and Stores (Start Here)
@@ -322,9 +322,9 @@ graph TB
     App -->|"3 · fetch full details<br/>by ID"| DB[(Primary Database<br/>source of truth)]
     DB -->|"item records"| App
 
-    style App fill:#90EE90
-    style VS fill:#e1f5ff
-    style DB fill:#e1f5ff
+    style App fill:#DDF3EC
+    style VS fill:#EAF5FD
+    style DB fill:#EAF5FD
 ```
 
 **Pattern 2: Hybrid search**. Query goes to both a keyword index (like Elasticsearch) and a vector index. Results get merged with some ranking function. Good for search applications where both exact matches and semantic similarity matter.

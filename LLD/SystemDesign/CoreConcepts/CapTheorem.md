@@ -115,12 +115,12 @@ graph TB
         A --> A3["Cassandra · Redis clusters<br/>DynamoDB (multi-AZ)"]
     end
 
-    style P fill:#FFB6C1
-    style Q fill:#FFE4B5
-    style C fill:#90EE90
-    style A fill:#90EE90
-    style C3 fill:#e1f5ff
-    style A3 fill:#e1f5ff
+    style P fill:#FCE5EA
+    style Q fill:#FFF6C9
+    style C fill:#DDF3EC
+    style A fill:#DDF3EC
+    style C3 fill:#EAF5FD
+    style A3 fill:#EAF5FD
 ```
 
 If you prioritize consistency, your design might include:
@@ -179,10 +179,10 @@ graph LR
     CA --> RY["Read-your-own-writes<br/>you see your own<br/>updates immediately"]
     RY --> EV["Eventual<br/>converges over time<br/>most relaxed"]
 
-    style S fill:#FFB6C1
-    style CA fill:#FFE4B5
-    style RY fill:#FFE4B5
-    style EV fill:#90EE90
+    style S fill:#FCE5EA
+    style CA fill:#FFF6C9
+    style RY fill:#FFF6C9
+    style EV fill:#DDF3EC
 ```
 
 **Strong Consistency**: All reads reflect the most recent write. This is the most expensive consistency model in terms of performance, but is necessary for systems that require absolute accuracy like bank account balances. This is what we have been discussing so far.

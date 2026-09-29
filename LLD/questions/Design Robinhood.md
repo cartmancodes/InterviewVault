@@ -239,12 +239,12 @@ graph TB
     EH --> PG
     EH -.order event.-> WSG
 
-    style ING fill:#90EE90
-    style BUS fill:#FFE4B5
-    style QC fill:#e1f5ff
-    style PG fill:#e1f5ff
-    style OS fill:#90EE90
-    style EX fill:#f3e5f5
+    style ING fill:#DDF3EC
+    style BUS fill:#FFF6C9
+    style QC fill:#EAF5FD
+    style PG fill:#EAF5FD
+    style OS fill:#DDF3EC
+    style EX fill:#EDE8FA
 ```
 
 **Path A: Price Fanout (read-heavy, eventually consistent)**
@@ -372,11 +372,11 @@ graph TB
     G1 -.push tick.-> C1
     G2 -.push tick.-> C1
 
-    style EX fill:#f3e5f5
-    style BUS fill:#FFE4B5
-    style QC fill:#e1f5ff
-    style I1 fill:#90EE90
-    style I2 fill:#90EE90
+    style EX fill:#EDE8FA
+    style BUS fill:#FFF6C9
+    style QC fill:#EAF5FD
+    style I1 fill:#DDF3EC
+    style I2 fill:#DDF3EC
 ```
 
 ### 3. Consistency of Balances and Positions
@@ -453,9 +453,9 @@ graph LR
     S3 -->|"market-open overwhelms shared PG"| S4
     S4 -->|"queueing delays + reconciliation"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0 to 100 Users (MVP)

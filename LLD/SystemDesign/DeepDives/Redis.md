@@ -122,25 +122,6 @@ if redis.call("GET", KEYS[1]) == ARGV[1] then return redis.call("DEL", KEYS[1]) 
 The acquire-work-release cycle, including the failure mode a blind `DEL` would cause, looks like this:
 
 ```mermaid
----
-config:
-  look: handDrawn
-  handDrawnSeed: 7
-  themeVariables:
-    primaryColor: "#FFFFFF"
-    primaryBorderColor: "#0E1A2B"
-    primaryTextColor: "#0E1A2B"
-    lineColor: "#0E1A2B"
-    actorBkg: "#FFFFFF"
-    actorBorder: "#0E1A2B"
-    actorTextColor: "#0E1A2B"
-    actorLineColor: "#6B7C96"
-    signalColor: "#0E1A2B"
-    signalTextColor: "#0E1A2B"
-    noteBkgColor: "#EAF5FD"
-    noteBorderColor: "#0E1A2B"
-    noteTextColor: "#0E1A2B"
----
 sequenceDiagram
     participant A as Client A
     participant R as Redis
@@ -209,22 +190,6 @@ A work queue shows how the pieces fit together. We add items onto the queue with
 The life of a single stream entry in a work queue captures both the happy path and the redelivery loop:
 
 ```mermaid
----
-config:
-  look: handDrawn
-  handDrawnSeed: 7
-  theme: base
-  themeVariables:
-    primaryColor: "#FFFFFF"
-    primaryBorderColor: "#0E1A2B"
-    primaryTextColor: "#0E1A2B"
-    lineColor: "#0E1A2B"
-    labelTextColor: "#0E1A2B"
-    labelBackgroundColor: "#FFFFFF"
-    noteBkgColor: "#EAF5FD"
-    noteBorderColor: "#0E1A2B"
-    noteTextColor: "#0E1A2B"
----
 stateDiagram-v2
     [*] --> InStream: XADD
     InStream --> Pending: XREADGROUP delivers to worker

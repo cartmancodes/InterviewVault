@@ -40,9 +40,9 @@ flowchart LR
     L2 --> P
     L3 --> P
 
-    classDef bad fill:#FFB6C1
-    classDef infra fill:#e1f5ff
-    classDef ext fill:#f3e5f5
+    classDef bad fill:#FCE5EA
+    classDef infra fill:#EAF5FD
+    classDef ext fill:#EDE8FA
     class L1,L2,L3 bad
     class N infra
     class P ext
@@ -86,8 +86,8 @@ flowchart TD
     R -.-> K
     R -.-> EU
 
-    classDef good fill:#90EE90
-    classDef warn fill:#FFE4B5
+    classDef good fill:#DDF3EC
+    classDef warn fill:#FFF6C9
     class O,T,K,EU good
     class US warn
 ```
@@ -190,9 +190,9 @@ flowchart LR
     PG --> BC["Budget enforcement"]
     S3 --> AU["Audit and forensics<br/>via Athena or a pipeline"]
 
-    classDef good fill:#90EE90
-    classDef store fill:#e1f5ff
-    classDef warn fill:#FFE4B5
+    classDef good fill:#DDF3EC
+    classDef store fill:#EAF5FD
+    classDef warn fill:#FFF6C9
     class PG,S3 store
     class BC good
     class AU warn
@@ -312,9 +312,9 @@ flowchart TB
     FL -->|"one batched transaction"| PG["Postgres"]
     LK -->|"all others"| SK["Skip: keep queueing"]
 
-    classDef good fill:#90EE90
-    classDef infra fill:#e1f5ff
-    classDef warn fill:#FFE4B5
+    classDef good fill:#DDF3EC
+    classDef infra fill:#EAF5FD
+    classDef warn fill:#FFF6C9
     class FL,PG good
     class RQU infra
     class LK warn

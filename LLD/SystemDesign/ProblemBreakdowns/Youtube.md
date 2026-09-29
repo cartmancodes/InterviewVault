@@ -163,9 +163,9 @@ graph LR
     A["Store raw file only<br/>no post-processing"] --> B["Store multiple formats<br/>transcode per device"]
     B --> C["Store segments per format<br/>few-second playable units"]
 
-    style A fill:#FFB6C1
-    style B fill:#FFE4B5
-    style C fill:#90EE90
+    style A fill:#FCE5EA
+    style B fill:#FFF6C9
+    style C fill:#DDF3EC
 ```
 
 This approach basically ignores the fact that we'll need to do any video post-processing. We store just the file the user provides and don't perform any post-processing.

@@ -157,11 +157,11 @@ graph TB
     NB -.heartbeat.-> MEM
     NC -.heartbeat.-> MEM
 
-    style NA fill:#e1f5ff
-    style NB fill:#e1f5ff
-    style NC fill:#e1f5ff
-    style CL fill:#90EE90
-    style MEM fill:#FFE4B5
+    style NA fill:#EAF5FD
+    style NB fill:#EAF5FD
+    style NC fill:#EAF5FD
+    style CL fill:#DDF3EC
+    style MEM fill:#FFF6C9
 ```
 
 Key design calls:
@@ -375,9 +375,9 @@ graph LR
     S3 -->|"hot keys saturate one shard"| S4
     S4 -->|"traffic + data span regions"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0–1K RPS (MVP)

@@ -389,10 +389,10 @@ graph LR
     LWT --> BATCH["Cassandra single-partition<br/>batch, sort IDs into<br/>one user_pair partition"]
     BATCH --> R["Redis atomic Lua script<br/>plus Cassandra as<br/>durable storage"]
 
-    style P fill:#FFB6C1
-    style LWT fill:#FFE4B5
-    style BATCH fill:#FFE4B5
-    style R fill:#90EE90
+    style P fill:#FCE5EA
+    style LWT fill:#FFF6C9
+    style BATCH fill:#FFF6C9
+    style R fill:#DDF3EC
 ```
 
 > ⚠️ Polling is a non-starter, it cannot notify the last swiper immediately. LWTs give linearizable consistency but only within a single partition, and at 2B+ swipes/day reciprocal swipes span partitions. Co-locating a pair's swipes in one partition (sorted `user_pair` key) unlocks single-partition atomicity, and Redis executes that atomically in memory while Cassandra keeps the durable record.
@@ -476,11 +476,11 @@ graph LR
     CACHE --> COMBO["Hybrid, cached feed first<br/>then Elasticsearch for<br/>fresh matches on exhaustion"]
     COMBO --> TTL["Short TTL + warm only<br/>active users to avoid<br/>stale feeds"]
 
-    style SQL fill:#FFB6C1
-    style IDX fill:#FFE4B5
-    style CACHE fill:#FFE4B5
-    style COMBO fill:#90EE90
-    style TTL fill:#e1f5ff
+    style SQL fill:#FCE5EA
+    style IDX fill:#FFF6C9
+    style CACHE fill:#FFF6C9
+    style COMBO fill:#DDF3EC
+    style TTL fill:#EAF5FD
 ```
 
 ### 3) How can the system avoid showing user profiles that the user has previously swiped on?

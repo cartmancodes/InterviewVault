@@ -138,11 +138,11 @@ graph TB
     WP -->|write SUCCEEDED / FAILED| RUNS
     WP -->|outputRef key| OBJ
 
-    style JOBS fill:#e1f5ff
-    style RUNS fill:#e1f5ff
-    style OBJ fill:#e1f5ff
-    style Q fill:#FFE4B5
-    style DISP fill:#90EE90
+    style JOBS fill:#EAF5FD
+    style RUNS fill:#EAF5FD
+    style OBJ fill:#EAF5FD
+    style Q fill:#FFF6C9
+    style DISP fill:#DDF3EC
 ```
 
 Flow for a single firing:
@@ -229,10 +229,10 @@ graph LR
     B -->|"scan spans timeline"| C
     C -->|"hot-window volume"| D
 
-    style A fill:#FFB6C1
-    style B fill:#FFE4B5
-    style C fill:#FFE4B5
-    style D fill:#90EE90
+    style A fill:#FCE5EA
+    style B fill:#FFF6C9
+    style C fill:#FFF6C9
+    style D fill:#DDF3EC
 ```
 
 ### 2. Leader Election for the Dispatcher
@@ -383,11 +383,11 @@ graph LR
     S3 -->|"DB chokes on top-of-hour fan-in"| S4
     S4 -->|"regional outage blast radius"| S5
 
-    style S1 fill:#FFB6C1
-    style S2 fill:#FFE4B5
-    style S3 fill:#FFE4B5
-    style S4 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S2 fill:#FFF6C9
+    style S3 fill:#FFF6C9
+    style S4 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0 to 100 Jobs/day (MVP)

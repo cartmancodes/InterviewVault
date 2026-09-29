@@ -247,10 +247,10 @@ graph LR
     B -->|"still fans out<br/>treats symptom"| C["Fan-out on write<br/>precompute feed<br/>into Redis ZSET"]
     C -->|"celebrity<br/>write amplification"| D["Hybrid<br/>write for regulars<br/>read-merge for celebs"]
 
-    style A fill:#FFB6C1
-    style B fill:#FFE4B5
-    style C fill:#FFE4B5
-    style D fill:#90EE90
+    style A fill:#FCE5EA
+    style B fill:#FFF6C9
+    style C fill:#FFF6C9
+    style D fill:#DDF3EC
 ```
 
 The most obvious improvement to the fan-out on read approach is adding a cache in front of the `Posts` table to cache each users recent posts. We can use Redis for this. The idea is simple: before querying the database for a user's followed users' posts, we check the cache. If the posts are in the cache, we return them. If not, we query the database and then store the results in the cache for future requests.
@@ -361,12 +361,12 @@ graph TB
     W -.->|"read time"| M
     Q --> MG["Merge chronologically<br/>and return"]
 
-    style W fill:#90EE90
-    style S fill:#FFE4B5
-    style M fill:#e1f5ff
-    style Q fill:#e1f5ff
-    style MG fill:#90EE90
-    style T fill:#FFE4B5
+    style W fill:#DDF3EC
+    style S fill:#FFF6C9
+    style M fill:#EAF5FD
+    style Q fill:#EAF5FD
+    style MG fill:#DDF3EC
+    style T fill:#FFF6C9
 ```
 
 As is always the case, more complexity comes with its own tradeoffs. The 100,000 follower threshold needs to be carefully tuned - set it too low and we don't solve the write amplification problem, set it too high and we impact read performance for too many users.

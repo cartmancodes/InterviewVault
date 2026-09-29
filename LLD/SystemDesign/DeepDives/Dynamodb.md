@@ -133,10 +133,10 @@ graph TB
     PM -->|"2 · route to node"| SN["Storage Node<br/>owning the partition"]
     SN -->|"3 · traverse B-tree<br/>by sort key"| ITEM["Matching Item(s)<br/>range query result"]
 
-    style C fill:#e8f5e9
-    style PM fill:#e1f5ff
-    style SN fill:#FFE4B5
-    style ITEM fill:#90EE90
+    style C fill:#DDF3EC
+    style PM fill:#EAF5FD
+    style SN fill:#FFF6C9
+    style ITEM fill:#DDF3EC
 ```
 
 ### Secondary Indexes
@@ -311,12 +311,12 @@ graph TB
     ER -.-> F1
     ER -.-> F2
 
-    style W fill:#FFE4B5
-    style L fill:#90EE90
-    style F1 fill:#e1f5ff
-    style F2 fill:#e1f5ff
-    style SR fill:#f3e5f5
-    style ER fill:#e8f5e9
+    style W fill:#FFF6C9
+    style L fill:#DDF3EC
+    style F1 fill:#EAF5FD
+    style F2 fill:#EAF5FD
+    style SR fill:#EDE8FA
+    style ER fill:#DDF3EC
 ```
 
 > 📖 **Quorum acknowledgment**: A write is confirmed once 2 of the 3 replicas (leader + at least one follower) persist the WAL record. This tolerates the loss of a single node or Availability Zone without losing data or blocking writes.

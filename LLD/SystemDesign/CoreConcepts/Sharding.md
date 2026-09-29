@@ -60,6 +60,10 @@ Each shard is a standalone database with its own CPU, memory, storage, and conne
 
 Sharding solves scaling but introduces new problems. You now have to choose a shard key, route queries to the right shard, avoid hotspots, and rebalance data as shards grow. We will cover how to handle these next.
 
+![Shards divide rows; replicas copy each shard across storage instances.](../../../content/visuals/shards-and-replicas.svg)
+
+*This placement example separates scaling from redundancy: columns own different rows, while each lower instance copies the shard above it. The optional walkthrough highlights the authored steps; the complete static figure is shown above.*
+
 ## 🏗️ How to Shard Your Data
 
 When you decide to shard, you need to make two decisions that work together:
@@ -107,12 +111,12 @@ graph LR
     H --> H1["✅ Even spread<br/>⚠️ Resharding moves data<br/>→ use consistent hashing"]
     D --> D1["✅ Max flexibility · move hot keys<br/>⚠️ Lookup per request · SPOF"]
 
-    style H fill:#90EE90
-    style H1 fill:#e8f5e9
-    style R fill:#FFE4B5
-    style D fill:#FFE4B5
-    style R1 fill:#fff4e1
-    style D1 fill:#fff4e1
+    style H fill:#DDF3EC
+    style H1 fill:#DDF3EC
+    style R fill:#FFF6C9
+    style D fill:#FFF6C9
+    style R1 fill:#FFF6C9
+    style D1 fill:#FFF6C9
 ```
 
 #### Range-Based Sharding
@@ -287,10 +291,10 @@ graph LR
     ID --> EX["2 · Explain why one DB<br/>won't scale (do the math)"]
     EX --> SH["3 · Propose sharding<br/>shard key + strategy"]
 
-    style B fill:#FFB6C1
-    style ID fill:#FFE4B5
-    style EX fill:#FFE4B5
-    style SH fill:#90EE90
+    style B fill:#FCE5EA
+    style ID fill:#FFF6C9
+    style EX fill:#FFF6C9
+    style SH fill:#DDF3EC
 ```
 
 You can use our [Numbers to Know](https://www.hellointerview.com/learn/system-design/core-concepts/numbers-to-know) in order to get a good sense of when you may hit reasonable limits with a single database.

@@ -27,10 +27,10 @@ graph LR
     V["Vote on<br/>existing ideas"] --> B
     B -->|"most-wanted<br/>rises to the top"| N["Next Breakdown<br/>gets published"]
 
-    style P fill:#FFE4B5
-    style V fill:#FFE4B5
-    style B fill:#e1f5ff
-    style N fill:#90EE90
+    style P fill:#FFF6C9
+    style V fill:#FFF6C9
+    style B fill:#EAF5FD
+    style N fill:#DDF3EC
 ```
 
 What questions or deep dives would you like to see next?

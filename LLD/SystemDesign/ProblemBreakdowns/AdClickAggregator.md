@@ -209,9 +209,9 @@ graph LR
     A["Same DB<br/>store raw clicks<br/>GROUP BY on query"] -->|"GROUP BY too slow<br/>at 10k clicks/s"| B["Batch pre-aggregation<br/>Cassandra event store<br/>Spark to OLAP"]
     B -->|"data always<br/>minutes stale"| C["Stream processing<br/>Kafka + Flink<br/>near real-time to OLAP"]
 
-    style A fill:#FFB6C1
-    style B fill:#FFE4B5
-    style C fill:#90EE90
+    style A fill:#FCE5EA
+    style B fill:#FFF6C9
+    style C fill:#DDF3EC
 ```
 
 Ad click aggregation is a textbook scaling writes problem. We're ingesting 10k clicks per second at peak, which dwarfs the read load from advertisers querying metrics. The entire architecture (stream buffering with Kafka/Kinesis, pre-aggregation in Flink, and partitioning by AdId) is driven by the need to handle high write throughput without losing data.

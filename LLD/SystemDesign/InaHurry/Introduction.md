@@ -138,9 +138,9 @@ graph LR
     D["1 · Delivery Framework<br/>cover fully<br/>your track to run on"] --> K["2 · Key Technologies<br/>skim<br/>know what's available"]
     K --> C["3 · Core Concepts<br/>any remaining time<br/>go as deep as you can"]
 
-    style D fill:#90EE90
-    style K fill:#FFE4B5
-    style C fill:#e8f5e9
+    style D fill:#DDF3EC
+    style K fill:#FFF6C9
+    style C fill:#DDF3EC
 ```
 
 ## 📝 Conclusion

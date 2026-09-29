@@ -132,13 +132,13 @@ graph LR
     EVT --> NOT["Notify users<br/>below threshold"]
     NOT --> U["User<br/>email alert"]
 
-    style A fill:#f3e5f5
-    style COL fill:#FFE4B5
-    style VAL fill:#FFE4B5
-    style DB fill:#e1f5ff
-    style EVT fill:#FFE4B5
-    style NOT fill:#90EE90
-    style U fill:#90EE90
+    style A fill:#EDE8FA
+    style COL fill:#FFF6C9
+    style VAL fill:#FFF6C9
+    style DB fill:#EAF5FD
+    style EVT fill:#FFF6C9
+    style NOT fill:#DDF3EC
+    style U fill:#DDF3EC
 ```
 
 > Note that this is simple, we will improve upon as we go, but it's important to start simple and build up from there.
@@ -431,17 +431,17 @@ graph TB
     NC --> MDB
     NC -->|price drop alert| C
 
-    style C fill:#90EE90
-    style RA fill:#FFE4B5
-    style WC fill:#FFE4B5
-    style VC fill:#FFB6C1
-    style GW fill:#FFE4B5
-    style PH fill:#FFE4B5
-    style SUB fill:#FFE4B5
-    style K fill:#f3e5f5
-    style NC fill:#90EE90
-    style PDB fill:#e1f5ff
-    style MDB fill:#e1f5ff
+    style C fill:#DDF3EC
+    style RA fill:#FFF6C9
+    style WC fill:#FFF6C9
+    style VC fill:#FCE5EA
+    style GW fill:#FFF6C9
+    style PH fill:#FFF6C9
+    style SUB fill:#FFF6C9
+    style K fill:#EDE8FA
+    style NC fill:#DDF3EC
+    style PDB fill:#EAF5FD
+    style MDB fill:#EAF5FD
 ```
 
 ## 🎤 [What is Expected at Each Level?](https://www.hellointerview.com/blog/the-system-design-interview-what-is-expected-at-each-level)

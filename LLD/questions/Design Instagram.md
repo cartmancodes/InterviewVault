@@ -158,14 +158,14 @@ graph TB
     S3 --> CDN
     CDN -.serve variants.-> Client
 
-    style FeedCache fill:#e1f5ff
-    style S3 fill:#e1f5ff
-    style PostsDB fill:#e1f5ff
-    style UsersDB fill:#e1f5ff
-    style GraphDB fill:#e1f5ff
-    style Encode fill:#FFE4B5
-    style CDN fill:#f3e5f5
-    style FeedSvc fill:#90EE90
+    style FeedCache fill:#EAF5FD
+    style S3 fill:#EAF5FD
+    style PostsDB fill:#EAF5FD
+    style UsersDB fill:#EAF5FD
+    style GraphDB fill:#EAF5FD
+    style Encode fill:#FFF6C9
+    style CDN fill:#EDE8FA
+    style FeedSvc fill:#DDF3EC
 ```
 
 Key ideas:
@@ -276,10 +276,10 @@ graph LR
     Router -->|"Yes: celebrity"| Skip[No fan-out<br/>pulled on read instead]
     Fanout --> Lists[(Per-follower<br/>Redis feed lists)]
 
-    style Fanout fill:#90EE90
-    style Skip fill:#FFE4B5
-    style Lists fill:#e1f5ff
-    style Router fill:#FFB6C1
+    style Fanout fill:#DDF3EC
+    style Skip fill:#FFF6C9
+    style Lists fill:#EAF5FD
+    style Router fill:#FCE5EA
 ```
 
 This bounds the worst case on both sides: write amplification is capped by the threshold, and read amplification is capped by how many celebrities any one user follows. The feed list is cached in Redis with a bounded length (e.g. latest 1000 entries) and backed by durable storage for rebuilds.
@@ -339,9 +339,9 @@ graph LR
     S3 -->|"celebrity fan-out floods the queue"| S4
     S4 -->|"CDN egress + single-region S3 explode"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0 – 100 Users

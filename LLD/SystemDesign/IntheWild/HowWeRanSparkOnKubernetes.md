@@ -102,9 +102,9 @@ flowchart TD
     C -.->|"ownerReference"| F
     A -.->|"no ownerReference: driver outlives the step"| C
 
-    classDef good fill:#90EE90
-    classDef bad fill:#FFB6C1
-    classDef infra fill:#e1f5ff
+    classDef good fill:#DDF3EC
+    classDef bad fill:#FCE5EA
+    classDef infra fill:#EAF5FD
     class D,E,F good
     class C bad
     class B infra
@@ -284,8 +284,8 @@ flowchart TB
     O --> N["Netty network buffers, JVM metaspace and stacks,<br/>native Kerberos/GSS library, AWS SDK native allocations"]
     P --> ES["Separate limit: ephemeral-storage<br/>shuffle spill and local checkpoints land here"]
 
-    classDef bad fill:#FFB6C1
-    classDef warn fill:#FFE4B5
+    classDef bad fill:#FCE5EA
+    classDef warn fill:#FFF6C9
     class O,N bad
     class ES warn
 ```
@@ -342,8 +342,8 @@ flowchart TB
       D2 -->|"owns"| X2["Executor pods"]
     end
 
-    classDef good fill:#90EE90
-    classDef bad fill:#FFB6C1
+    classDef good fill:#DDF3EC
+    classDef bad fill:#FCE5EA
     class P1,S1,X1 good
     class D2 bad
 ```
@@ -531,8 +531,8 @@ flowchart LR
     T -->|"one MERGE statement, one transaction, all rows"| D["Destination table"]
     D --> X["Unstable past ~800k rows"]
 
-    classDef good fill:#90EE90
-    classDef bad fill:#FFB6C1
+    classDef good fill:#DDF3EC
+    classDef bad fill:#FCE5EA
     class S,T good
     class X bad
 ```

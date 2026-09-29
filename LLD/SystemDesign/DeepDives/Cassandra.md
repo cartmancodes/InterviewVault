@@ -120,13 +120,13 @@ To improve on this design, consistent hashing prefers a different approach.
 
 Rather than hashing a value and running a modulo to select a node, consistent hashing hashes a value to a range of integers that are visualized on a ring. This ring has nodes mapping to specific values. When a value is hashed, it is hashed to an integer. The ring is then walked clockwise to find the first value corresponding to a node. The value is then stored on that node.
 
-![Diagram](assets/bAHvYck_rF0Z.0wnme3firabor.svg)
+![Consistent hashing: choose the first node clockwise from a key’s hash position.](assets/bAHvYck_rF0Z.0wnme3firabor.svg)
 
 This design prevents excess re-mapping of values if a node enters or leaves the system because it will affect one adjacent node. If a node enters, it re-maps some values from the node ahead of it when moving clockwise on the ring. If a node exits, values from the node exiting re-map to the node ahead of it when moving clockwise on the ring.
 
 However, this design doesn't address the issue of uneven load between nodes. To address this, Cassandra opts to map multiple nodes on the ring to physical nodes in the distributed system. The nodes on the ring are called `vnodes` (a.k.a. virtual nodes) are owned by physical nodes. This distributes load over the cluster more evenly. It also allows for the system to take advantage of the resources of different physical nodes; some physical nodes might be bigger machines with more resources, so they can be responsible for more `vnodes`. Below is how the cluster might look, with values, called "tokens" (`t1`, `t2`, etc.), represented on the ring, `vnodes` mapped to those tokens, and different physical nodes represented by the colors of the `vnodes`.
 
-![Diagram](assets/966P2zaW4ldT.2yom9v91yc_d5.svg)
+![Virtual nodes: token positions on the ring map to physical nodes, shown by colour.](assets/966P2zaW4ldT.2yom9v91yc_d5.svg)
 
 ### Replication
 
@@ -162,7 +162,7 @@ Cassandra allows you to choose from a list of "consistency levels" for reads and
 
 One notable consistency level to understand is `QUORUM`. `QUORUM` requires a majority (`n/2 + 1`) of replicas to respond. Applying `QUORUM` to both reads and writes guarantees that writes are visible to reads because at least one overlapping node is guaranteed to participate in both a write and a read. To illustrate this, let's assume a set of 3 nodes. `3/2 + 1 = 2`, so 2 of 3 nodes need to be written to and read from in order for writes and reads to succeed. This means that a write will always be seen by a read because at least 1 of those 2 nodes will have also seen the write.
 
-![Diagram](assets/f9fCvU6Wr3CB.2memxhcgsh_e1.svg)
+![Quorum overlap: a two-replica write quorum and two-replica read quorum share at least one of three replicas.](assets/f9fCvU6Wr3CB.2memxhcgsh_e1.svg)
 
 > Typically, Cassandra aims for " eventual consistency " for all consistency levels, where all replicas have the latest data assuming enough time passes.
 
@@ -210,11 +210,11 @@ graph TB
     BF --> S[Read candidate SSTables<br/>newest to oldest<br/>sorted by primary key]
     S --> R
 
-    style Q fill:#FFE4B5
-    style M fill:#e1f5ff
-    style BF fill:#e1f5ff
-    style S fill:#e1f5ff
-    style R fill:#90EE90
+    style Q fill:#FFF6C9
+    style M fill:#EAF5FD
+    style BF fill:#EAF5FD
+    style S fill:#EAF5FD
+    style R fill:#DDF3EC
 ```
 
 Building on the above foundation, there's 2 additional concepts to internalize:

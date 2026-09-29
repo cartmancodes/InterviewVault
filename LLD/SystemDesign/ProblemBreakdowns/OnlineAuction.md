@@ -224,10 +224,10 @@ graph LR
     L -->|"locks many rows,<br/>doesn't block inserts"| R["Redis max bid<br/>atomic Lua CAS"]
     R -->|"cache vs DB<br/>consistency gap"| D["max_bid on Auction row<br/>OCC / single-row lock"]
 
-    style P fill:#FFB6C1
-    style L fill:#FFB6C1
-    style R fill:#FFE4B5
-    style D fill:#90EE90
+    style P fill:#FCE5EA
+    style L fill:#FCE5EA
+    style R fill:#FFF6C9
+    style D fill:#DDF3EC
 ```
 
 One initial approach might be to use **row-level locking** on the bids table to serialize bid processing for an auction. The idea is to lock all existing bid rows for an auction while we check the maximum and insert a new bid:

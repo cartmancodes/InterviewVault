@@ -153,14 +153,14 @@ graph TB
     CLICK -->|302 redirect| PUB
     CLICK -.signals.-> FEED
 
-    style PUB fill:#f3e5f5
-    style KAFKA fill:#FFE4B5
-    style DB fill:#e1f5ff
-    style ES fill:#e1f5ff
-    style REDIS fill:#e1f5ff
-    style CDN fill:#e1f5ff
-    style CLUS fill:#90EE90
-    style FEED fill:#90EE90
+    style PUB fill:#EDE8FA
+    style KAFKA fill:#FFF6C9
+    style DB fill:#EAF5FD
+    style ES fill:#EAF5FD
+    style REDIS fill:#EAF5FD
+    style CDN fill:#EAF5FD
+    style CLUS fill:#DDF3EC
+    style FEED fill:#DDF3EC
 ```
 
 **Ingest plane:**
@@ -201,12 +201,12 @@ graph LR
     DED -->|MinHash LSH cluster| CLU
     CLU --> STORE
 
-    style POLL fill:#FFE4B5
-    style RAW fill:#FFE4B5
-    style EXT fill:#FFE4B5
-    style DED fill:#FFE4B5
-    style CLU fill:#90EE90
-    style STORE fill:#e1f5ff
+    style POLL fill:#FFF6C9
+    style RAW fill:#FFF6C9
+    style EXT fill:#FFF6C9
+    style DED fill:#FFF6C9
+    style CLU fill:#DDF3EC
+    style STORE fill:#EAF5FD
 ```
 
 **Crawl scheduling is the throttle point.** RSS and Atom feeds are pull-based: there is no push; the system must poll each source URL repeatedly to discover new articles. A naive per-minute sweep of 100K sources would hammer publisher servers and burn bandwidth. The correct model is an **adaptive crawl scheduler**: each source tracks its historical publish rate and derives a `pollInterval` from it — a 24/7 breaking-news wire gets polled every 60 s; a weekly blog every 6 h. The scheduler is a priority queue of `(nextPollAt, sourceId)` entries consumed by a pool of fetcher workers. On every successful fetch, the interval is recalculated from the measured inter-article gap, using exponential smoothing so a single burst does not cause over-polling.
@@ -327,12 +327,12 @@ graph TB
     FS --> DB
     FS -.membership checks O 1.-> SHARD
 
-    style U fill:#FFB6C1
-    style CDN fill:#e1f5ff
-    style RC fill:#90EE90
-    style FS fill:#90EE90
-    style SHARD fill:#FFE4B5
-    style DB fill:#e1f5ff
+    style U fill:#FCE5EA
+    style CDN fill:#EAF5FD
+    style RC fill:#DDF3EC
+    style FS fill:#DDF3EC
+    style SHARD fill:#FFF6C9
+    style DB fill:#EAF5FD
 ```
 
 - Edge CDN caches the cluster detail response for 10–30 s; every POP absorbs the vast majority of load.
@@ -357,9 +357,9 @@ graph LR
     S3 -->|"regional latency + personalization ask"| S4
     S4 -->|"write-hot cluster + new-country latency"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0 – 100 Users

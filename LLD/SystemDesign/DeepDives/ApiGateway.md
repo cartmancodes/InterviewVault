@@ -71,10 +71,10 @@ graph TB
     GW -->|"/orders/*"| OS
     GW -->|"/payments/*"| PS
 
-    style GW fill:#90EE90
-    style US fill:#f3e5f5
-    style OS fill:#f3e5f5
-    style PS fill:#f3e5f5
+    style GW fill:#DDF3EC
+    style US fill:#EDE8FA
+    style OS fill:#EDE8FA
+    style PS fill:#EDE8FA
 ```
 
 ### Tracing a Request

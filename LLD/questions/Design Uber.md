@@ -160,11 +160,11 @@ graph TB
     MS --> NS
     NS -.push offer.-> DA
 
-    style REDIS fill:#e1f5ff
-    style PG fill:#e1f5ff
-    style KAFKA fill:#FFE4B5
-    style WF fill:#f3e5f5
-    style MS fill:#90EE90
+    style REDIS fill:#EAF5FD
+    style PG fill:#EAF5FD
+    style KAFKA fill:#FFF6C9
+    style WF fill:#EDE8FA
+    style MS fill:#DDF3EC
 ```
 
 **Write path (location ping):** driver app opens a websocket to Location Service; every 4 seconds (adaptive) it posts lat/lng; Location Service writes to Redis using `GEOADD` keyed by region.
@@ -312,9 +312,9 @@ graph LR
     S3 -->|"single primary chokes @10M/day"| S4
     S4 -->|"data residency + global events"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 0-100 Users (One city MVP)

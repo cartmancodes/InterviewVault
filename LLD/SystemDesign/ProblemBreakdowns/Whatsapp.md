@@ -381,11 +381,11 @@ graph LR
     K -->|"~50KB per topic<br/>50TB+ for 1B users"| CH["Consistent hashing<br/>ZooKeeper registry"]
     CH -->|"N-to-N server links,<br/>rebalancing pain"| PS["Redis Pub/Sub<br/>sharded by userId"]
 
-    style S fill:#FFB6C1
-    style LB fill:#FFB6C1
-    style K fill:#FFB6C1
-    style CH fill:#FFE4B5
-    style PS fill:#90EE90
+    style S fill:#FCE5EA
+    style LB fill:#FCE5EA
+    style K fill:#FCE5EA
+    style CH fill:#FFF6C9
+    style PS fill:#DDF3EC
 ```
 
 #### Should we partition by chat or by user?

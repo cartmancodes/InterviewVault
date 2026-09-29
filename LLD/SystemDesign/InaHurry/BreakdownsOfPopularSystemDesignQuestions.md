@@ -38,9 +38,9 @@ graph LR
     E["Study a written<br/>breakdown<br/>(worked example)"] --> P["Practice the problem<br/>with the AI-guided<br/>practice tool"]
     P --> M["Ready for the<br/>real interview"]
 
-    style E fill:#e1f5ff
-    style P fill:#FFE4B5
-    style M fill:#90EE90
+    style E fill:#EAF5FD
+    style P fill:#FFF6C9
+    style M fill:#DDF3EC
 ```
 
 ## 🎓 Key Takeaways

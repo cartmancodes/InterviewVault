@@ -142,9 +142,9 @@ graph LR
     GraphQL -->|Multiple clients| USE2[Mobile + Web<br/>Different data needs<br/>Flexible queries]
     gRPC -->|Performance critical| USE3[Microservices<br/>Internal APIs<br/>Low latency]
     
-    style REST fill:#e8f5e9
-    style GraphQL fill:#e1f5ff
-    style gRPC fill:#fff4e1
+    style REST fill:#DDF3EC
+    style GraphQL fill:#EAF5FD
+    style gRPC fill:#FFF6C9
 ```
 
 ### When to Use Each
@@ -182,9 +182,9 @@ graph TB
     Q3 -->|Yes| gRPC[gRPC<br/>High performance]
     Q3 -->|No| REST
     
-    style REST fill:#e8f5e9
-    style GraphQL fill:#e1f5ff
-    style gRPC fill:#fff4e1
+    style REST fill:#DDF3EC
+    style GraphQL fill:#EAF5FD
+    style gRPC fill:#FFF6C9
 ```
 
 ### Important API Concepts
@@ -239,14 +239,14 @@ graph TB
     R1 & R2 & R3 -->|Best for| UC1[User accounts<br/>Orders & Products<br/>Financial transactions]
     N1 & N2 & N3 -->|Best for| UC2[Rapidly changing data<br/>High write throughput<br/>Massive scale]
     
-    style R1 fill:#e1f5ff
-    style R2 fill:#e1f5ff
-    style R3 fill:#e1f5ff
-    style R4 fill:#e1f5ff
-    style N1 fill:#fff4e1
-    style N2 fill:#fff4e1
-    style N3 fill:#fff4e1
-    style N4 fill:#fff4e1
+    style R1 fill:#EAF5FD
+    style R2 fill:#EAF5FD
+    style R3 fill:#EAF5FD
+    style R4 fill:#EAF5FD
+    style N1 fill:#FFF6C9
+    style N2 fill:#FFF6C9
+    style N3 fill:#FFF6C9
+    style N4 fill:#FFF6C9
 ```
 
 ### Normalization vs Denormalization
@@ -270,10 +270,10 @@ graph LR
     
     OTD -->|Trade-offs| T2[✓ Fast reads<br/>✓ No joins<br/>✗ Data duplication<br/>✗ Complex updates]
     
-    style UT fill:#e1f5ff
-    style OT fill:#e1f5ff
-    style PT fill:#e1f5ff
-    style OTD fill:#fff4e1
+    style UT fill:#EAF5FD
+    style OT fill:#EAF5FD
+    style PT fill:#EAF5FD
+    style OTD fill:#FFF6C9
 ```
 
 **Key Trade-offs:**
@@ -316,9 +316,9 @@ graph TB
     Q2 --> E3[Multiple access patterns]
     E3 --> D3[Use Global Secondary Index<br/>or Multiple Tables]
     
-    style D1 fill:#e8f5e9
-    style D2 fill:#fff4e1
-    style D3 fill:#e1f5ff
+    style D1 fill:#DDF3EC
+    style D2 fill:#FFF6C9
+    style D3 fill:#EAF5FD
 ```
 
 > ⚠️ **Important**: With NoSQL databases like DynamoDB, you must know your queries upfront and design around them. You can't easily add new query patterns later.
@@ -350,10 +350,10 @@ graph TB
     FT -->|Examples| FE["SELECT * FROM documents<br/>WHERE content MATCH 'keyword'"]
     GS -->|Examples| GE["SELECT * FROM restaurants<br/>WHERE distance < 5 miles"]
     
-    style BT fill:#e8f5e9
-    style HI fill:#e1f5ff
-    style FT fill:#fff4e1
-    style GS fill:#f3e5f5
+    style BT fill:#DDF3EC
+    style HI fill:#EAF5FD
+    style FT fill:#FFF6C9
+    style GS fill:#EDE8FA
 ```
 
 ### When to Add Indexes
@@ -376,10 +376,10 @@ flowchart TD
     
     R --> Note[But watch out for:<br/>- Write performance impact<br/>- Storage overhead<br/>- Index maintenance]
     
-    style A1 fill:#e8f5e9
-    style A2 fill:#e1f5ff
-    style A3 fill:#fff4e1
-    style A4 fill:#f3e5f5
+    style A1 fill:#DDF3EC
+    style A2 fill:#EAF5FD
+    style A3 fill:#FFF6C9
+    style A4 fill:#EDE8FA
 ```
 
 ### Index Trade-offs
@@ -404,8 +404,8 @@ graph LR
     Decision -->|Read-heavy| YES[✓ Add indexes]
     Decision -->|Write-heavy| MAYBE[⚠️ Careful consideration]
     
-    style YES fill:#e8f5e9
-    style MAYBE fill:#fff4e1
+    style YES fill:#DDF3EC
+    style MAYBE fill:#FFF6C9
 ```
 
 > 💡 **Interview Tip**: Think about your query patterns and propose indexes on the fields you're querying frequently. If you're looking up users by email for authentication, index the email column. If you're fetching a user's orders, index the user_id column on the orders table.
@@ -438,9 +438,9 @@ graph LR
         S2 -.->|Update cache| Cache
     end
     
-    style Cache fill:#e8f5e9
-    style DB1 fill:#e1f5ff
-    style DB2 fill:#e1f5ff
+    style Cache fill:#DDF3EC
+    style DB1 fill:#EAF5FD
+    style DB2 fill:#EAF5FD
 ```
 
 **Performance Difference:**
@@ -503,12 +503,12 @@ graph TB
     S1 -.-> Trade2[Reliability vs<br/>performance]
     W1 -.-> Trade3[Cache hit rate vs<br/>memory cost]
     
-    style I fill:#ffe1e1
-    style S fill:#ffe1e1
-    style W fill:#ffe1e1
-    style I1 fill:#e8f5e9
-    style S1 fill:#e8f5e9
-    style W1 fill:#e8f5e9
+    style I fill:#FCE5EA
+    style S fill:#FCE5EA
+    style W fill:#FCE5EA
+    style I1 fill:#DDF3EC
+    style S1 fill:#DDF3EC
+    style W1 fill:#DDF3EC
 ```
 
 ### Cache Types
@@ -529,9 +529,9 @@ graph TB
     EXT -->|Pros/Cons| E2[✓ Shared<br/>✓ Large capacity<br/>✗ Network latency]
     CDN -->|Pros/Cons| C2[✓ Global distribution<br/>✓ Low latency<br/>✗ Static content only]
     
-    style APP fill:#e1f5ff
-    style EXT fill:#e8f5e9
-    style CDN fill:#fff4e1
+    style APP fill:#EAF5FD
+    style EXT fill:#DDF3EC
+    style CDN fill:#FFF6C9
 ```
 
 > ⚠️ **Common Mistake**: Caching everything. Cache only data that's read frequently and doesn't change often. If you're caching data that changes on every request, you're just adding latency and complexity for no benefit.
@@ -564,10 +564,10 @@ graph TB
     
     SHARD --> WARNING[⚠️ Adds complexity:<br/>- Cross-shard queries hard<br/>- Transactions complex<br/>- Resharding painful]
     
-    style SHARD fill:#fff4e1
-    style OPT1 fill:#e8f5e9
-    style OPT2 fill:#e8f5e9
-    style OPT3 fill:#e8f5e9
+    style SHARD fill:#FFF6C9
+    style OPT1 fill:#DDF3EC
+    style OPT2 fill:#DDF3EC
+    style OPT3 fill:#DDF3EC
 ```
 
 > ⚠️ **Biggest Mistake**: Sharding too early. A well-tuned single database with read replicas can handle way more than most candidates think.
@@ -598,12 +598,12 @@ graph TB
     R1 & R2 -->|Best for| RU[Geographic partitions<br/>Multi-tenant SaaS]
     D1 & D2 -->|Best for| DU[Rarely used<br/>Too much overhead]
     
-    style H1 fill:#e8f5e9
-    style H2 fill:#e8f5e9
-    style R1 fill:#fff4e1
-    style R2 fill:#fff4e1
-    style D1 fill:#ffe1e1
-    style D2 fill:#ffe1e1
+    style H1 fill:#DDF3EC
+    style H2 fill:#DDF3EC
+    style R1 fill:#FFF6C9
+    style R2 fill:#FFF6C9
+    style D1 fill:#FCE5EA
+    style D2 fill:#FCE5EA
 ```
 
 ### Shard Key Selection
@@ -624,10 +624,10 @@ flowchart TD
     TK --> TKR[✓ Perfect for B2B SaaS<br/>✗ Uneven tenant sizes<br/>Example: Slack]
     TIK --> TIKR[✓ Time-based access<br/>✗ Hot spots on recent<br/>Example: Logs]
     
-    style UK fill:#e8f5e9
-    style GK fill:#e1f5ff
-    style TK fill:#fff4e1
-    style TIK fill:#f3e5f5
+    style UK fill:#DDF3EC
+    style GK fill:#EAF5FD
+    style TK fill:#FFF6C9
+    style TIK fill:#EDE8FA
 ```
 
 ### Sharding Challenges
@@ -646,14 +646,14 @@ graph LR
     P3 -->|Solution| S3[Use consistent hashing<br/>Plan for growth<br/>Over-provision shards]
     P4 -->|Solution| S4[Denormalize data<br/>Application-level joins<br/>Accept limitations]
     
-    style P1 fill:#ffe1e1
-    style P2 fill:#ffe1e1
-    style P3 fill:#ffe1e1
-    style P4 fill:#ffe1e1
-    style S1 fill:#e8f5e9
-    style S2 fill:#e8f5e9
-    style S3 fill:#e8f5e9
-    style S4 fill:#e8f5e9
+    style P1 fill:#FCE5EA
+    style P2 fill:#FCE5EA
+    style P3 fill:#FCE5EA
+    style P4 fill:#FCE5EA
+    style S1 fill:#DDF3EC
+    style S2 fill:#DDF3EC
+    style S3 fill:#DDF3EC
+    style S4 fill:#DDF3EC
 ```
 
 > 💡 **Interview Tip**: Bring up sharding after you've justified why a single database won't work. Then clearly state your shard key choice and explain the tradeoff (fast for X queries, slow for Y queries).
@@ -692,7 +692,7 @@ graph TB
     S2 -.-> PROBLEM
     S3 -.-> PROBLEM
     
-    style PROBLEM fill:#ffe1e1
+    style PROBLEM fill:#FCE5EA
 ```
 
 ### Consistent Hashing Solution
@@ -723,10 +723,10 @@ graph TB
     
     S2 -.->|Small portion| S4
     
-    style S1 fill:#e8f5e9
-    style S2 fill:#e1f5ff
-    style S3 fill:#fff4e1
-    style S4 fill:#f3e5f5
+    style S1 fill:#DDF3EC
+    style S2 fill:#EAF5FD
+    style S3 fill:#FFF6C9
+    style S4 fill:#EDE8FA
 ```
 
 ### Virtual Nodes
@@ -749,8 +749,8 @@ graph LR
     
     V1 & V2 & V3 -->|Solution| P2[Even distribution<br/>Keys spread uniformly<br/>Better load balancing]
     
-    style P1 fill:#ffe1e1
-    style P2 fill:#e8f5e9
+    style P1 fill:#FCE5EA
+    style P2 fill:#DDF3EC
 ```
 
 ### Impact Comparison
@@ -768,12 +768,12 @@ graph TB
     SM -->|Remove 1 server| SM2[~90% of data moves]
     CH -->|Remove 1 server| CH2[~10% of data moves]
     
-    style SM fill:#ffe1e1
-    style SM1 fill:#ffe1e1
-    style SM2 fill:#ffe1e1
-    style CH fill:#e8f5e9
-    style CH1 fill:#e8f5e9
-    style CH2 fill:#e8f5e9
+    style SM fill:#FCE5EA
+    style SM1 fill:#FCE5EA
+    style SM2 fill:#FCE5EA
+    style CH fill:#DDF3EC
+    style CH1 fill:#DDF3EC
+    style CH2 fill:#DDF3EC
 ```
 
 ### Where It's Used
@@ -833,11 +833,11 @@ graph TB
     CP -->|Examples| CPE[MongoDB<br/>HBase<br/>Redis Sentinel]
     AP -->|Examples| APE[Cassandra<br/>DynamoDB<br/>Couchbase]
     
-    style C fill:#e1f5ff
-    style A fill:#e8f5e9
-    style P fill:#fff4e1
-    style CP fill:#e1f5ff
-    style AP fill:#e8f5e9
+    style C fill:#EAF5FD
+    style A fill:#DDF3EC
+    style P fill:#FFF6C9
+    style CP fill:#EAF5FD
+    style AP fill:#DDF3EC
 ```
 
 ### Consistency vs Availability Trade-off
@@ -885,11 +885,11 @@ flowchart TD
     
     AP -->|Examples| APE[Social media feeds<br/>Recommendations<br/>Analytics dashboards<br/>Content feeds]
     
-    style CP1 fill:#e1f5ff
-    style CP2 fill:#e1f5ff
-    style CP3 fill:#e1f5ff
-    style AP fill:#e8f5e9
-    style APE fill:#e8f5e9
+    style CP1 fill:#EAF5FD
+    style CP2 fill:#EAF5FD
+    style CP3 fill:#EAF5FD
+    style AP fill:#DDF3EC
+    style APE fill:#DDF3EC
 ```
 
 ### Mixed Consistency Models
@@ -908,10 +908,10 @@ graph TB
     ORD -->|Strategy| ORDS[CP: Postgres<br/>Strong consistency<br/>No data loss]
     REV -->|Strategy| REVS[AP: Cassandra<br/>High availability<br/>Eventually sync]
     
-    style PCS fill:#e8f5e9
-    style INVS fill:#e1f5ff
-    style ORDS fill:#e1f5ff
-    style REVS fill:#e8f5e9
+    style PCS fill:#DDF3EC
+    style INVS fill:#EAF5FD
+    style ORDS fill:#EAF5FD
+    style REVS fill:#DDF3EC
 ```
 
 > 💡 **Interview Tip**: For most systems, availability is the right default. Users can tolerate seeing slightly stale data (your Instagram feed being 2 seconds old), but they can't tolerate the app being down.
@@ -936,12 +936,12 @@ graph LR
     
     AP1 & AP2 & AP3 -->|Why| REASON2[Stale data acceptable:<br/>slight delays OK,<br/>downtime is worse]
     
-    style CP1 fill:#e1f5ff
-    style CP2 fill:#e1f5ff
-    style CP3 fill:#e1f5ff
-    style AP1 fill:#e8f5e9
-    style AP2 fill:#e8f5e9
-    style AP3 fill:#e8f5e9
+    style CP1 fill:#EAF5FD
+    style CP2 fill:#EAF5FD
+    style CP3 fill:#EAF5FD
+    style AP1 fill:#DDF3EC
+    style AP2 fill:#DDF3EC
+    style AP3 fill:#DDF3EC
 ```
 
 ---
@@ -971,11 +971,11 @@ graph TB
     HDD -->|4x slower| NET_DC
     NET_DC -->|300x slower| NET_CROSS
     
-    style L1 fill:#e8f5e9
-    style RAM fill:#e1f5ff
-    style SSD fill:#fff4e1
-    style NET_DC fill:#f3e5f5
-    style NET_CROSS fill:#ffe1e1
+    style L1 fill:#DDF3EC
+    style RAM fill:#EAF5FD
+    style SSD fill:#FFF6C9
+    style NET_DC fill:#EDE8FA
+    style NET_CROSS fill:#FCE5EA
 ```
 
 ### Key Performance Numbers
@@ -998,10 +998,10 @@ graph LR
     A -->|When to scale| AS[CPU > 70%<br/>Connections near 100k<br/>Memory > 80%]
     M -->|When to scale| MS[Throughput near 800k<br/>Consumer lag growing<br/>Partitions > 200k]
     
-    style C fill:#e8f5e9
-    style D fill:#e1f5ff
-    style A fill:#fff4e1
-    style M fill:#f3e5f5
+    style C fill:#DDF3EC
+    style D fill:#EAF5FD
+    style A fill:#FFF6C9
+    style M fill:#EDE8FA
 ```
 
 ### Capacity Planning Example
@@ -1024,7 +1024,7 @@ flowchart TD
     
     FINAL --> NOTE[Monitor:<br/>- CPU usage<br/>- Memory usage<br/>- Request latency<br/>- Error rates]
     
-    style FINAL fill:#e8f5e9
+    style FINAL fill:#DDF3EC
 ```
 
 ### Storage Calculations
@@ -1046,8 +1046,8 @@ graph TB
     DEC -->|No| SINGLE[Single Postgres<br/>handles few TB easily]
     DEC -->|Yes if| SHARD[- Growing to 50TB+<br/>- High write throughput<br/>- Geographic distribution]
     
-    style SINGLE fill:#e8f5e9
-    style SHARD fill:#fff4e1
+    style SINGLE fill:#DDF3EC
+    style SHARD fill:#FFF6C9
 ```
 
 ### When Numbers Matter
@@ -1151,16 +1151,16 @@ graph TB
     SCALE --> SYSTEM
     DIST --> SYSTEM
     
-    style NET fill:#e8f5e9
-    style API fill:#e8f5e9
-    style DATA fill:#e1f5ff
-    style IDX fill:#e1f5ff
-    style CACHE fill:#fff4e1
-    style SHARD fill:#fff4e1
-    style HASH fill:#fff4e1
-    style CAP fill:#f3e5f5
-    style NUM fill:#f3e5f5
-    style SYSTEM fill:#ffe1e1
+    style NET fill:#DDF3EC
+    style API fill:#DDF3EC
+    style DATA fill:#EAF5FD
+    style IDX fill:#EAF5FD
+    style CACHE fill:#FFF6C9
+    style SHARD fill:#FFF6C9
+    style HASH fill:#FFF6C9
+    style CAP fill:#EDE8FA
+    style NUM fill:#EDE8FA
+    style SYSTEM fill:#FCE5EA
 ```
 
 ### Key Takeaways

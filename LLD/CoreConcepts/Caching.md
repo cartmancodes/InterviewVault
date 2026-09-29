@@ -27,8 +27,8 @@ graph LR
     
     NOTE[❌ Every read hits disk<br/>❌ 50ms per query<br/>❌ Database bottleneck]
     
-    style DB fill:#FFB6C1
-    style NOTE fill:#FFE4B5
+    style DB fill:#FCE5EA
+    style NOTE fill:#FFF6C9
 ```
 
 **Without Cache**: Reading from PostgreSQL takes ~50ms (disk access cost)
@@ -49,8 +49,8 @@ graph LR
     
     NOTE[✅ Cache hit: 1ms<br/>✅ 50x faster!<br/>✅ Reduced DB load]
     
-    style CACHE fill:#90EE90
-    style NOTE fill:#90EE90
+    style CACHE fill:#DDF3EC
+    style NOTE fill:#DDF3EC
 ```
 
 **With Cache**: Reading from Redis takes ~1ms (memory access) - **50x improvement!**
@@ -118,11 +118,11 @@ graph TB
     L3 --> L4[External Cache<br/>Redis/Memcached]
     L4 --> L5[(Database)]
     
-    style L1 fill:#e1f5ff
-    style L2 fill:#fff4e1
-    style L3 fill:#FFE4B5
-    style L4 fill:#90EE90
-    style L5 fill:#FFB6C1
+    style L1 fill:#EAF5FD
+    style L2 fill:#FFF6C9
+    style L3 fill:#FFF6C9
+    style L4 fill:#DDF3EC
+    style L5 fill:#FCE5EA
 ```
 
 ---
@@ -152,8 +152,8 @@ graph TB
     APP3 <--> REDIS
     REDIS <--> DB
     
-    style REDIS fill:#90EE90
-    style DB fill:#e1f5ff
+    style REDIS fill:#DDF3EC
+    style DB fill:#EAF5FD
 ```
 
 #### Characteristics
@@ -196,10 +196,10 @@ graph TB
     
     NOTE[✅ 20-40ms from edge<br/>❌ 250-300ms from origin]
     
-    style EDGE1 fill:#90EE90
-    style EDGE2 fill:#90EE90
-    style EDGE3 fill:#90EE90
-    style ORIGIN fill:#e1f5ff
+    style EDGE1 fill:#DDF3EC
+    style EDGE2 fill:#DDF3EC
+    style EDGE3 fill:#DDF3EC
+    style ORIGIN fill:#EAF5FD
 ```
 
 #### How CDN Works
@@ -233,11 +233,11 @@ graph TB
     CDN --> API[Public API Responses<br/>Product listings]
     CDN --> HTML[HTML Pages<br/>Landing pages]
     
-    style CDN fill:#e1f5ff
-    style STATIC fill:#90EE90
-    style MEDIA fill:#90EE90
-    style API fill:#FFE4B5
-    style HTML fill:#FFE4B5
+    style CDN fill:#EAF5FD
+    style STATIC fill:#DDF3EC
+    style MEDIA fill:#DDF3EC
+    style API fill:#FFF6C9
+    style HTML fill:#FFF6C9
 ```
 
 ✅ **Best For**:
@@ -275,9 +275,9 @@ graph TB
     MOBILE --> EX3
     MOBILE --> EX4
     
-    style BROWSER fill:#e1f5ff
-    style MOBILE fill:#e1f5ff
-    style EX4 fill:#90EE90
+    style BROWSER fill:#EAF5FD
+    style MOBILE fill:#EAF5FD
+    style EX4 fill:#DDF3EC
 ```
 
 #### HTTP Caching Headers
@@ -349,9 +349,9 @@ graph TB
     
     NOTE[⚠️ Each server has<br/>independent cache]
     
-    style LOCAL1 fill:#90EE90
-    style LOCAL2 fill:#90EE90
-    style LOCAL3 fill:#90EE90
+    style LOCAL1 fill:#DDF3EC
+    style LOCAL2 fill:#DDF3EC
+    style LOCAL3 fill:#DDF3EC
 ```
 
 #### Performance Comparison
@@ -364,9 +364,9 @@ graph LR
     ACCESS --> REDIS[Redis Cache<br/>~1ms]
     ACCESS --> DB[Database<br/>~50ms]
     
-    style IP fill:#90EE90
-    style REDIS fill:#FFE4B5
-    style DB fill:#FFB6C1
+    style IP fill:#DDF3EC
+    style REDIS fill:#FFF6C9
+    style DB fill:#FCE5EA
 ```
 
 ✅ **Best For**:
@@ -460,9 +460,9 @@ flowchart TB
     RETURN1 --> END[Response]
     RETURN2 --> END
     
-    style CHECK fill:#e1f5ff
-    style RETURN1 fill:#90EE90
-    style QUERY fill:#FFE4B5
+    style CHECK fill:#EAF5FD
+    style RETURN1 fill:#DDF3EC
+    style QUERY fill:#FFF6C9
 ```
 
 ✅ **Pros**:
@@ -526,8 +526,8 @@ graph TB
         WT_CACHE -->|Sync write| WT_DB
     end
     
-    style CA_APP fill:#FFE4B5
-    style WT_CACHE fill:#90EE90
+    style CA_APP fill:#FFF6C9
+    style WT_CACHE fill:#DDF3EC
 ```
 
 ✅ **Pros**:
@@ -581,9 +581,9 @@ graph TB
     
     NOTE[⚡ Fast writes<br/>⚠️ Data loss risk if cache crashes]
     
-    style CACHE fill:#90EE90
-    style BUFFER fill:#FFE4B5
-    style NOTE fill:#FFB6C1
+    style CACHE fill:#DDF3EC
+    style BUFFER fill:#FFF6C9
+    style NOTE fill:#FCE5EA
 ```
 
 ✅ **Pros**:
@@ -653,8 +653,8 @@ graph TB
         RT_CACHE <--> RT_DB
     end
     
-    style CA_APP fill:#FFE4B5
-    style RT_CACHE fill:#90EE90
+    style CA_APP fill:#FFF6C9
+    style RT_CACHE fill:#DDF3EC
 ```
 
 ✅ **Pros**:
@@ -694,11 +694,11 @@ graph TB
     FIFO --> FIFO_DESC[Evict oldest insert<br/>❌ Rarely used]
     TTL --> TTL_DESC[Evict expired entries<br/>✅ Combined with others]
     
-    style FULL fill:#e1f5ff
-    style LRU fill:#90EE90
-    style LFU fill:#FFE4B5
-    style FIFO fill:#FFB6C1
-    style TTL fill:#90EE90
+    style FULL fill:#EAF5FD
+    style LRU fill:#DDF3EC
+    style LFU fill:#FFF6C9
+    style FIFO fill:#FCE5EA
+    style TTL fill:#DDF3EC
 ```
 
 ---
@@ -725,9 +725,9 @@ graph LR
     EVICT[Cache full?<br/>Evict from tail]
     TAIL -.->|Evicted| EVICT
     
-    style HEAD fill:#90EE90
-    style TAIL fill:#FFB6C1
-    style NEW fill:#e1f5ff
+    style HEAD fill:#DDF3EC
+    style TAIL fill:#FCE5EA
+    style NEW fill:#EAF5FD
 ```
 
 **Implementation**: Linked list + hash map for O(1) access and eviction
@@ -759,10 +759,10 @@ graph TB
     
     NOTE[✅ Trending content stays<br/>❌ New items easily evicted]
     
-    style K1 fill:#90EE90
-    style K2 fill:#90EE90
-    style K3 fill:#FFE4B5
-    style K4 fill:#FFB6C1
+    style K1 fill:#DDF3EC
+    style K2 fill:#DDF3EC
+    style K3 fill:#FFF6C9
+    style K4 fill:#FCE5EA
 ```
 
 ✅ **Best For**:
@@ -787,8 +787,8 @@ graph LR
     EVICT[Full?<br/>Evict oldest]
     OLDEST -.->|Out| EVICT
     
-    style OLDEST fill:#FFB6C1
-    style NEWEST fill:#90EE90
+    style OLDEST fill:#FCE5EA
+    style NEWEST fill:#DDF3EC
 ```
 
 ❌ **Rarely Used**: Ignores usage patterns, may evict hot items
@@ -832,9 +832,9 @@ graph TB
     DYNAMIC --> TTL2[TTL: 5-60 minutes]
     SESSION --> TTL3[TTL: 30 minutes]
     
-    style STATIC fill:#90EE90
-    style DYNAMIC fill:#FFE4B5
-    style SESSION fill:#e1f5ff
+    style STATIC fill:#DDF3EC
+    style DYNAMIC fill:#FFF6C9
+    style SESSION fill:#EAF5FD
 ```
 
 ✅ **Best For**:
@@ -907,7 +907,7 @@ graph TB
     REQ3 --> DB
     REQN --> DB
     
-    style DB fill:#FFB6C1
+    style DB fill:#FCE5EA
 ```
 
 #### Solution 1: Request Coalescing (Single Flight)
@@ -953,8 +953,8 @@ graph TB
     
     REFRESH --> RETURN
     
-    style CHECK fill:#e1f5ff
-    style REFRESH fill:#90EE90
+    style CHECK fill:#EAF5FD
+    style REFRESH fill:#DDF3EC
 ```
 
 **Solutions**:
@@ -1002,8 +1002,8 @@ graph LR
     
     T0 --> T1 --> T2 --> T3 --> T4
     
-    style T2 fill:#FFB6C1
-    style T4 fill:#90EE90
+    style T2 fill:#FCE5EA
+    style T4 fill:#DDF3EC
 ```
 
 #### Solution Strategies
@@ -1020,10 +1020,10 @@ flowchart TB
     S2 -->|TTL| TTL[Short TTL<br/>Accept staleness]
     S2 -->|Accept| ACC[Eventual Consistency<br/>Tolerate delay]
     
-    style INV fill:#90EE90
-    style UPD fill:#FFE4B5
-    style TTL fill:#FFE4B5
-    style ACC fill:#FFE4B5
+    style INV fill:#DDF3EC
+    style UPD fill:#FFF6C9
+    style TTL fill:#FFF6C9
+    style ACC fill:#FFF6C9
 ```
 
 **Solutions**:
@@ -1063,8 +1063,8 @@ graph TB
     
     NOTE[⚠️ One key bottlenecks<br/>entire Redis node]
     
-    style KEY fill:#FFB6C1
-    style SHARD fill:#FFB6C1
+    style KEY fill:#FCE5EA
+    style SHARD fill:#FCE5EA
 ```
 
 #### Example: Viral Content
@@ -1092,10 +1092,10 @@ graph TB
     
     NOTE[✅ Distribute load<br/>across replicas]
     
-    style LB fill:#e1f5ff
-    style HOT1 fill:#90EE90
-    style HOT2 fill:#90EE90
-    style HOT3 fill:#90EE90
+    style LB fill:#EAF5FD
+    style HOT1 fill:#DDF3EC
+    style HOT2 fill:#DDF3EC
+    style HOT3 fill:#DDF3EC
 ```
 
 #### Solution 2: Local In-Process Cache
@@ -1114,9 +1114,9 @@ graph TB
     APP2 -.->|Rare refresh| REDIS
     APP3 -.->|Rare refresh| REDIS
     
-    style APP1 fill:#90EE90
-    style APP2 fill:#90EE90
-    style APP3 fill:#90EE90
+    style APP1 fill:#DDF3EC
+    style APP2 fill:#DDF3EC
+    style APP3 fill:#DDF3EC
 ```
 
 **Solutions**:
@@ -1143,9 +1143,9 @@ graph LR
 
     NOTE[99% hit L1 or L2<br/>DB sees <1% of traffic]
 
-    style L1 fill:#90EE90
-    style L2 fill:#FFE4B5
-    style DB fill:#FFB6C1
+    style L1 fill:#DDF3EC
+    style L2 fill:#FFF6C9
+    style DB fill:#FCE5EA
 ```
 
 ```python
@@ -1264,9 +1264,9 @@ graph TB
 
     COLD --> S3[Strategy 3: Snapshot Restore<br/>Restore Redis RDB snapshot from before deploy<br/>✅ Instant — if compatible with new code]
 
-    style S1 fill:#FFE4B5
-    style S2 fill:#90EE90
-    style S3 fill:#90EE90
+    style S1 fill:#FFF6C9
+    style S2 fill:#DDF3EC
+    style S3 fill:#DDF3EC
 ```
 
 ```python
@@ -1403,10 +1403,10 @@ graph TB
         D3[Moved hot guilds to separate Redis shards]
     end
 
-    style N1 fill:#e1f5ff
-    style T1 fill:#FFE4B5
-    style F1 fill:#90EE90
-    style D1 fill:#FFB6C1
+    style N1 fill:#EAF5FD
+    style T1 fill:#FFF6C9
+    style F1 fill:#DDF3EC
+    style D1 fill:#FCE5EA
 ```
 
 ### Facebook's Lease Token (Thundering Herd Solution)
@@ -1444,11 +1444,11 @@ flowchart TB
     
     CHECK -->|Low traffic<br/>Simple queries| NO[❌ Not needed yet]
     
-    style YES1 fill:#90EE90
-    style YES2 fill:#90EE90
-    style YES3 fill:#90EE90
-    style YES4 fill:#90EE90
-    style NO fill:#FFB6C1
+    style YES1 fill:#DDF3EC
+    style YES2 fill:#DDF3EC
+    style YES3 fill:#DDF3EC
+    style YES4 fill:#DDF3EC
+    style NO fill:#FCE5EA
 ```
 
 ### Interview Framework
@@ -1469,11 +1469,11 @@ graph TB
     STEP4 --> D4[LRU + TTL<br/>How long to cache?]
     STEP5 --> D5[Cache failures?<br/>Invalidation strategy?<br/>Hot keys?]
     
-    style STEP1 fill:#e1f5ff
-    style STEP2 fill:#e1f5ff
-    style STEP3 fill:#90EE90
-    style STEP4 fill:#FFE4B5
-    style STEP5 fill:#FFB6C1
+    style STEP1 fill:#EAF5FD
+    style STEP2 fill:#EAF5FD
+    style STEP3 fill:#DDF3EC
+    style STEP4 fill:#FFF6C9
+    style STEP5 fill:#FCE5EA
 ```
 
 ### Example Interview Script
@@ -1543,9 +1543,9 @@ graph TB
     
     Q1 -->|Config<br/>Feature flags| PROC[In-Process<br/>Local HashMap<br/>Short TTL]
     
-    style EXT fill:#90EE90
-    style CDN_C fill:#90EE90
-    style PROC fill:#90EE90
+    style EXT fill:#DDF3EC
+    style CDN_C fill:#DDF3EC
+    style PROC fill:#DDF3EC
 ```
 
 ---
@@ -1569,8 +1569,8 @@ graph LR
     CONS --> C2[Cache invalidation]
     CONS --> C3[Additional complexity]
     
-    style PROS fill:#90EE90
-    style CONS fill:#FFB6C1
+    style PROS fill:#DDF3EC
+    style CONS fill:#FCE5EA
 ```
 
 ### Remember

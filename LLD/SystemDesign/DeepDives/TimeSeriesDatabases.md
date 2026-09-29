@@ -308,12 +308,12 @@ graph LR
     R --> A["4 · Apply aggregations<br/>streaming, no full load"]
     A --> Res["Result"]
 
-    style Q fill:#e1f5ff
-    style P fill:#FFE4B5
-    style S fill:#FFE4B5
-    style R fill:#e1f5ff
-    style A fill:#FFE4B5
-    style Res fill:#90EE90
+    style Q fill:#EAF5FD
+    style P fill:#FFF6C9
+    style S fill:#FFF6C9
+    style R fill:#EAF5FD
+    style A fill:#FFF6C9
+    style Res fill:#DDF3EC
 ```
 
 The key insight is that time-series databases exploit both time locality (recent data is in memory or recent files) and series locality (related data points are stored together) to minimize disk access.

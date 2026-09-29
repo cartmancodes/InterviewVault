@@ -136,14 +136,14 @@ graph TB
     PARSE -->|normalize + dedup| REDIS
     PARSE -->|new URLs| FRONTIER
 
-    style FRONTIER fill:#FFE4B5
-    style FETCH fill:#90EE90
-    style PARSE fill:#90EE90
-    style BLOB fill:#e1f5ff
-    style TEXT fill:#e1f5ff
-    style META fill:#e1f5ff
-    style REDIS fill:#e1f5ff
-    style DNS fill:#e1f5ff
+    style FRONTIER fill:#FFF6C9
+    style FETCH fill:#DDF3EC
+    style PARSE fill:#DDF3EC
+    style BLOB fill:#EAF5FD
+    style TEXT fill:#EAF5FD
+    style META fill:#EAF5FD
+    style REDIS fill:#EAF5FD
+    style DNS fill:#EAF5FD
 ```
 
 **Flow:**
@@ -224,11 +224,11 @@ graph TB
     B1 & B2 & B3 --> SCHED
     SCHED --> FT
 
-    style ROUTER fill:#90EE90
-    style SCHED fill:#90EE90
-    style B1 fill:#e1f5ff
-    style B2 fill:#e1f5ff
-    style B3 fill:#e1f5ff
+    style ROUTER fill:#DDF3EC
+    style SCHED fill:#DDF3EC
+    style B1 fill:#EAF5FD
+    style B2 fill:#EAF5FD
+    style B3 fill:#EAF5FD
 ```
 
 Priority selection (front queues) and politeness (back queues) are decoupled: the front side decides *what* to crawl next, the back side decides *when* it is polite to crawl it.
@@ -284,12 +284,12 @@ graph LR
     SH -->|near-duplicate| DROP2
     SH -->|novel| STORE[Write to text store]
 
-    style Q fill:#FFE4B5
-    style STORE fill:#90EE90
-    style DROP1 fill:#FFB6C1
-    style DROP2 fill:#FFB6C1
-    style BF fill:#e1f5ff
-    style EX fill:#e1f5ff
+    style Q fill:#FFF6C9
+    style STORE fill:#DDF3EC
+    style DROP1 fill:#FCE5EA
+    style DROP2 fill:#FCE5EA
+    style BF fill:#EAF5FD
+    style EX fill:#EAF5FD
 ```
 
 ### 4. robots.txt and Crawler Ethics
@@ -386,9 +386,9 @@ graph LR
     S3 -->|"100M+/day: DNS + egress bottleneck"| S4
     S4 -->|"transoceanic latency + regional blocks"| S5
 
-    style S1 fill:#FFB6C1
-    style S3 fill:#FFE4B5
-    style S5 fill:#90EE90
+    style S1 fill:#FCE5EA
+    style S3 fill:#FFF6C9
+    style S5 fill:#DDF3EC
 ```
 
 ### Stage 1: 1K Pages/day (MVP)

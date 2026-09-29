@@ -69,10 +69,10 @@ graph TB
     SSE -->|When to use| UC3[Live scores<br/>Notifications<br/>One-way updates]
     gRPC -->|When to use| UC4[Microservices<br/>Internal APIs<br/>Performance critical]
     
-    style HTTP fill:#e8f5e9
-    style WS fill:#e1f5ff
-    style SSE fill:#fff4e1
-    style gRPC fill:#f3e5f5
+    style HTTP fill:#DDF3EC
+    style WS fill:#EAF5FD
+    style SSE fill:#FFF6C9
+    style gRPC fill:#EDE8FA
 ```
 
 ### Protocol Comparison
@@ -209,10 +209,10 @@ graph TB
     WS1 <--> PS
     WS2 <--> PS
     
-    style LB fill:#e1f5ff
-    style WS1 fill:#e8f5e9
-    style WS2 fill:#e8f5e9
-    style PS fill:#fff4e1
+    style LB fill:#EAF5FD
+    style WS1 fill:#DDF3EC
+    style WS2 fill:#DDF3EC
+    style PS fill:#FFF6C9
 ```
 
 **Key Challenges with WebSockets:**
@@ -244,8 +244,8 @@ graph TB
         L4 -.-> B2[WebSockets<br/>Persistent Connections<br/>Raw Speed<br/>Any TCP/UDP]
     end
     
-    style L7 fill:#e1f5ff
-    style L4 fill:#fff4e1
+    style L7 fill:#EAF5FD
+    style L4 fill:#FFF6C9
 ```
 
 ### Layer 7 (Application Load Balancer)
@@ -272,7 +272,7 @@ graph LR
     L7 -->|/web/*| WEB[Web Servers]
     L7 -->|/admin/*| ADMIN[Admin Servers]
     
-    style L7 fill:#e1f5ff
+    style L7 fill:#EAF5FD
 ```
 
 ### Layer 4 (Network Load Balancer)
@@ -298,7 +298,7 @@ graph LR
     L4 -->|Distribution| S2[Server 2]
     L4 -->|Maintains| S3[Server 3]
     
-    style L4 fill:#fff4e1
+    style L4 fill:#FFF6C9
 ```
 
 ### Comparison Table
@@ -355,9 +355,9 @@ graph TB
     T -->|~20ms| APAC_DC
     T -.->|~150ms| US_DC
     
-    style US_CDN fill:#e8f5e9
-    style EU_CDN fill:#e8f5e9
-    style APAC_CDN fill:#e8f5e9
+    style US_CDN fill:#DDF3EC
+    style EU_CDN fill:#DDF3EC
+    style APAC_CDN fill:#DDF3EC
 ```
 
 ### Geographic Latency Facts
@@ -389,9 +389,9 @@ graph TB
     MULTI --> SOL2[✓ Regional databases<br/>✓ Data partitioning<br/>✓ Geo-routing]
     SINGLE --> SOL3[✓ Simpler architecture<br/>✓ Lower cost<br/>✓ Works for many cases]
     
-    style CDN fill:#e8f5e9
-    style MULTI fill:#e1f5ff
-    style SINGLE fill:#fff4e1
+    style CDN fill:#DDF3EC
+    style MULTI fill:#EAF5FD
+    style SINGLE fill:#FFF6C9
 ```
 
 ### Regional Architecture Example
@@ -426,9 +426,9 @@ graph TB
     US_DB -.->|Replication| EU_DB
     US_DB -.->|Replication| AP_DB
     
-    style US_DB fill:#e8f5e9
-    style EU_DB fill:#e1f5ff
-    style AP_DB fill:#fff4e1
+    style US_DB fill:#DDF3EC
+    style EU_DB fill:#EAF5FD
+    style AP_DB fill:#FFF6C9
 ```
 
 **Solution**: If your system needs low latency globally, you'll need regional deployments with data replicated or partitioned by geography. This is why CDNs exist - to serve static content from edge servers close to users.
@@ -465,9 +465,9 @@ graph TB
     L4_OSI -.-> TRANS
     L3_OSI -.-> NET
     
-    style APP fill:#e8f5e9
-    style TRANS fill:#e1f5ff
-    style NET fill:#fff4e1
+    style APP fill:#DDF3EC
+    style TRANS fill:#EAF5FD
+    style NET fill:#FFF6C9
 ```
 
 ### Detailed Layer Breakdown
@@ -487,10 +487,10 @@ graph LR
         REMOTE[Remote Access<br/>Telnet<br/>RDP<br/>SSH]
     end
     
-    style HTTP fill:#e8f5e9
-    style MAIL fill:#e1f5ff
-    style VIDEO fill:#fff4e1
-    style REMOTE fill:#f3e5f5
+    style HTTP fill:#DDF3EC
+    style MAIL fill:#EAF5FD
+    style VIDEO fill:#FFF6C9
+    style REMOTE fill:#EDE8FA
 ```
 
 **Key Protocols:**
@@ -528,10 +528,10 @@ graph TB
     
     BINARY --> NETWORK[Send to Network]
     
-    style ENC fill:#e8f5e9
-    style COMP fill:#e1f5ff
-    style ENCRYPT fill:#fff4e1
-    style FORMAT fill:#f3e5f5
+    style ENC fill:#DDF3EC
+    style COMP fill:#EAF5FD
+    style ENCRYPT fill:#FFF6C9
+    style FORMAT fill:#EDE8FA
 ```
 
 **Key Functions:**
@@ -633,10 +633,10 @@ graph TB
     ERROR --> PORT
     PORT --> SEGMENT[Segment with:<br/>- Sequence number<br/>- Port number<br/>- Checksum]
     
-    style SEG fill:#e8f5e9
-    style FLOW fill:#e1f5ff
-    style ERROR fill:#fff4e1
-    style PORT fill:#f3e5f5
+    style SEG fill:#DDF3EC
+    style FLOW fill:#EAF5FD
+    style ERROR fill:#FFF6C9
+    style PORT fill:#EDE8FA
 ```
 
 **Key Functions:**
@@ -701,10 +701,10 @@ graph TB
     ROUTE --> PATH
     PATH --> PACKET[IP Packet with:<br/>- Source IP<br/>- Destination IP<br/>- TTL<br/>- Protocol]
     
-    style LOG fill:#e8f5e9
-    style ROUTE fill:#e1f5ff
-    style PATH fill:#fff4e1
-    style PACK fill:#f3e5f5
+    style LOG fill:#DDF3EC
+    style ROUTE fill:#EAF5FD
+    style PATH fill:#FFF6C9
+    style PACK fill:#EDE8FA
 ```
 
 **Key Functions:**
@@ -762,10 +762,10 @@ graph TB
     ACCESS --> ERR
     ERR --> FINAL[Frame with:<br/>- MAC Source<br/>- MAC Destination<br/>- IP Header<br/>- Data<br/>- Tail CRC]
     
-    style MAC fill:#e8f5e9
-    style ACCESS fill:#e1f5ff
-    style ERR fill:#fff4e1
-    style FRAME fill:#f3e5f5
+    style MAC fill:#DDF3EC
+    style ACCESS fill:#EAF5FD
+    style ERR fill:#FFF6C9
+    style FRAME fill:#EDE8FA
 ```
 
 **Key Functions:**
@@ -835,9 +835,9 @@ graph LR
     
     COPPER & FIBER & WIRELESS --> MEDIUM
     
-    style COPPER fill:#e8f5e9
-    style FIBER fill:#e1f5ff
-    style WIRELESS fill:#fff4e1
+    style COPPER fill:#DDF3EC
+    style FIBER fill:#EAF5FD
+    style WIRELESS fill:#FFF6C9
 ```
 
 **Key Functions:**
@@ -883,12 +883,12 @@ graph TB
         EX3[Example: Phone call]
     end
     
-    style A1 fill:#ffe1e1
-    style B1 fill:#ffe1e1
-    style A2 fill:#fff4e1
-    style B2 fill:#fff4e1
-    style A3 fill:#e8f5e9
-    style B3 fill:#e8f5e9
+    style A1 fill:#FCE5EA
+    style B1 fill:#FCE5EA
+    style A2 fill:#FFF6C9
+    style B2 fill:#FFF6C9
+    style A3 fill:#DDF3EC
+    style B3 fill:#DDF3EC
 ```
 
 - **Simplex**: One direction only (e.g., TV broadcast)
@@ -909,46 +909,7 @@ graph TB
 
 ### Complete Data Flow Through OSI Layers
 
-```mermaid
-graph TB
-    subgraph "Sender Side - Data Encapsulation"
-        APP_S[Application Layer<br/>User Data]
-        PRES_S[Presentation Layer<br/>Format + Compress + Encrypt]
-        SESS_S[Session Layer<br/>Add Session Info]
-        TRANS_S[Transport Layer<br/>Add Segment Header<br/>Port, Sequence, Checksum]
-        NET_S[Network Layer<br/>Add IP Header<br/>Source & Dest IP]
-        LINK_S[Data Link Layer<br/>Add MAC Header + Tail<br/>Frame]
-        PHY_S[Physical Layer<br/>Convert to Signals<br/>Bits]
-    end
-    
-    subgraph "Transmission Medium"
-        MEDIUM[Copper/Fiber/Wireless]
-    end
-    
-    subgraph "Receiver Side - Data Decapsulation"
-        PHY_R[Physical Layer<br/>Receive Signals<br/>Convert to Bits]
-        LINK_R[Data Link Layer<br/>Remove MAC Header<br/>Error Check]
-        NET_R[Network Layer<br/>Remove IP Header<br/>Check Destination]
-        TRANS_R[Transport Layer<br/>Remove Segment Header<br/>Reassemble, Error Check]
-        SESS_R[Session Layer<br/>Validate Session]
-        PRES_R[Presentation Layer<br/>Decrypt + Decompress]
-        APP_R[Application Layer<br/>Deliver to Application]
-    end
-    
-    APP_S --> PRES_S --> SESS_S --> TRANS_S --> NET_S --> LINK_S --> PHY_S
-    PHY_S --> MEDIUM
-    MEDIUM --> PHY_R
-    PHY_R --> LINK_R --> NET_R --> TRANS_R --> SESS_R --> PRES_R --> APP_R
-    
-    style APP_S fill:#e8f5e9
-    style TRANS_S fill:#e1f5ff
-    style NET_S fill:#fff4e1
-    style LINK_S fill:#f3e5f5
-    style APP_R fill:#e8f5e9
-    style TRANS_R fill:#e1f5ff
-    style NET_R fill:#fff4e1
-    style LINK_R fill:#f3e5f5
-```
+![OSI encapsulation and decapsulation: read down the sender stack, cross the medium, then read up the receiver stack.](../../content/visuals/osi-encapsulation.svg)
 
 ### Layer-by-Layer Data Transformation
 
@@ -971,10 +932,10 @@ graph LR
     D5 -->|Data Link| D6
     D6 -->|Physical| D7
     
-    style D1 fill:#e8f5e9
-    style D4 fill:#e1f5ff
-    style D5 fill:#fff4e1
-    style D6 fill:#f3e5f5
+    style D1 fill:#DDF3EC
+    style D4 fill:#EAF5FD
+    style D5 fill:#FFF6C9
+    style D6 fill:#EDE8FA
 ```
 
 ### Quick Reference: What Happens at Each Layer
@@ -1011,12 +972,12 @@ graph LR
     
     UDP1 & UDP2 & UDP3 -->|Use for| UDPU[Video streaming<br/>Gaming<br/>DNS queries<br/>VoIP]
     
-    style TCP1 fill:#e1f5ff
-    style TCP2 fill:#e1f5ff
-    style TCP3 fill:#e1f5ff
-    style UDP1 fill:#fff4e1
-    style UDP2 fill:#fff4e1
-    style UDP3 fill:#fff4e1
+    style TCP1 fill:#EAF5FD
+    style TCP2 fill:#EAF5FD
+    style TCP3 fill:#EAF5FD
+    style UDP1 fill:#FFF6C9
+    style UDP2 fill:#FFF6C9
+    style UDP3 fill:#FFF6C9
 ```
 
 ---
@@ -1044,8 +1005,8 @@ graph TB
         NOTE2["1 connection, 3 parallel streams<br/>1 TLS handshake<br/>Header compression (HPACK)"]
     end
 
-    style NOTE1 fill:#FFB6C1
-    style NOTE2 fill:#90EE90
+    style NOTE1 fill:#FCE5EA
+    style NOTE2 fill:#DDF3EC
 ```
 
 **gRPC is built on HTTP/2** — this is why gRPC can stream bidirectionally without WebSockets.
@@ -1077,8 +1038,8 @@ graph LR
         LOSS2 -->|Only affected stream stalls| CONT[Other streams continue<br/>independently]
     end
 
-    style STALL fill:#FFB6C1
-    style CONT fill:#90EE90
+    style STALL fill:#FCE5EA
+    style CONT fill:#DDF3EC
 ```
 
 **Key benefits of HTTP/3**:
@@ -1114,8 +1075,8 @@ graph TB
         NOTE2[✅ 20 connections serve 1000 req/sec<br/>✅ Sub-ms connection checkout]
     end
 
-    style NOTE1 fill:#FFB6C1
-    style NOTE2 fill:#90EE90
+    style NOTE1 fill:#FCE5EA
+    style NOTE2 fill:#DDF3EC
 ```
 
 **PgBouncer configuration** (used at Heroku, Render, Supabase):
@@ -1190,9 +1151,9 @@ stateDiagram-v2
     HalfOpen --> Closed: Test request succeeds
     HalfOpen --> Open: Test request fails
 
-    Closed: CLOSED\nAll requests pass through
-    Open: OPEN\nAll requests fail fast (no network call)
-    HalfOpen: HALF-OPEN\nOne test request allowed
+    Closed: CLOSED<br/>All requests pass through
+    Open: OPEN<br/>All requests fail fast (no network call)
+    HalfOpen: HALF-OPEN<br/>One test request allowed
 ```
 
 ```python
@@ -1246,8 +1207,8 @@ graph TB
 
     NOTE[Application code: zero networking code<br/>Sidecar handles: mTLS, retries, circuit breakers, metrics]
 
-    style NOTE fill:#90EE90
-    style CTRL fill:#e1f5ff
+    style NOTE fill:#DDF3EC
+    style CTRL fill:#EAF5FD
 ```
 
 **Tools**: Istio (Google), Linkerd (CNCF), AWS App Mesh, Consul Connect.
@@ -1281,7 +1242,7 @@ graph TB
 
     NOTE[Same IP 1.1.1.1<br/>BGP routes to nearest PoP<br/>~5ms from anywhere on Earth]
 
-    style NOTE fill:#90EE90
+    style NOTE fill:#DDF3EC
 ```
 
 **Why it matters**: Anycast makes Cloudflare DDoS-resistant. A 1 Tbps attack hits one PoP, which has spare capacity. The other 299 PoPs are unaffected.
@@ -1310,10 +1271,10 @@ flowchart TD
     Q3 -->|Yes, performance critical| GRPC[gRPC<br/>Binary protocol]
     Q3 -->|No| FINAL_REST[REST APIs<br/>JSON over HTTP]
     
-    style FINAL_REST fill:#e8f5e9
-    style WS fill:#e1f5ff
-    style SSE fill:#fff4e1
-    style GRPC fill:#f3e5f5
+    style FINAL_REST fill:#DDF3EC
+    style WS fill:#EAF5FD
+    style SSE fill:#FFF6C9
+    style GRPC fill:#EDE8FA
 ```
 
 ### Common Patterns
@@ -1403,10 +1364,10 @@ graph TB
     
     L1 & L2 --> G1 & G2 & G3
     
-    style P1 fill:#e8f5e9
-    style P2 fill:#e1f5ff
-    style P3 fill:#fff4e1
-    style P4 fill:#f3e5f5
+    style P1 fill:#DDF3EC
+    style P2 fill:#EAF5FD
+    style P3 fill:#FFF6C9
+    style P4 fill:#EDE8FA
 ```
 
 **Remember**: Networking in system design interviews is about making practical choices that you can justify. Start with the simple, well-understood options (HTTP/TCP, REST) and only add complexity (WebSockets, multi-region) when you have a clear reason backed by requirements.

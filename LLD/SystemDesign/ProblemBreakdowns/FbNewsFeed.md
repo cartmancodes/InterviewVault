@@ -294,11 +294,11 @@ graph TB
         M --> U["User Feed"]
     end
 
-    style PF fill:#e1f5ff
-    style PT fill:#e1f5ff
-    style SK fill:#FFB6C1
-    style M fill:#90EE90
-    style U fill:#90EE90
+    style PF fill:#EAF5FD
+    style PT fill:#EAF5FD
+    style SK fill:#FCE5EA
+    style M fill:#DDF3EC
+    style U fill:#DDF3EC
 ```
 
 ### 3) How can we handle uneven reads of Posts?

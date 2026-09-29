@@ -29,9 +29,9 @@ flowchart TD
     CGROUP -->|"under the limit"| OK["Pod runs on, unaware"]
     CGROUP -->|"over the limit"| KILL["kubelet kills the pod:<br/>exit 137, OOMKilled"]
 
-    classDef good fill:#90EE90
-    classDef warn fill:#FFE4B5
-    classDef bad fill:#FFB6C1
+    classDef good fill:#DDF3EC
+    classDef warn fill:#FFF6C9
+    classDef bad fill:#FCE5EA
     class GIVEBACK,OK good
     class STUCK,CGROUP warn
     class KILL bad
@@ -82,9 +82,9 @@ flowchart TD
     LIM -->|"yes"| NEW["mmap a new 64 MB heap<br/>create a new arena"]
     LIM -->|"no"| SHARE["Share an existing arena,<br/>contend on its lock"]
 
-    classDef good fill:#90EE90
-    classDef warn fill:#FFE4B5
-    classDef bad fill:#FFB6C1
+    classDef good fill:#DDF3EC
+    classDef warn fill:#FFF6C9
+    classDef bad fill:#FCE5EA
     class U,U2 good
     class NEW warn
     class SHARE bad
@@ -138,9 +138,9 @@ flowchart TB
     F3 -->|"stranded in the middle"| RES
     NEED["Thread on arena 2<br/>needs a block"] -.->|"cannot reach arena 1's free list"| F1
 
-    classDef good fill:#90EE90
-    classDef bad fill:#FFB6C1
-    classDef warn fill:#FFE4B5
+    classDef good fill:#DDF3EC
+    classDef bad fill:#FCE5EA
+    classDef warn fill:#FFF6C9
     class OS good
     class RES,F1,F3 bad
     class F2,NEED warn
@@ -185,9 +185,9 @@ flowchart LR
     FRAG --> CG{"cgroup memory<br/>accounting"}
     CG -->|"exceeds 512Mi"| KILL["OOMKilled, exit 137"]
 
-    classDef bad fill:#FFB6C1
-    classDef warn fill:#FFE4B5
-    classDef infra fill:#e1f5ff
+    classDef bad fill:#FCE5EA
+    classDef warn fill:#FFF6C9
+    classDef infra fill:#EAF5FD
     class KILL,FRAG bad
     class CEIL warn
     class NODE,POD infra
