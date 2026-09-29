@@ -1,6 +1,6 @@
 # 🖱️ Ad Click Aggregator
 
-> **Overview**: An Ad Click Aggregator collects and aggregates data on ad clicks so advertisers can track the performance of their campaigns. The design must scale to a peak of 10k clicks per second, serve advertisers sub-second analytics queries at 1-minute granularity, never lose click data, and count each click exactly once. This is a textbook data-processing and write-scaling problem, solved by streaming clicks through Kafka/Kinesis, pre-aggregating with Flink, and storing results in an OLAP database.
+> **Overview**: An Ad Click Aggregator collects and summarizes ad clicks so advertisers can track campaign performance. The design must handle peaks of 10k clicks per second, serve sub-second analytics queries at 1-minute granularity, and preserve enough event data to recover from processing failures. It uses a durable stream such as Kafka or Kinesis, pre-aggregates events with Flink, and stores summaries in an OLAP database. Retries and replays are handled with deduplication and repeat-safe updates.
 
 ## 📋 Table of Contents
 - [Layman's Explanation](#laymans-explanation)
@@ -20,9 +20,13 @@ Watch the author walk through the problem step-by-step
 
 ## 🧒 Layman's Explanation
 
-Imagine a busy stadium where every ad click is a person walking through a turnstile. A sponsor wants to know how many people entered each gate, minute by minute. You *could* have every person sign a giant ledger and later flip through millions of lines to tally them up (this is **batch processing** — accurate but slow), but that's painful when the sponsor wants near-live numbers. Instead, you put a running counter at each turnstile that ticks up the moment someone passes through (this is **stream processing** with Flink), and you periodically cross-check those counters against the ledger to catch any miscounts (this is **reconciliation**, the Lambda architecture).
+Imagine a popular concert with several entrances. Every time someone scans a ticket, the venue needs to let them in quickly and record the entry. If a scanner times out and sends the same scan again, the venue should not count that entry twice. Staff also want to see how many people have arrived so far without searching through every scan one by one.
 
-Two more wrinkles: when a superstar shows up and one gate gets mobbed while others sit idle, you open extra lanes at that gate (splitting a **hot shard**). And to stop someone from walking back and forth to inflate the count, you hand each person a unique wristband when they enter — if the same wristband comes back, you ignore it (this is **idempotency** via signed impression IDs).
+An ad click aggregator has the same basic job. When someone clicks an ad, the system records the click and redirects the visitor to the advertiser's website. Each ad instance has an identifier, so if the same click is retried, the system can recognize it. The click is saved in a durable event log, then grouped into small time buckets—such as one-minute totals. A dashboard can read those summaries quickly instead of recounting every click from the beginning.
+
+The live total is a running count, not automatically the final billable count. A processor may replay events after a failure, and some events may arrive late, so the system periodically recomputes summaries from the event records it retained and corrects discrepancies. In a production ad platform, separate validity rules may also adjust billable clicks; fraud detection is outside the scope of this design.
+
+In short, the system records clicks reliably, turns many events into quick dashboard summaries, and rechecks its recorded events to correct processing errors. The concert analogy is only a guide: ad systems must handle traffic spikes and failures across many machines.
 
 ## 🎯 Understanding the Problem
 
@@ -181,7 +185,7 @@ To address the latency and scalability issues, let's introduce a stream for real
 
 When a click comes in our click processing service will immediately write the event to a stream like [Kafka](https://kafka.apache.org/) or [Kinesis](https://aws.amazon.com/kinesis/). We then need a stream processor like [Flink](https://flink.apache.org/) or [Spark Streaming](https://spark.apache.org/streaming/) to read the events from the stream and aggregate them in real-time.
 
-You might be wondering why we need a dedicated stream processor like Flink. Can't we just use regular Kafka consumers that keep a running count in memory and flush to the database every minute? You could, and for a mid-level interview that's a reasonable answer. But Flink gives us several things that are painful to build yourself. It handles windowed aggregations with event-time semantics (so out-of-order events land in the correct minute bucket), watermarks that know when it's safe to close a window, exactly-once processing guarantees, and built-in fault tolerance with state recovery. Rolling your own version of all that on top of raw Kafka consumers is doable but error-prone.
+You might be wondering why we need a dedicated stream processor like Flink. Can't we just use regular Kafka consumers that keep a running count in memory and flush to the database every minute? You could, and for a mid-level interview that's a reasonable answer. But Flink gives us several things that are painful to build yourself. It handles windowed aggregations with event-time semantics (so out-of-order events can land in the correct minute bucket), watermarks that estimate when a window is ready to close, and fault tolerance with state recovery. Replays can still happen across processing and storage boundaries, so the destination should support repeat-safe updates. Rolling your own version of all that on top of raw Kafka consumers is doable but error-prone.
 
 This works by keeping a running count of click totals in memory and updating them as new events come in. We use event time (when the click actually occurred) rather than processing time (when Flink received the event) to ensure accurate aggregations even when events arrive out of order. [Flink](https://www.hellointerview.com/learn/system-design/deep-dives/flink) uses watermarks to track event time progress and handle late-arriving events. When we reach the end of a time window, we can flush the aggregated data to our OLAP database.
 
@@ -245,15 +249,15 @@ For our case, however, our aggregation windows are very small. Candidates often 
 
 > These types of identifications that somewhat go against the grain are really effective ways to show seniority. A well-studied candidate may remember reading about checkpointing and propose it as a solution, but an experienced candidate will instead think critically about whether it's actually necessary given the context of the problem.
 
-Click data matters, a lot. If we lose click data, we lose money. So we need to make sure that our data is correct. This is a tough balance, because guaranteeing correctness and low latency are often at odds. We can balance the two by introducing periodic reconciliation.
+Click data matters because it can affect advertiser reporting and billing. Low latency and correction are different needs, so we can provide a fast running view and periodically reconcile it against the event records we retained.
 
 Despite our best efforts with the above measures, things could still go wrong. Transient processing errors in Flink, bad code pushes, out-of-order events in the stream, etc., could all lead to slight inaccuracies in our data. To catch these, we can introduce a periodic reconciliation job that runs every hour or day.
 
-At the end of the stream, alongside the stream processors, we can also dump the raw click events to a data lake like S3. Both Kafka and Kinesis support this natively — Kafka through Kafka Connect S3 Sink Connector, and Kinesis through Kinesis Data Firehose — making it straightforward to continuously archive raw events without adding load to Flink. Then, as with the "good" answer in "Advertisers can query ad click metrics over time at 1-minute intervals" above, we can run a periodic batch job (e.g. daily with Spark) that reads all the raw click events from the data lake and re-aggregates them. This way, we can compare the results of the batch job to the results of the stream processor and ensure that they match. If they don't, we can investigate the discrepancies and fix the root cause while updating the data in the OLAP DB with the correct values.
+At the end of the stream, alongside the stream processors, we can also archive raw click events to a data lake like S3. Both Kafka and Kinesis support this through connectors such as Kafka Connect's S3 Sink Connector and Kinesis Data Firehose. A periodic batch job (for example, a daily Spark job) can read the retained events and recalculate the summaries. We compare those results with the streaming totals, investigate discrepancies, and update the OLAP database. This can correct processing errors in the events we captured; it cannot prove that every real-world click was captured or establish whether a click was valid.
 
 ![Reconciliation](assets/upWYaBJ4J8N2.01ywwmjdugjpb.svg)
 
-This essentially combines our two solutions, real-time stream processing and periodic batch processing, to ensure that our data is not only fast but also accurate. You may hear this referred to as a [Lambda architecture](https://en.wikipedia.org/wiki/Lambda_architecture). It consists of a speed layer (Flink) for low-latency results and a batch layer (Spark) for correctness. The batch layer acts as a source of truth that periodically corrects any inaccuracies from the speed layer.
+This combines real-time stream processing and periodic batch processing, often called a [Lambda architecture](https://en.wikipedia.org/wiki/Lambda_architecture). The Flink speed layer provides low-latency results; the Spark batch layer recalculates summaries from retained raw events and can correct mistakes in the speed layer. The retained event log is the basis for that recalculation, subject to what the system actually captured and its counting rules.
 
 ### 3) How can we prevent abuse from users clicking on ads multiple times?
 
