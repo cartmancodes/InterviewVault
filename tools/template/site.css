@@ -251,26 +251,26 @@ body.portfolio a { text-decoration-color: currentColor; text-decoration-thicknes
   letter-spacing: .1em; text-transform: uppercase; margin-bottom: 14px;
 }
 .map svg { width: 100%; height: auto; display: block; overflow: visible; }
-.node rect {
+.map .node rect {
   fill: var(--paper); stroke: var(--ink); stroke-width: 2;
   transition: fill .15s ease;
 }
-.node .n-label { font-family: var(--sans); font-size: 15px; font-weight: 600; fill: var(--ink); }
-.node .n-count { font-family: var(--mono); font-size: 12px; fill: var(--mut); }
-.node { cursor: pointer; }
-.node:hover rect, .node:focus-visible rect { fill: var(--acc); }
-.node:hover .n-label, .node:focus-visible .n-label { fill: var(--ink); }
-.node:hover .n-count, .node:focus-visible .n-count { fill: var(--ink-2); }
-.edge {
+.map .node .n-label { font-family: var(--sans); font-size: 15px; font-weight: 600; fill: var(--ink); }
+.map .node .n-count { font-family: var(--mono); font-size: 12px; fill: var(--mut); }
+.map .node { cursor: pointer; }
+.map .node:hover rect, .map .node:focus-visible rect { fill: var(--acc); }
+.map .node:hover .n-label, .map .node:focus-visible .n-label { fill: var(--ink); }
+.map .node:hover .n-count, .map .node:focus-visible .n-count { fill: var(--ink-2); }
+.map .edge {
   stroke: var(--ink); stroke-width: 2; fill: none;
   stroke-dasharray: var(--len, 400); stroke-dashoffset: var(--len, 400);
   animation: draw .9s ease forwards;
 }
-.edge.d2 { animation-delay: .12s; }
-.edge.d3 { animation-delay: .24s; }
+.map .edge.d2 { animation-delay: .12s; }
+.map .edge.d3 { animation-delay: .24s; }
 @keyframes draw { to { stroke-dashoffset: 0; } }
-@media (prefers-reduced-motion: reduce) { .edge { stroke-dashoffset: 0; animation: none; } }
-.edge-head { fill: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .map .edge { stroke-dashoffset: 0; animation: none; } }
+.map .edge-head { fill: var(--ink); }
 
 /* ── library table ─────────────────────────────────────── */
 .lib { max-width: var(--shell); margin: 0 auto; padding: 0 20px 80px; }
@@ -1299,50 +1299,6 @@ body.portfolio .portfolio-fallback details > :not(summary) { margin-top: 20px; }
   body.portfolio .location { display: none; }
 }
 
-/* The landing page defaults to dark. Theme tokens stay local to this page;
-   the vault continues to use the original light palette. */
-body.portfolio { color-scheme: light; }
-html[data-portfolio-theme="dark"] { color-scheme: dark; background: #101b2a; }
-html[data-portfolio-theme="dark"] body.portfolio {
-  color-scheme: dark;
-  --ink: #EEF4FC;
-  --ink-2: #C1CEDF;
-  --mut: #A6B7CE;
-  --paper: #101B2A;
-  --soft: #1C2B40;
-  --prose: #DBE5F2;
-  --rule: #32445B;
-  --sky-wash: #142438;
-  --acc-wash: #283B50;
-  --blue: #79C3F0;
-  --cut: 2px solid #32445B;
-  --lift: 4px 4px 0 #050C14;
-  --lift-hi: 6px 6px 0 #050C14;
-}
-html[data-portfolio-theme="dark"] .portfolio .site-shell { border-inline-color: var(--rule); }
-html[data-portfolio-theme="dark"] .portfolio .brand-mark,
-html[data-portfolio-theme="dark"] .portfolio .terminal-title { background: #0B1523; color: var(--ink); }
-html[data-portfolio-theme="dark"] .portfolio .window-dots i:nth-child(3) { background: var(--ink); }
-html[data-portfolio-theme="dark"] .portfolio .terminal-nav {
-  background-color: #1B3147;
-  background-image: linear-gradient(#28455F 1px, transparent 1px), linear-gradient(90deg, #28455F 1px, transparent 1px);
-}
-html[data-portfolio-theme="dark"] .portfolio .terminal-nav button.active,
-html[data-portfolio-theme="dark"] .portfolio .terminal-nav button.active span,
-html[data-portfolio-theme="dark"] .portfolio .suggestions button:hover,
-html[data-portfolio-theme="dark"] .portfolio .enter-button,
-html[data-portfolio-theme="dark"] .portfolio .primary-link,
-html[data-portfolio-theme="dark"] .portfolio .speech,
-html[data-portfolio-theme="dark"] .portfolio h1 .highlight-text { color: #0E1A2B; }
-html[data-portfolio-theme="dark"] .portfolio .terminal-nav button.active:hover,
-html[data-portfolio-theme="dark"] .portfolio .primary-link:hover { background: #FFE455; }
-html[data-portfolio-theme="dark"] .portfolio .terminal-nav button.active:focus-visible { outline-color: #0E1A2B; }
-html[data-portfolio-theme="dark"] .portfolio h2 .highlight-text { color: var(--acc); background: none; }
-html[data-portfolio-theme="dark"] .portfolio .speech,
-html[data-portfolio-theme="dark"] .portfolio .primary-link { box-shadow: 3px 3px 0 #050C14; }
-html[data-portfolio-theme="dark"] .portfolio .speech-corner { border-color: var(--rule); }
-html[data-portfolio-theme="dark"] .portfolio .live-dot,
-html[data-portfolio-theme="dark"] .portfolio .tiny-line { background: var(--sky); }
 body.portfolio .header-right { gap: 14px; }
 body.portfolio #theme-toggle { white-space: nowrap; }
 body.portfolio #theme-icon { font-size: 16px; line-height: 1; }

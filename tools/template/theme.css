@@ -1,0 +1,171 @@
+/* Shared theme, loaded after the reading and figure styles. The initializer
+   sets data-theme before CSS loads; no page owns a separate palette. */
+:root { color-scheme: light; --accent-ink: #0E1A2B; }
+html[data-theme="dark"] {
+  color-scheme: dark;
+  background: #101B2A;
+  --ink: #EEF4FC;
+  --ink-2: #C1CEDF;
+  --mut: #A6B7CE;
+  --paper: #101B2A;
+  --soft: #1C2B40;
+  --prose: #DBE5F2;
+  --rule: #32445B;
+  --sky-wash: #142438;
+  --acc-wash: #283B50;
+  --blue: #79C3F0;
+  --cut: 2px solid #32445B;
+  --lift: 4px 4px 0 #050C14;
+  --lift-hi: 6px 6px 0 #050C14;
+}
+
+.theme-toggle {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  flex: none; min-height: 44px; padding: 8px 11px;
+  border: var(--cut); border-radius: 7px; background: var(--paper);
+  color: var(--ink); font: 500 12px var(--mono); white-space: nowrap;
+  cursor: pointer; touch-action: manipulation;
+}
+.theme-toggle:hover { background: var(--acc-wash); }
+.theme-toggle #theme-icon { font-size: 16px; line-height: 1; }
+/* Theme controls work independently of the portfolio terminal enhancement. */
+body.portfolio:not(.terminal-enhanced) #theme-toggle { display: inline-flex; }
+
+html[data-theme="dark"] .hdr { background: rgb(16 27 42 / .94); }
+html[data-theme="dark"] .brand-mark { background: #0B1523; color: var(--ink); }
+html[data-theme="dark"] .blueprint {
+  background-color: #1B3147;
+  background-image: linear-gradient(#28455F 1px, transparent 1px),
+    linear-gradient(90deg, #28455F 1px, transparent 1px);
+}
+html[data-theme="dark"] .foot { background: #1B3147; }
+html[data-theme="dark"] #pr-board,
+html[data-theme="dark"] .prose pre { background-color: #0B1523; }
+html[data-theme="dark"] .prose code { color: #BED9FF; }
+html[data-theme="dark"] .prose pre code { color: inherit; }
+html[data-theme="dark"] .prose th,
+html[data-theme="dark"] .dsa-summary { background: var(--soft); }
+html[data-theme="dark"] .dsa-warning { background: #302B1D; }
+.search input::placeholder { color: var(--mut); opacity: 1; }
+
+/* Yellow remains a highlight, with fixed dark ink rather than the theme's
+   light reading text. Keep secondary counts and active track numbers legible. */
+html[data-theme="dark"] :is(
+  .hdr-nav a[aria-current="page"], .hero h1 em, .socials a:hover,
+  #pr-btn, .lib-bar .chip[aria-pressed="true"],
+  .lib-bar .chip[aria-pressed="true"] .c-n,
+  .side a[aria-current="page"], .side a[aria-current="page"] .track-n,
+  .toc a.active, .sc-lv, .sc-cp:not(.done) .sc-go, .mech-go:not(:disabled), .tg.on,
+  .chip.on, .sheet-open-btn, .mp-done
+) { color: var(--accent-ink); }
+html[data-theme="dark"] .sc-cp.done .sc-go { color: var(--mut); }
+html[data-theme="dark"] .map .n-count { fill: var(--mut); }
+html[data-theme="dark"] .map .node:is(:hover, :focus-visible) :is(.n-label, .n-count) {
+  fill: var(--accent-ink);
+}
+.sc-cp-head, .duel-opt, .rung-c, .dash-card { color: var(--ink); }
+html[data-theme="dark"] .dash-card.state-warn .dash-delta { color: #FFD575; }
+html[data-theme="dark"] .dash-card.state-hot .dash-delta { color: #FF9B9B; }
+html[data-theme="dark"] .tier-tag.now { color: #7DE5BC; }
+
+/* Figure chrome follows the page. The actual diagram retains a light canvas
+   and its own semantic colours, including when expanded into a dialog. */
+html[data-theme="dark"] :is(.content-figure, .figure-dialog) {
+  background: var(--paper); color: var(--ink); border-color: var(--rule);
+}
+html[data-theme="dark"] :is(.figure-heading, .figure-dialog-bar) {
+  background: var(--soft); border-color: var(--rule);
+}
+html[data-theme="dark"] .content-figure figcaption {
+  background: var(--soft); color: var(--ink-2); border-color: var(--rule);
+}
+html[data-theme="dark"] .figure-transcript { border-color: var(--rule); }
+html[data-theme="dark"] .figure-player { background: var(--sky-wash); border-color: var(--rule); }
+html[data-theme="dark"] :is(.figure-kind, .figure-step-count, .figure-motion-note) { color: var(--mut); }
+html[data-theme="dark"] :is(.figure-expand, .figure-controls button, .figure-dialog-bar button) {
+  background: var(--paper); color: var(--ink); border-color: var(--mut);
+}
+html[data-theme="dark"] .figure-expand:hover { background: var(--acc-wash); }
+html[data-theme="dark"] .figure-controls button[data-action="play"] {
+  background: var(--acc); color: var(--accent-ink); border-color: var(--acc);
+}
+html[data-theme="dark"] :is(.figure-expand, .figure-controls button, .figure-dialog button, .figure-transcript summary):focus-visible {
+  outline-color: var(--blue);
+}
+html[data-theme="dark"] :is(.figure-viewport, .diagram, figure.fig img) {
+  color-scheme: light; background: #FCFDFF; color: #0E1A2B;
+}
+/* SVGs that use site variables still get the original diagram palette. */
+html[data-theme="dark"] :is(.figure-canvas, .diagram) {
+  --ink: #0E1A2B; --ink-2: #3A4A61; --mut: #4F5F79;
+  --paper: #FFFFFF; --soft: #F2F5FB; --rule: #CFE0EE;
+  --prose: #16233A; --acc-wash: #FFF6C9; --sky-wash: #EAF5FD;
+}
+
+/* The header may wrap even on desktop. JS measures its rendered height so
+   sticky panels and anchored headings stay below it at every text size. */
+html { scroll-padding-top: calc(var(--header-height, 64px) + 16px); }
+.lib-bar { top: var(--header-height, 64px); }
+.side, .toc, .rail {
+  top: calc(var(--header-height, 64px) + 16px);
+  max-height: calc(100vh - var(--header-height, 64px) - 36px);
+}
+.prose h2, .prose h3, .prose h4 { scroll-margin-top: 0; }
+
+/* Keep the title and theme control on the first row. Navigation scrolls in
+   its own column on the second row, alongside the social links. */
+@media (max-width: 1050px) {
+  .hdr-in { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 8px 14px; }
+  .hdr-in > .brand { grid-row: 1; grid-column: 1; min-width: 0; }
+  .hdr-in > .theme-toggle { grid-row: 1; grid-column: 2; }
+  .hdr-in > .hdr-nav {
+    grid-row: 2; grid-column: 1; order: initial; margin: 0; width: 100%;
+    min-width: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+  }
+  .hdr-nav::-webkit-scrollbar { display: none; }
+  .hdr-nav a { white-space: nowrap; display: inline-flex; align-items: center; min-height: 44px; }
+  .hdr-in > .socials { grid-row: 2; grid-column: 2; margin-left: 0; justify-content: flex-end; }
+  .socials a { width: 40px; height: 40px; }
+  html { scroll-padding-top: calc(var(--header-height, 108px) + 16px); }
+  .side, .toc, .rail {
+    top: calc(var(--header-height, 108px) + 16px);
+    max-height: calc(100vh - var(--header-height, 108px) - 36px);
+  }
+  .lib-bar { position: static; }
+}
+@media (max-width: 800px) {
+  .side { max-height: none; }
+}
+@media (max-width: 380px) {
+  .hdr-in { column-gap: 7px; }
+  .hdr-in > .brand { gap: 7px; }
+  .hdr-in .brand-name { font-size: 12px; }
+  .theme-toggle { padding-inline: 8px; font-size: 11px; }
+}
+html[data-theme="dark"] .portfolio .site-shell { border-inline-color: var(--rule); }
+html[data-theme="dark"] .portfolio .brand-mark,
+html[data-theme="dark"] .portfolio .terminal-title { background: #0B1523; color: var(--ink); }
+html[data-theme="dark"] .portfolio .window-dots i:nth-child(3) { background: var(--ink); }
+html[data-theme="dark"] .portfolio .terminal-nav {
+  background-color: #1B3147;
+  background-image: linear-gradient(#28455F 1px, transparent 1px), linear-gradient(90deg, #28455F 1px, transparent 1px);
+}
+html[data-theme="dark"] .portfolio .terminal-nav button.active,
+html[data-theme="dark"] .portfolio .terminal-nav button.active span,
+html[data-theme="dark"] .portfolio .suggestions button:hover,
+html[data-theme="dark"] .portfolio .enter-button,
+html[data-theme="dark"] .portfolio .primary-link,
+html[data-theme="dark"] .portfolio .speech,
+html[data-theme="dark"] .portfolio h1 .highlight-text { color: #0E1A2B; }
+html[data-theme="dark"] .portfolio .terminal-nav button.active:hover,
+html[data-theme="dark"] .portfolio .primary-link:hover { background: #FFE455; }
+html[data-theme="dark"] .portfolio .terminal-nav button.active:focus-visible { outline-color: #0E1A2B; }
+html[data-theme="dark"] .portfolio h2 .highlight-text { color: var(--acc); background: none; }
+html[data-theme="dark"] .portfolio .speech,
+html[data-theme="dark"] .portfolio .primary-link { box-shadow: 3px 3px 0 #050C14; }
+html[data-theme="dark"] .portfolio .speech-corner { border-color: var(--rule); }
+html[data-theme="dark"] .portfolio .live-dot,
+html[data-theme="dark"] .portfolio .tiny-line { background: var(--sky); }
+
+/* Input and toggle boundaries remain visible against dark reading surfaces. */
+html[data-theme="dark"] :is(.search, .theme-toggle, .portfolio #theme-toggle) { border-color: var(--mut); }

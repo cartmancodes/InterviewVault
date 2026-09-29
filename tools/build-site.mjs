@@ -260,6 +260,7 @@ const header = (active) => `<header class="hdr"><div class="hdr-in">
 <nav class="hdr-nav">${COLLECTIONS.filter((c) => c.key !== 'quickref')
   .map((c) => `<a href="${VAULT}#${c.key}"${active === c.key ? ' aria-current="page"' : ''}>${c.label}</a>`).join('')}</nav>
 ${SOCIALS}
+<button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to dark mode"><span id="theme-icon" aria-hidden="true">☾</span> <span id="theme-label">Dark mode</span></button>
 </div></header>`;
 
 const footer = () => `<footer class="foot"><div class="foot-in">
@@ -271,16 +272,11 @@ const footer = () => `<footer class="foot"><div class="foot-in">
 // carries its own nav and footer and shares nothing but the shell and the fonts.
 function page({ title, desc, body, active, cls = '', chrome = true }) {
   return `<!DOCTYPE html>
-<html lang="en"${cls === 'portfolio' ? ' data-portfolio-theme="dark"' : ''}>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-${cls === 'portfolio' ? `<script>
-// Apply the saved landing-page theme before styles load to avoid a colour flash.
-try {
-  if (localStorage.getItem('pf-theme') === 'light') document.documentElement.dataset.portfolioTheme = 'light';
-} catch { /* Dark remains the default when storage is unavailable. */ }
-</script>` : ''}
+<script src="/assets/theme.js"></script>
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(desc)}">
 <meta property="og:title" content="${esc(title)}">
@@ -289,6 +285,7 @@ try {
 ${FONTS}
 <link rel="stylesheet" href="/assets/site.css">
 <link rel="stylesheet" href="/assets/figures.css">
+<link rel="stylesheet" href="/assets/theme.css">
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 </head>
 <body class="${cls}">
@@ -685,6 +682,7 @@ function build() {
   buildProgressPage();
 
   copyFileSync(path.join(TPL, 'site.css'), path.join(SITE, 'assets', 'site.css'));
+  for (const file of ['theme.js', 'theme.css']) copyFileSync(path.join(TPL, file), path.join(SITE, 'assets', file));
   copyFileSync(path.join(TPL, 'home.js'), path.join(SITE, 'assets', 'home.js'));
   copyFileSync(path.join(TPL, 'game.js'), path.join(SITE, 'assets', 'game.js'));
   copyFileSync(path.join(TPL, 'doc.js'), path.join(SITE, 'assets', 'doc.js'));

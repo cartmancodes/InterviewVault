@@ -5,20 +5,6 @@
   const output = $('output'), input = $('command-input');
   if (!output || !input) return;
   document.body.classList.add('terminal-enhanced');
-  const themeToggle = $('theme-toggle');
-  function updateThemeToggle() {
-    const dark = document.documentElement.dataset.portfolioTheme !== 'light';
-    $('theme-icon').textContent = dark ? '☀' : '☾';
-    $('theme-label').textContent = dark ? 'Light mode' : 'Dark mode';
-    themeToggle.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
-  }
-  themeToggle.addEventListener('click', () => {
-    const theme = document.documentElement.dataset.portfolioTheme === 'light' ? 'dark' : 'light';
-    document.documentElement.dataset.portfolioTheme = theme;
-    updateThemeToggle();
-    try { localStorage.setItem('pf-theme', theme); } catch {}
-  });
-  updateThemeToggle();
   const commands = ['about','experience','projects','notes','education','hobbies','contact','help','clear'];
   const aliases = {whoami:'about',home:'about',work:'experience',ls:'help',pwd:'about',email:'contact',vault:'notes',skills:'about'};
   const displayed = {about:'whoami',experience:'cat experience.md',projects:'ls ./projects',notes:'open ./vault',education:'cat education.md',hobbies:'cat life-outside-code.md',contact:'cat contact.txt',help:'help',clear:'clear'};
