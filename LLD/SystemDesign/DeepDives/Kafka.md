@@ -9,7 +9,7 @@
 - [🔬 How Kafka Works](#-how-kafka-works)
 - [🎤 When to use Kafka in your interview](#-when-to-use-kafka-in-your-interview)
 - [🔎 What you should know about Kafka for System Design Interviews](#-what-you-should-know-about-kafka-for-system-design-interviews)
-- [🗝️ Choosing a Partition Key: Real-World Playbook](#️-choosing-a-partition-key-real-world-playbook)
+- [🗝️ Designing Topics and Partition Keys: Real-World Playbook](#️-designing-topics-and-partition-keys-real-world-playbook)
 - [📝 Summary](#-summary)
 - [🎓 Key Takeaways](#-key-takeaways)
 - [📚 Related Concepts](#-related-concepts)
@@ -382,14 +382,41 @@ Kafka topics have a retention policy that determines how long messages are retai
 
 In your interview, you may be asked to design a system that needs to store messages for a longer period of time. In this case, you can configure the retention policy to keep messages for a longer duration. Just be mindful of the impact on storage costs and performance.
 
-## 🗝️ Choosing a Partition Key: Real-World Playbook
+## 🗝️ Designing Topics and Partition Keys: Real-World Playbook
 
-Saying "I'll partition by user ID" is easy. Defending it is the part interviewers probe. This section walks through the questions that actually decide a key, then applies them to the use cases that come up again and again in system design interviews.
+Saying "I'll put events on Kafka, partitioned by user ID" is easy. Defending it is the part interviewers probe. A Kafka design is really two decisions made together:
 
-### 🧭 The Four Questions That Pick the Key
+- **Topics** decide *what travels together*: which events share a log, which consumers read them, and how long they are kept.
+- **Partition keys** decide *how one topic is split*: which events stay in order and which consumer owns which entity.
 
-1. **What must happen in order?** Kafka only orders records *within* a partition, so the key defines your **ordering scope**. Find the entity whose events must never be seen out of sequence — an order, an account, a device — and key by it. If nothing needs ordering, you may not need a key at all.
-2. **Whose state does the consumer mutate?** Keying by the entity a consumer updates means exactly one consumer owns that entity's state at a time. That is what lets a consumer keep a local cache, a running balance or a window aggregate without distributed locks. The key is your **consistency boundary**, not just a load-balancing hint.
+This section covers the questions that settle each decision, then applies both to the use cases that come up again and again in system design interviews.
+
+### 📂 Step 1: Draw the Topic Boundaries
+
+A topic is the unit of everything you configure: retention, compaction, replication, durability settings, access control and partition count are all set per topic. Consumers also subscribe per topic. So one rule and four splitting reasons decide the boundaries.
+
+**The rule: events that must be ordered relative to each other go in the same topic.** Ordering never spans topics, or even partitions. If `OrderPaid` and `OrderShipped` live in two topics, a consumer reading both can see the shipment first. One topic per **entity stream** (all of an order's events), with the event type in the payload or a header, is the default.
+
+**Split into separate topics when any of these differ:**
+
+1. **Consumers.** If most consumers only want a slice of the data (impressions vs clicks), a separate topic saves every consumer from reading and discarding traffic it does not need.
+2. **Retention or compaction.** Audit logs kept for a year and debug logs kept for a day cannot share a topic. Neither can a compacted "latest state" stream and a full event history.
+3. **Throughput or durability.** A firehose of location pings and a trickle of payment events need different partition counts, and payments need `acks=all` with `min.insync.replicas=2` where a lost ping does not matter.
+4. **Key.** A topic has one partitioning scheme. When a second consumer needs the same events grouped differently (by map cell instead of by driver), write them to a new topic with the new key. Never change the producer's key to suit one consumer.
+
+**What not to do: a topic per entity *instance*.** A topic per user, per chat room or per tenant looks tidy but every topic adds partitions, metadata and open files on the brokers. Clusters handle thousands of topics, not millions. Entities belong in *keys*. Topics are for *kinds* of data.
+
+**Support topics come in a few standard shapes.** Add them as needed:
+- `*.retry` and `*.dlq` for failed messages (see [Handling Retries and Errors](#handling-retries-and-errors)).
+- Derived topics for re-keyed or aggregated output.
+- Compacted topics that hold the latest value per key.
+
+A naming convention like `<domain>.<stream>` (`orders.events`, `orders.events.dlq`) keeps these discoverable.
+
+### 🔑 Step 2: The Four Questions That Pick the Key
+
+1. **What must happen in order?** Kafka only orders records *within* a partition, so the key defines your **ordering scope**. Find the entity whose events must never be seen out of sequence (an order, an account, a device) and key by it. If nothing needs ordering, you may not need a key at all.
+2. **Whose state does the consumer mutate?** Keying by the entity a consumer updates means exactly one consumer owns that entity's state at a time. That lets a consumer keep a local cache, a running balance or a window aggregate without distributed locks. The key is your **consistency boundary**, not just a load-balancing hint.
 3. **Is the key well spread?** You want cardinality far above the partition count (millions of users across 64 partitions, not 50 US states) and no single key producing a large share of traffic. A key with skew becomes a hot partition no matter how many brokers you add.
 4. **Is it stable and known at send time?** The producer has to have the key in hand when it sends, and the key must not change over the entity's life. Keying by `order_status` or `assigned_driver` moves the same entity between partitions mid-lifecycle and silently breaks ordering.
 
@@ -397,7 +424,13 @@ The tension is almost always between question 1 and question 3: the narrower you
 
 ```mermaid
 flowchart TD
-    Start["New topic"] --> Q1{"Do related events<br/>need ordering?"}
+    Start["New stream of events"] --> T1{"Must these events be ordered<br/>with an existing stream?"}
+    T1 -->|Yes| Same["Same topic as that stream"]
+    T1 -->|No| T2{"Different consumers, retention,<br/>durability or key?"}
+    T2 -->|Yes| New["New topic"]
+    T2 -->|No| Same
+    Same --> Q1{"Do related events<br/>need ordering?"}
+    New --> Q1
     Q1 -->|No| NullKey["No key<br/>sticky partitioner, max spread"]
     Q1 -->|Yes| Q2["Key = narrowest entity<br/>that owns the invariant"]
     Q2 --> Q3{"Any single key a large<br/>share of traffic?"}
@@ -413,55 +446,113 @@ flowchart TD
     style Q3 fill:#FFB6C1
 ```
 
-### 🛒 E-commerce Order Lifecycle — key by `order_id`
+Every example below follows the same shape: the workload, then the **topics** (with why each one exists), then the **key** for each topic and why the obvious alternatives fail.
+
+### 🛒 E-commerce Order Lifecycle
 
 **Workload.** `OrderPlaced → PaymentAuthorized → Packed → Shipped → Delivered`, consumed by fulfilment, email and analytics services.
 
-**Key: `order_id`.** The invariant is "a single order's state machine advances in order" — fulfilment must never see `Shipped` before `PaymentAuthorized`. Order IDs are high cardinality and every order generates a handful of events, so spread is excellent.
+| Topic | Key | Holds | Why it is its own topic |
+|---|---|---|---|
+| `orders.events` | `order_id` | Every lifecycle event, with the type in a header | One entity stream: all of an order's events must be read in order, so they share a topic |
+| `orders.events.retry` / `.dlq` | `order_id` | Events fulfilment failed to process | Failed messages are retried without blocking the main stream |
 
-**Why not the alternatives?**
-- `customer_id` also preserves per-order ordering (an order belongs to one customer) but widens the ordering scope for no benefit, and a B2B customer placing 50,000 orders a day becomes a hot key.
-- `order_status` is the classic wrong answer: every `Shipped` event lands on one partition and the same order hops partitions as it progresses — ordering is lost *and* load is skewed.
+**Why one topic and not `order-placed`, `order-shipped`, ...?** A topic per event type is the most common mistake here. Fulfilment would subscribe to five topics with no ordering between them and could act on `Shipped` before `PaymentAuthorized` for the same order. Fulfilment, email and analytics each run their **own consumer group** on the single topic, so each reads everything at its own pace and email cannot slow fulfilment down. Seven-day retention is enough: the orders database is the source of truth, and Kafka is the delivery mechanism.
 
-> Widen to `customer_id` only when there is a genuinely cross-order invariant, such as "a customer may have at most one open return" or per-customer credit limits.
+**Key: `order_id`.** The invariant is "a single order's state machine advances in order." Order IDs are high cardinality and every order generates a handful of events, so spread is excellent.
 
-### 💳 Payments and Ledgers — key by `account_id`
+- `customer_id` also preserves per-order ordering, since an order belongs to one customer. But it widens the ordering scope for no benefit, and a B2B customer placing 50,000 orders a day becomes a hot key.
+- `order_status` is the classic wrong answer. Every `Shipped` event lands on one partition, and the same order hops partitions as it progresses, so ordering is lost *and* load is skewed.
 
-**Workload.** Debits and credits applied to account balances, often by a consumer that keeps balances in a local store.
+> Widen to `customer_id` only when there is a genuinely cross-order invariant, such as "a customer may have at most one open return" or per-customer credit limits. And note the retry topic trades away ordering: while order 42's `Packed` event sits in retry, its `Shipped` event can overtake it. If that matters, the consumer must park later events for that order until the retry clears.
 
-**Key: `account_id`.** Two concurrent withdrawals against one account must be applied serially or you overdraw it. Keying by account means one consumer owns that account and processes its events one at a time — no row locks or distributed coordination.
+### 💳 Payments and Ledgers
+
+**Workload.** Debits and credits applied to account balances, often by a consumer that keeps balances in a local store, plus transfers that move money between two accounts.
+
+| Topic | Key | Holds | Why it is its own topic |
+|---|---|---|---|
+| `ledger.commands` | `account_id` | `DebitRequested`, `CreditRequested` | Requests that must be applied to one account strictly in order |
+| `ledger.entries` | `account_id` | `Debited`, `Credited`, `DebitRejected` | Facts that happened. Read by statements, fraud and reconciliation, and kept much longer than commands |
+| `transfers.events` | `transfer_id` | `TransferStarted`, `TransferCompleted`, `TransferFailed` | The saga's own progress, ordered per transfer rather than per account |
+
+**Why split commands from entries?** They have different readers and lifetimes. Only the ledger consumer reads commands, and once applied they are worthless. Entries are the audit trail, read by many teams and retained for months or moved to tiered storage. All three topics run with replication factor 3, `acks=all` and `min.insync.replicas=2` because losing a money event is unacceptable. That setting is per topic, which is another reason not to share a topic with low-value traffic.
+
+**Key for the ledger topics: `account_id`.** Two concurrent withdrawals against one account must be applied serially or you overdraw it. Keying by account means one consumer owns that account and processes its events one at a time, without row locks or distributed coordination.
 
 **The tempting mistake is `transaction_id`.** It spreads perfectly, but two transactions against the same account land on different partitions, get processed by different consumers in parallel, and race on the balance.
 
-**What about a transfer between two accounts?** It touches two keys, so it cannot live on one partition. Model it as a saga: publish `DebitRequested` keyed by the source account; when that consumer succeeds it emits `CreditRequested` keyed by the destination account. Each step is ordered within its own account, and each carries the transfer ID as an idempotency key so a replay after a crash cannot debit twice.
+**What about a transfer between two accounts?** It touches two keys, so it cannot live on one partition. Model it as a saga:
+1. Publish `DebitRequested` keyed by the source account.
+2. When that consumer succeeds, it emits `CreditRequested` keyed by the destination account.
+3. The saga coordinator tracks each transfer's progress on `transfers.events`, keyed by `transfer_id`.
 
-**Hot accounts.** A large merchant can receive thousands of credits a second onto one `account_id`. Incoming credits only ever add to the balance, so they can be split: give the merchant several sub-ledger accounts (`merchant-42:0` .. `merchant-42:7`) that each take a share of credits, and sum them when reporting the balance. Debits, which must check the balance, stay on a single account.
+Each step is ordered within its own account, and each carries the transfer ID as an idempotency key so a replay after a crash cannot debit twice.
 
-### 🚗 Ride-sharing Location Pings — key by `driver_id`
+**Hot accounts.** A large merchant can receive thousands of credits a second onto one `account_id`. Credits only ever add to the balance, so they can be split. Give the merchant several sub-ledger accounts (`merchant-42:0` .. `merchant-42:7`) that each take a share of credits, and sum them when reporting the balance. Debits must check the balance, so they stay on a single account.
 
-**Workload.** Every active driver sends a GPS ping every few seconds, hundreds of thousands of pings per second at peak.
+### 🚗 Ride-sharing Location Pings
 
-**Key: `driver_id`.** You need each driver's pings in order so the latest position wins and speed or ETA calculations do not jump backwards. Drivers are numerous and each sends at roughly the same rate, so the distribution is naturally even.
+**Workload.** Every active driver sends a GPS ping every few seconds, hundreds of thousands of pings per second at peak. The location service needs each driver's latest position, and the matching service needs "which drivers are near this rider?"
 
-**Why not the alternatives?**
-- `city_id` is the hot-partition trap: New York produces orders of magnitude more pings than a small town, and your parallelism is capped at the number of cities.
+```mermaid
+flowchart LR
+    App["Driver app"] -->|"key driver_id"| Raw[("driver.locations<br/>retention 1h")]
+    Raw --> Rekey["Stream processor<br/>re-key by geohash"]
+    Rekey -->|"key geohash"| Cell[("driver.locations.by-cell<br/>retention 1h")]
+    Rekey -->|"key driver_id"| Latest[("driver.latest-location<br/>compacted")]
+    Cell --> Match["Matching service"]
+    Latest --> Loc["Location service"]
+
+    style Raw fill:#e1f5ff
+    style Cell fill:#e1f5ff
+    style Latest fill:#e1f5ff
+    style Rekey fill:#FFE4B5
+```
+
+| Topic | Key | Holds | Why it is its own topic |
+|---|---|---|---|
+| `driver.locations` | `driver_id` | Raw pings | The firehose. Many partitions, short retention, `acks=1`, because a lost ping is replaced seconds later |
+| `driver.locations.by-cell` | geohash | The same pings, re-keyed | Matching needs pings grouped by map cell, a different key, so it needs a different topic |
+| `driver.latest-location` | `driver_id` | Latest position per driver | Compacted, so it holds one record per driver. A restarting service rebuilds its state from it in seconds instead of replaying the firehose |
+
+**Why short retention?** A location from an hour ago is useless, and at this volume a seven-day default would store terabytes of noise. Retention follows how long the data stays *useful*, not a default.
+
+**Key for the raw topic: `driver_id`.** Each driver's pings must stay in order so the latest position wins and speed or ETA calculations do not jump backwards. Drivers are numerous and each sends at roughly the same rate, so the distribution is naturally even.
+
+- `city_id` is the hot-partition trap. New York produces orders of magnitude more pings than a small town, and your parallelism is capped at the number of cities.
 - `ride_id` does not exist while a driver is idle, so it fails the "known at send time" test.
 
-**Different consumers, different keys.** The matching service actually wants pings grouped by *geo cell*, not by driver. Do not change the producer's key to suit one consumer — have a stream processor read the `driver_id`-keyed topic and **re-key** it into a second topic keyed by geohash. Kafka Streams calls this a repartition topic; [Flink](Flink.md) does the same with `keyBy`. One event, two topics, each keyed for its own consumer.
+**Re-keying is a pattern, not a hack.** A stream processor reads the `driver_id`-keyed topic and writes a second topic keyed by geohash. Kafka Streams calls this a repartition topic, and [Flink](Flink.md) does the same with `keyBy`. One event, two topics, each keyed for its own consumer.
 
-### 💬 Chat and Messaging — key by `conversation_id`
+### 💬 Chat and Messaging
 
-**Workload.** Messages in one-to-one chats and group channels, consumed by persistence and fan-out services.
+**Workload.** Messages in one-to-one chats and group channels, consumed by persistence and delivery services, plus read receipts and typing indicators.
 
-**Key: `conversation_id`.** Everyone in a conversation must see messages in the same order. A conversation is the natural ordering scope — you never need global order across chats.
+| Topic | Key | Holds | Why it is its own topic |
+|---|---|---|---|
+| `chat.messages` | `conversation_id` | Sent messages, edits, deletes | Durable, ordered per conversation, read by persistence and delivery |
+| `chat.receipts` | `conversation_id` | Delivered and read receipts | Several times the volume of messages but low value. Shorter retention and `acks=1` |
 
-**But what about a channel with a million members?** That feels like a hot key, but look at what flows through the topic: *messages sent*, not deliveries. Even a very busy channel produces a few hundred messages a second because humans are typing them, which one partition handles easily. The million-member fan-out happens downstream in the delivery service. Heat comes from write volume per key, not from how many people eventually read it.
+**Why not a topic per chat room?** Millions of conversations would mean millions of topics, far beyond what a cluster can hold. Conversations are entities, so they go in the key. **Why split receipts out?** Every message generates a receipt per recipient. Mixing them in would make the persistence consumer wade through mostly receipts, and they deserve weaker durability. Typing indicators are usually not put on Kafka at all: they are ephemeral, so they travel over the WebSocket or a pub/sub layer like [Redis](Redis.md).
 
-### 📊 Ad Click Aggregation — key by `ad_id`, salt the hot ones
+**Key: `conversation_id`.** Everyone in a conversation must see messages in the same order. A conversation is the natural ordering scope, and you never need global order across chats.
 
-**Workload.** Click events aggregated into per-ad counts every minute, as in [Ad Click Aggregator](../ProblemBreakdowns/AdClickAggregator.md).
+**But what about a channel with a million members?** That feels like a hot key, but look at what flows through the topic: *messages sent*, not deliveries. Even a very busy channel produces a few hundred messages a second because humans are typing them, and one partition handles that easily. The million-member fan-out happens downstream in the delivery service. Heat comes from write volume per key, not from how many people eventually read it.
 
-**Key: `ad_id`.** Grouping by ad lets one consumer own the running count for each ad. But ordering does not actually matter here — counting is commutative, so `click 1 + click 2` equals `click 2 + click 1`. That is what makes the hot-key fix cheap.
+### 📊 Ad Click Aggregation
+
+**Workload.** Ad impressions and clicks aggregated into per-ad counts every minute, as in [Ad Click Aggregator](../ProblemBreakdowns/AdClickAggregator.md).
+
+| Topic | Key | Holds | Why it is its own topic |
+|---|---|---|---|
+| `ads.impressions` | `ad_id` (salted) | Every ad shown | Often 100x the volume of clicks. Sized and retained separately so it cannot starve click processing |
+| `ads.clicks` | `ad_id` (salted) | Every click | Billing data. Higher durability and longer retention so counts can be recomputed during a dispute |
+| `ads.click-counts.1m` | `ad_id` | Per-ad, per-minute totals | Derived output for dashboards. Tiny compared with the raw stream |
+
+**Why keep clicks and impressions apart?** Different volume, different value, different readers. Click-through rate needs both, so a stream processor joins the two topics on `ad_id`, which works because both use the same key and the same partition count (*co-partitioning*). **Why keep the raw clicks once you have counts?** Retaining raw clicks for a few days lets you rerun the aggregation from an old offset after a bug, which is exactly the replay that Kafka's log design makes cheap.
+
+**Key: `ad_id`.** Grouping by ad lets one consumer own the running count for each ad. Ordering does not actually matter here: counting is commutative, so `click 1 + click 2` equals `click 2 + click 1`. That is what makes the hot-key fix cheap.
 
 **Salt only the hot keys.** When a viral ad launches, append a bucket number for that ad only, spreading it across *k* partitions, and let the aggregator sum the *k* partial counts:
 
@@ -477,18 +568,26 @@ def click_key(ad_id: str) -> bytes:
         return f"{ad_id}#{random.randrange(SALT_BUCKETS)}".encode()
     return ad_id.encode()
 
-producer.send("ad-clicks", key=click_key("nike-lebron-launch"), value=b"{...}")
+producer.send("ads.clicks", key=click_key("nike-lebron-launch"), value=b"{...}")
 ```
 
-Salting everything doubles the merge work for the 99% of ads that were never hot, so salt selectively. And note this only works because the operation is splittable — compare the exchange example next.
+Salting everything doubles the merge work for the 99% of ads that were never hot, so salt selectively. This only works because the operation is splittable. Compare the exchange example next.
 
-### 📈 Stock Exchange Order Book — key by `symbol`, dedicate the hot ones
+### 📈 Stock Exchange Order Book
 
-**Workload.** Buy and sell orders fed to a matching engine.
+**Workload.** Buy and sell orders fed to a matching engine, which publishes trades and market data.
+
+| Topic | Key | Holds | Why it is its own topic |
+|---|---|---|---|
+| `orders.inbound` | `symbol` | New, amend and cancel requests | The sequenced input to matching. Its partition order *is* price-time priority |
+| `trades.executed` | `symbol` | Fills produced by the matching engine | Facts for clearing, settlement and user notifications. Durable and retained long |
+| `marketdata.ticks` | `symbol` | Price and order-book updates | Huge fan-out to many readers, short retention. Isolated so slow readers cannot affect trade processing |
+
+**Why separate input from output?** `orders.inbound` holds *requests* that may be rejected. `trades.executed` holds *facts* that downstream systems must never miss. Keeping them apart means settlement never has to filter rejected orders, and the matching engine can be rebuilt by replaying `orders.inbound` from its last snapshot.
 
 **Key: `symbol`.** Price-time priority means orders for a symbol must be matched in exactly the order they arrived. The matching engine holds the order book in memory, so one consumer must own each symbol.
 
-**The hot key here cannot be salted.** NVDA or TSLA may carry a huge share of volume, but splitting a symbol across partitions splits its order book, and two matching engines would each match against half the book — which is simply wrong. When ordering is non-negotiable you **scale the key vertically**: give the hottest symbols dedicated partitions (so they never share with other symbols) and run their consumers on the fastest hardware.
+**The hot key here cannot be salted.** NVDA or TSLA may carry a huge share of volume, but splitting a symbol across partitions splits its order book, and two matching engines would each match against half the book, which is simply wrong. When ordering is non-negotiable you **scale the key vertically**. Give the hottest symbols dedicated partitions, so they never share with other symbols, and run their consumers on the fastest hardware.
 
 A custom partitioner pins the hot symbols and hashes the rest over the remaining partitions:
 
@@ -510,71 +609,111 @@ producer = KafkaProducer(
 )
 ```
 
-> The general rule: if the per-key work is **commutative** (counts, sums, max), salt it. If it is **order-dependent** (state machines, matching, balances), isolate it instead.
+> The general rule: if the per-key work is **commutative** (counts, sums, max), salt it. If it is **order-dependent** (state machines, matching, balances), isolate it instead. In practice, the lowest-latency stock exchanges use purpose-built sequencers rather than Kafka, but this design fits brokerages and crypto exchanges, and the reasoning is what interviewers want to hear.
 
-### 🗃️ Change Data Capture (CDC) — key by the row's primary key
+### 🗃️ Change Data Capture (CDC)
 
-**Workload.** Every insert, update and delete in a database table streamed to Kafka (for example by Debezium) to feed search indexes, caches or a data lake.
+**Workload.** Every insert, update and delete in a database streamed to Kafka (for example by Debezium) to feed search indexes, caches or a data lake.
+
+| Topic | Key | Holds | Why it is its own topic |
+|---|---|---|---|
+| `shop.public.products` | `product_id` | Row changes for the `products` table | Debezium's default is one topic per table, because each table has its own schema and its own readers |
+| `shop.public.inventory` | `sku` | Row changes for the `inventory` table | Search indexing needs products. The warehouse system needs inventory. Neither reads the other |
+| `orders.events` (via outbox) | `order_id` | Business events written to an `outbox` table | Used when changes across several tables must arrive together and in order |
+
+**Why one topic per table?** Each table has its own schema, so consumers pick only what they need, and compaction works per table. **The catch is that ordering does not span topics.** An order header and its line items, written in one database transaction, arrive on two topics with no guarantee of which comes first. When a consumer needs the whole change, use the **outbox pattern**. In the same transaction, insert one event into an `outbox` table, and stream that table to a single topic per aggregate. The topic then reflects business events, not raw table rows.
 
 **Key: the table's primary key.** Updates to one row must apply in commit order, or a stale `UPDATE` overwrites a newer one in [Elasticsearch](Elasticsearch.md). Debezium keys by primary key by default for exactly this reason.
 
-**Bonus: log compaction.** With `cleanup.policy=compact`, Kafka keeps only the latest record per key, so the topic becomes a complete, replayable snapshot of the table — a new consumer can rebuild its index from offset zero without the topic growing forever. Compaction is keyed, which is one more reason the key must be the row identity and not something like `tenant_id`.
+**Bonus: log compaction.** With `cleanup.policy=compact`, Kafka keeps only the latest record per key, so the topic becomes a complete, replayable snapshot of the table. A new consumer can rebuild its index from offset zero without the topic growing forever. Compaction is keyed, which is one more reason the key must be the row identity and not something like `tenant_id`.
 
-### 🏢 Multi-tenant SaaS Events — key by `tenant_id:entity_id`, not `tenant_id`
+### 🏢 Multi-tenant SaaS Events
 
-**Workload.** Events from thousands of customer organisations sharing one topic.
+**Workload.** Events from thousands of customer organisations, such as invoices and tickets, in one platform.
 
-**The trap: `tenant_id`.** It is attractive because consumers can keep per-tenant state, but tenant sizes follow a power law — one enterprise customer can be bigger than your next thousand combined, and that whale pins one partition.
+| Topic | Key | Holds | Why it is its own topic |
+|---|---|---|---|
+| `invoices.events` | `tenant_id:invoice_id` | Invoice events for all tenants | One topic per *kind* of data, shared by every tenant |
+| `tickets.events` | `tenant_id:ticket_id` | Ticket events for all tenants | Different consumers and schema from invoices |
+| `eu.invoices.events` | `tenant_id:invoice_id` | Invoices for EU-resident tenants | Data-residency rules force this data onto an EU cluster. Compliance, not throughput, draws this boundary |
 
-**Key: a compound key, `tenant_id:entity_id`** (for example `acme:invoice-881`). Ask what really needs ordering: almost always it is a single document, ticket or invoice, not the entire tenant. The compound key keeps per-entity order, spreads the whale's traffic, and still lets consumers find the tenant by parsing the key. If a few tenants genuinely need tenant-wide ordering, give them their own topic.
+**Why not a topic per tenant?** It sounds like clean isolation, but thousands of tenants means thousands of topics, most nearly empty, each with its own partitions to manage. Every consumer would also have to subscribe to a constantly changing list. Use a topic per data kind and put the tenant in the key and a header. Give a separate topic only to tenants who need different *configuration*, such as residency, retention or a dedicated SLA.
 
-### 📦 Inventory During a Flash Sale — key by `sku`, then split the stock
+**The key trap: `tenant_id` alone.** It is attractive because consumers can keep per-tenant state, but tenant sizes follow a power law. One enterprise customer can be bigger than your next thousand combined, and that whale pins one partition.
 
-**Workload.** Reservation requests decrementing stock for a product, where overselling is unacceptable.
+**Key: a compound key, `tenant_id:entity_id`** (for example `acme:invoice-881`). Ask what really needs ordering: almost always it is a single document, ticket or invoice, not the entire tenant. The compound key keeps per-entity order, spreads the whale's traffic, and still lets consumers find the tenant by parsing the key.
+
+### 📦 Inventory During a Flash Sale
+
+**Workload.** Reservation requests decrementing stock for a product, where overselling is unacceptable. Checkout needs to hear back about each reservation.
+
+| Topic | Key | Holds | Why it is its own topic |
+|---|---|---|---|
+| `inventory.reservations` | `sku`, or `sku:bucket` when hot | Reserve and release requests | Requests grouped by the stock counter they decrement |
+| `inventory.reservation-results` | `order_id` | `Reserved` or `SoldOut`, per request | Checkout consumes results by order, a different key, so results need their own topic |
+
+**Why a separate results topic?** The two topics are keyed for different owners. The inventory consumer owns SKUs. The checkout consumer owns orders. Writing results back onto the requests topic would key them by SKU, so checkout would have to read every SKU's traffic to find its own order's result.
 
 **Key: `sku`.** One consumer per SKU serialises decrements, so two buyers can never both take the last unit.
 
-**When one SKU goes hot** (a console launch, concert merch), you cannot salt the requests alone — two consumers decrementing the same counter would oversell. Instead **split the invariant itself**: divide 10,000 units into 10 buckets of 1,000, key requests by `sku:bucket`, and let each bucket's consumer sell its own allocation. Each bucket is an independent counter, so splitting is now safe. When a bucket empties, route its traffic to the buckets with stock left. This is the same idea as salting — it only works once you make the work splittable.
+**When one SKU goes hot** (a console launch, concert merch), you cannot salt the requests alone, because two consumers decrementing the same counter would oversell. Instead **split the invariant itself**. Divide 10,000 units into 10 buckets of 1,000, key requests by `sku:bucket`, and let each bucket's consumer sell its own allocation. Each bucket is an independent counter, so splitting is now safe. When a bucket empties, route its traffic to the buckets with stock left. This is the same idea as salting, and it only works once you make the work splittable.
 
-### 🌐 Clickstream Sessionisation — key by `user_id` (or device ID)
+### 🌐 Clickstream Sessionisation
 
 **Workload.** Page views and clicks grouped into sessions ("30 minutes of inactivity ends a session") for analytics.
 
-**Key: `user_id`, or an anonymous device ID for logged-out users.** Sessionising requires seeing all of one user's events, in order, in one place. `session_id` sounds right but sessions are exactly what you are trying to *compute*, so the producer does not have it yet.
+| Topic | Key | Holds | Why it is its own topic |
+|---|---|---|---|
+| `clickstream.raw` | `user_id` or device ID | Every page view and click from real users | High volume. Retained a few days so sessions can be recomputed after a logic change |
+| `clickstream.bots` | device ID | Traffic flagged as automated | Quarantined so bots cannot heat the main topic's partitions, but still available for fraud analysis |
+| `clickstream.sessions` | `user_id` | One record per completed session | Derived output, far smaller. Kept much longer for analytics |
 
-**Hot keys come from bots.** A scraper firing thousands of requests a second under one device ID will heat a partition. Filter or rate-limit known bots before they reach the topic, or route them to a separate topic, rather than reshaping the key for everyone.
+**Why quarantine bots in their own topic?** Bot detection runs at the edge, before events reach Kafka, and the two streams have different readers: analytics wants humans, fraud wants bots. Putting bots in their own topic keeps one scraper's flood off the partitions real users share.
 
-### 🪵 Logs and Metrics — no key at all
+**Key: `user_id`, or an anonymous device ID for logged-out users.** Sessionising requires seeing all of one user's events, in order, in one place. `session_id` sounds right, but sessions are exactly what you are trying to *compute*, so the producer does not have it yet.
 
-**Workload.** Application logs or metrics shipped to a search index or time-series store.
+### 🪵 Logs and Metrics
 
-**Key: none.** Each line is independent, the sink indexes by timestamp, and nobody cares which order two log lines from different pods arrive in. Sending without a key lets the sticky partitioner build large batches and spread load evenly — the best possible throughput.
+**Workload.** Application logs, access logs, audit logs and metrics shipped to a search index or time-series store.
 
-> Do not reach for a key just because a field exists. Keying by `host` here would make every chatty host a hot spot for no ordering benefit. A key is a cost you pay for ordering — only pay it when you need it.
+| Topic | Key | Holds | Why it is its own topic |
+|---|---|---|---|
+| `logs.app` | None | Application and debug logs | Huge and low value. Short retention, `acks=1`, `lz4` compression |
+| `logs.access` | None | HTTP access logs | Needed by security tooling and traffic analytics, which do not want debug noise |
+| `logs.audit` | None | Who-did-what records for compliance | Must not be lost and must be kept for a long time. `acks=all`, long retention, restricted read access |
+| `metrics.raw` | Series ID | Metric samples | A different schema and sink, the time-series database |
+
+**Why split by log type rather than by service?** The real differences are durability, retention and who may read them, and all three are per-topic settings. An audit record and a debug line from the same service need very different treatment. A topic per service would mix them.
+
+**Key: none for logs.** Each line is independent, the sink indexes by timestamp, and nobody cares which order two log lines from different pods arrive in. Sending without a key lets the sticky partitioner build large batches and spread load evenly, which gives the best possible throughput. **Metrics are the exception:** keying by series ID (metric name plus labels) keeps one series' samples together, which lets a downstream aggregator pre-compute rollups per series.
+
+> Do not reach for a key just because a field exists. Keying logs by `host` would make every chatty host a hot spot for no ordering benefit. A key is a cost you pay for ordering, so only pay it when you need it.
 
 ### 🧾 Cheat Sheet
 
-| Use case | Partition key | Invariant it protects | Hot-key risk | Mitigation |
+| Use case | Main topic | Partition key | Invariant the key protects | Other topics, and why |
 |---|---|---|---|---|
-| Order lifecycle | `order_id` | One order's state machine | Low | — |
-| Payments / ledger | `account_id` | Serial balance updates | Medium (merchant accounts) | Sub-ledgers per merchant, saga for transfers |
-| Driver locations | `driver_id` | Latest position wins | Low | Re-key to geohash for matching |
-| Chat | `conversation_id` | Same message order for everyone | Low (writes are human-paced) | Fan-out downstream |
-| Ad clicks | `ad_id` | One owner per running count | High (viral ads) | Salt hot keys, merge partial counts |
-| Order book | `symbol` | Price-time priority | High (popular stocks) | Dedicated partitions, no salting |
-| CDC | Primary key | Row updates in commit order | Low | Log compaction |
-| Multi-tenant SaaS | `tenant_id:entity_id` | Per-entity order | High if `tenant_id` alone | Compound key, own topic for whales |
-| Flash-sale inventory | `sku` → `sku:bucket` | No overselling | High (launch SKUs) | Split stock into buckets |
-| Clickstream | `user_id` / device ID | Complete sessions | Medium (bots) | Filter bots upstream |
-| Logs / metrics | None | Nothing | None | Sticky partitioner |
+| Order lifecycle | `orders.events` | `order_id` | One order's state machine | Retry and DLQ for failures. *Not* a topic per event type |
+| Payments / ledger | `ledger.commands` | `account_id` | Serial balance updates | `ledger.entries` for the long-lived audit trail, `transfers.events` for saga state |
+| Driver locations | `driver.locations` | `driver_id` | Latest position wins | Re-keyed `by-cell` for matching, compacted `latest-location` for fast restarts |
+| Chat | `chat.messages` | `conversation_id` | Same message order for everyone | `chat.receipts` for high-volume, low-value receipts |
+| Ad clicks | `ads.clicks` | `ad_id` (salted when hot) | One owner per running count | `ads.impressions` for 100x volume, `click-counts` for derived output |
+| Order book | `orders.inbound` | `symbol` | Price-time priority | `trades.executed` for facts, `marketdata.ticks` for fan-out |
+| CDC | One per table | Primary key | Row updates in commit order | Outbox topic when changes span tables |
+| Multi-tenant SaaS | `<entity>.events` | `tenant_id:entity_id` | Per-entity order | Regional topics only when residency or configuration differs |
+| Flash-sale inventory | `inventory.reservations` | `sku` → `sku:bucket` | No overselling | `reservation-results` keyed by `order_id` for checkout |
+| Clickstream | `clickstream.raw` | `user_id` / device ID | Complete sessions | `bots` to quarantine skew, `sessions` for derived output |
+| Logs / metrics | `logs.<type>` | None (series ID for metrics) | Nothing | Split by durability and retention, not by service |
 
 ### ⚠️ Gotchas Interviewers Like to Probe
 
-- **Adding partitions remaps keys.** `hash(key) % N` changes when `N` changes, so after you go from 12 to 24 partitions, new events for a key may land on a different partition than its old events — and two consumers could briefly process the same entity out of order. Kafka never moves existing data. Over-provision partitions at creation time (enough for a couple of years of growth) rather than planning to add them later; if you must, drain the topic or migrate to a new topic.
+- **Ordering never crosses topics.** If two event types must be processed in order relative to each other, they belong in one topic with one key. Splitting them for neatness is the most common topic-design mistake.
+- **Joins need co-partitioning.** Joining two topics in a stream processor is only straightforward when both use the same key *and* the same partition count, so that matching records sit in partition *i* of each. Plan this when you create the topics.
+- **Adding partitions remaps keys.** `hash(key) % N` changes when `N` changes. After you go from 12 to 24 partitions, new events for a key may land on a different partition than its old events, and two consumers could briefly process the same entity out of order. Kafka never moves existing data. Over-provision partitions at creation time (enough for a couple of years of growth) rather than planning to add them later. If you must grow, drain the topic or migrate to a new one.
 - **Sizing the partition count.** A practical starting point is `partitions ≥ max(target throughput ÷ per-partition producer throughput, target throughput ÷ per-consumer throughput)`. Since one partition feeds at most one consumer in a group, the partition count is also your ceiling on consumer parallelism.
 - **Ordering also needs a well-behaved producer.** A key keeps related records on one partition, but retries can still reorder in-flight batches unless the producer is idempotent (`enable_idempotence=True`, which keeps order with up to five in-flight requests).
-- **Null key ≠ empty string.** An empty-string key is a real key — every such record hashes to the same partition. Make sure "no key" is actually `None`.
-- **One key, one consumer bottleneck.** Even perfect hashing cannot split a single key. If your slowest-to-process key needs more throughput than one consumer thread provides, no amount of partitions helps — you need salting, isolation or a smaller ordering scope.
+- **Null key ≠ empty string.** An empty-string key is a real key, so every such record hashes to the same partition. Make sure "no key" is actually `None`.
+- **One key, one consumer bottleneck.** Even perfect hashing cannot split a single key. If your busiest key needs more throughput than one consumer thread provides, adding partitions does not help. You need salting, isolation or a smaller ordering scope.
 
 ## 📝 Summary
 
@@ -591,6 +730,7 @@ Answer the question below to find your gaps.
 - **Partitions are the unit of parallelism and ordering.** A topic is a logical grouping; partitions are the physical, append-only logs. Ordering is only guaranteed *within* a partition, so choosing a good partition key is the single most important decision — it's where your scaling conversation should start.
 - **Consumer groups distribute work without double-processing.** Each partition is assigned to exactly one consumer in a group, and consumers track progress via committed offsets so they can resume after a crash or rebalance.
 - **Durability comes from replication + acks.** Each partition is replicated (factor of 3 is common: 1 leader + 2 followers), and `acks=all` only acknowledges once all in-sync replicas (ISR) have the message — the strongest guarantee. Kafka is "always available, sometimes consistent."
+- **Topics group what must travel together; keys split it.** Events that must be ordered relative to each other share one topic, because ordering never crosses topics. Split topics when consumers, retention, durability or the needed key differ, and keep entities in keys, never one topic per user or tenant.
 - **Pick the narrowest key that protects your invariant.** The key is the ordering scope and the consistency boundary: `order_id` for an order's state machine, `account_id` for balances, `conversation_id` for chat, no key for logs. Keys must be high-cardinality, stable, and known at send time — and adding partitions later remaps them.
 - **Watch out for hot partitions.** A skewed key (e.g. a viral ad) overwhelms one partition; mitigate with no-key default partitioning, random salting, compound keys, or producer back pressure. Salt only when the per-key work is commutative (counts); for order-dependent work (order books, balances) isolate the hot key on its own partition instead.
 - **Kafka delivers at-least-once by default.** A consumer that crashes after processing but before committing will reprocess — keep consumer work small, commit carefully, and reach for idempotent producers + transactions if you need exactly-once.
