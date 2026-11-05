@@ -568,10 +568,10 @@ const PF_PROJECTS = [
     meta: 'Python · github ↗',
   },
   {
-    name: 'YTRecommender',
-    href: 'https://github.com/cartmancodes/YTRecommender',
-    blurb: 'Find, filter, and rank quality YouTube videos by views, reactions, and engagement.',
-    meta: 'Python · github ↗',
+    name: 'Octet',
+    href: 'https://github.com/cartmancodes/octet',
+    blurb: 'A native terminal workspace for the Claude Code and Codex CLIs — every permission request in front of you, and sessions you can pick up from your phone.',
+    meta: 'Rust · github ↗',
   },
 ];
 
