@@ -284,6 +284,8 @@ body.portfolio a { text-decoration-color: currentColor; text-decoration-thicknes
   background: var(--paper); border: var(--cut); border-radius: 100px;
   padding: 8px 11px;
 }
+/* the input asks for the full width, so pin the icon or it is squeezed off-square */
+.search svg { flex: none; }
 .search input { border: 0; outline: 0; width: 100%; font: 400 14px var(--sans); color: var(--ink); background: none; }
 .search kbd {
   font-family: var(--mono); font-size: 11px; color: var(--mut);
@@ -1382,4 +1384,58 @@ body.portfolio .skip { background: var(--acc); color: #0E1A2B; }
   body.portfolio .terminal-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   body.portfolio .terminal-nav button span { font-size: 13px; }
   body.portfolio .terminal-title { padding-inline: 12px; }
+}
+
+/* Fit the window. The two-column layout was drawn from fixed pixel heights (a
+   661px terminal inside a 740px main), so it only suited a window about 1100px
+   tall: shorter ones pushed the command input below the fold, taller ones left
+   a dead band under the footer where the grid backdrop stopped. The shell now
+   always spans the window, the chrome scales with its height, and the terminal
+   takes exactly what is left. Each --pf-* length is both applied and
+   subtracted, so the sum stays exact; tools/layout.test.mjs holds it to that. */
+body.portfolio { min-height: 100vh; min-height: 100dvh; }
+body.portfolio .site-shell { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+body.portfolio main { flex: 1 0 auto; min-height: 0; align-content: center; }
+body.portfolio .character-fit { display: flex; flex-direction: column; width: 100%; }
+@media (min-width: 901px) {
+  body.portfolio {
+    --pf-header: clamp(72px, 9.8vh, 106px);
+    --pf-top: clamp(28px, 4.8vh, 52px);
+    --pf-bottom: clamp(20px, 4vh, 44px);
+    --pf-note-gap: 15px;
+    --pf-note: 26px;
+    --pf-footer: clamp(48px, 6.6vh, 72px);
+    --pf-terminal: clamp(440px, 100dvh - var(--pf-header) - var(--pf-top) - var(--pf-bottom)
+      - var(--pf-note-gap) - var(--pf-note) - var(--pf-footer), 820px);
+  }
+  body.portfolio .header { height: var(--pf-header); }
+  body.portfolio main { padding: var(--pf-top) 0 var(--pf-bottom); }
+  body.portfolio .terminal { height: var(--pf-terminal); }
+  body.portfolio .terminal-note { margin-top: var(--pf-note-gap); min-height: var(--pf-note); }
+  body.portfolio footer { min-height: var(--pf-footer); padding-block: 0; align-items: center; }
+  body.portfolio .intro h1 {
+    font-size: clamp(34px, min(3.5vw, 6vh), 54px);
+    margin: clamp(14px, 2.2vh, 24px) 0 clamp(8px, 1.4vh, 15px);
+  }
+  body.portfolio .intro-copy { margin-top: clamp(10px, 1.9vh, 20px); }
+  body.portfolio .social-links { margin-top: clamp(10px, 2vh, 21px); padding-top: clamp(12px, 2.1vh, 23px); }
+  /* Cartman takes the height left beside the terminal. The stage is a size
+     container, so the frame is sized from both of its dimensions at once and
+     the 3:2 sprite is scaled, never stretched. 64px holds the speech bubble's
+     overhang and the caption line. */
+  body.portfolio .character-stage { container-type: size; min-height: 204px; margin-top: clamp(14px, 2.8vh, 30px); }
+  body.portfolio .character-fit { container: pf-fit / inline-size; width: min(100cqw, (100cqh - 64px) * 1.5); }
+  /* A frame narrower than the bubble: hang the bubble off the frame's right
+     edge on one line instead of wrapping it into a tall block over the copy. */
+  @container pf-fit (max-width: 344px) {
+    body.portfolio .speech { align-self: flex-start; width: max-content; max-width: 290px; margin-inline: 36px 0; }
+    body.portfolio .scene-caption { white-space: nowrap; }
+    body.portfolio .caption-code { display: none; }
+  }
+}
+@media (min-width: 901px) and (pointer: coarse) {
+  body.portfolio { --pf-note: 44px; }
+}
+@media (min-width: 1450px) {
+  body.portfolio { --pf-top: clamp(28px, 6vh, 65px); }
 }
