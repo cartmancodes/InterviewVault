@@ -45,7 +45,10 @@ async function at(route, { width, height, theme = 'dark', touch = false }, run) 
 const measure = page => page.evaluate(() => {
   const box = sel => { const r = document.querySelector(sel).getBoundingClientRect(); return { top: r.top + scrollY, bottom: r.bottom + scrollY, left: r.left, right: r.right, width: r.width, height: r.height }; };
   const de = document.documentElement;
+  const shellEl = document.querySelector('.site-shell');
   return {
+    // how much larger than drawn the page is shown: 1 up to a 1440px window, more beyond
+    scale: shellEl.getBoundingClientRect().width / shellEl.offsetWidth,
     viewport: { width: de.clientWidth, height: de.clientHeight },
     page: { width: de.scrollWidth, height: de.scrollHeight },
     body: box('body'), shell: box('.site-shell'), footer: box('.site-shell > footer'),
@@ -78,8 +81,8 @@ test('the shell and its grid backdrop reach the bottom of the window in both the
     for (const [width, height] of [[1920, 1080], [2560, 1440], [3440, 1440], [1024, 1366]]) {
       const m = await at('/', { width, height, theme }, measure);
       const label = `${width}x${height} ${theme}`;
-      assert.ok(m.body.bottom >= m.viewport.height, `${label}: body (grid backdrop) stops at ${Math.round(m.body.bottom)}px`);
-      assert.ok(m.shell.bottom >= m.viewport.height, `${label}: shell stops at ${Math.round(m.shell.bottom)}px`);
+      assert.ok(m.body.bottom >= m.viewport.height - 0.5, `${label}: body (grid backdrop) stops at ${Math.round(m.body.bottom)}px`);
+      assert.ok(m.shell.bottom >= m.viewport.height - 0.5, `${label}: shell stops at ${Math.round(m.shell.bottom)}px`);
       assert.ok(Math.abs(m.footer.bottom - m.viewport.height) <= 1, `${label}: footer ends at ${Math.round(m.footer.bottom)}px, not the window bottom`);
     }
   }
@@ -98,10 +101,41 @@ test('the Cartman frame stays 3:2, stays legible, and stays inside its column', 
     assert.ok(m.cartman.left >= m.stage.left - 1 && m.cartman.right <= m.stage.right + 1, `${label}: sprite spills out of its column`);
     assert.ok(m.speech.left >= m.stage.left - 1 && m.speech.right <= m.stage.right + 1, `${label}: speech bubble leaves its column`);
     // one line is 40px, or 50px once the bubble's 2deg tilt is in the bounding box
-    assert.ok(m.speech.height <= 56, `${label}: speech bubble wrapped to ${Math.round(m.speech.height)}px tall`);
+    assert.ok(m.speech.height <= 56 * m.scale, `${label}: speech bubble wrapped to ${Math.round(m.speech.height)}px tall`);
     if (!shape.touch) assert.ok(m.speech.top >= m.copy.bottom, `${label}: speech bubble overlaps the intro copy`);
     assert.ok(m.caption.bottom <= m.social.top, `${label}: caption overlaps the social links`);
     assert.equal(m.page.width, m.viewport.width, `${label}: page scrolls sideways`);
+  }
+});
+
+// Windows wider than the 1440px the page was drawn at. The page used to stop
+// growing there and sit as a narrow column between two empty bands (a 1920px
+// window lost a quarter of its width, a 2560px one almost half). It is now
+// magnified as one piece until the window's width or height is used up.
+const WIDE = [[1920, 950], [1920, 1080], [2560, 1300], [2837, 1406], [3440, 1340], [3840, 2000]];
+
+test('wide windows are filled edge to edge, by magnifying the page as one piece', async () => {
+  for (const [width, height] of WIDE) {
+    for (const theme of ['light', 'dark']) {
+      const m = await at('/', { width, height, theme }, measure);
+      const label = `${width}x${height} ${theme}`;
+      assert.ok(m.shell.left <= 0.5 && m.shell.right >= m.viewport.width - 0.5, `${label}: page spans ${Math.round(m.shell.left)}..${Math.round(m.shell.right)}px of a ${m.viewport.width}px window`);
+      assert.ok(Math.abs(m.scale - Math.min(width / 1440, height / 880)) < 0.01, `${label}: magnified ${m.scale.toFixed(3)}x`);
+      assert.ok(m.terminal.height >= 0.6 * m.viewport.height, `${label}: terminal uses only ${Math.round(m.terminal.height)}px of the window's height`);
+      assert.equal(m.page.height, m.viewport.height, `${label}: page is ${m.page.height}px tall in a ${m.viewport.height}px window`);
+      assert.equal(m.page.width, m.viewport.width, `${label}: page scrolls sideways`);
+      assert.ok(m.input.bottom <= m.viewport.height, `${label}: command input is below the fold`);
+      assert.ok(Math.abs(m.footer.bottom - m.viewport.height) <= 1, `${label}: footer ends at ${Math.round(m.footer.bottom)}px`);
+      assert.ok(Math.abs(m.cartman.width / m.cartman.height - 1.5) < 0.015, `${label}: sprite frame is off 3:2`);
+      assert.ok(m.speech.height <= 56 * m.scale && m.speech.top >= m.copy.bottom, `${label}: speech bubble wraps or overlaps the intro copy`);
+    }
+  }
+});
+
+test('a window no wider than 1440px is shown at its drawn size', async () => {
+  for (const [width, height] of [[1440, 900], [1366, 768], [1024, 768], [390, 844]]) {
+    const m = await at('/', { width, height }, measure);
+    assert.ok(Math.abs(m.scale - 1) < 0.001, `${width}x${height}: magnified ${m.scale.toFixed(3)}x`);
   }
 });
 
