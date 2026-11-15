@@ -263,8 +263,14 @@ ${SOCIALS}
 <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to dark mode"><span id="theme-icon" aria-hidden="true">☾</span> <span id="theme-label">Dark mode</span></button>
 </div></header>`;
 
+const supportLinks = `<div class="support-links" role="group" aria-label="Support my work">
+<a class="support-coffee" href="https://buymeacoffee.com/shubhchak" target="_blank" rel="noopener noreferrer">Buy me a coffee <span aria-hidden="true">↗</span></a>
+<a class="support-upi" href="upi://pay?pa=9199083445-3%40ybl&amp;pn=Shubhojeet%20Chakraborty&amp;cu=INR" title="Open your UPI app"><span>Support via UPI <span aria-hidden="true">↗</span></span><span class="support-upi-id">9199083445-3@ybl</span></a>
+</div>`;
+
 const footer = () => `<footer class="foot"><div class="foot-in">
 <span>cartmancodes/vault — system design study vault</span>
+${supportLinks}
 <span>${docs.length} documents · ${docs.reduce((a, d) => a + d.diagrams, 0)} diagrams</span>
 </div></footer>`;
 
@@ -591,6 +597,7 @@ ${PF_PROJECTS.map((project, i) => `<a class="project" href="${esc(project.href)}
 <p>${esc(project.blurb)}</p><span class="project-meta">${esc(project.meta)}</span></div></a>`).join('')}`;
   let body = readFileSync(path.join(TPL, 'portfolio.html'), 'utf8')
     .replaceAll('{{year}}', String(new Date().getFullYear()))
+    .replaceAll('{{support}}', supportLinks)
     .replaceAll('{{docs}}', String(docs.length))
     .replaceAll('{{diagrams}}', String(totalDiagrams))
     .replace('{{experience}}', experience)
