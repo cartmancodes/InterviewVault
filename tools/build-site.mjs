@@ -263,10 +263,13 @@ ${SOCIALS}
 <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to dark mode"><span id="theme-icon" aria-hidden="true">☾</span> <span id="theme-label">Dark mode</span></button>
 </div></header>`;
 
-const supportLinks = `<div class="support-links" role="group" aria-label="Support my work">
-<a class="support-coffee" href="https://buymeacoffee.com/shubhchak" target="_blank" rel="noopener noreferrer">Buy me a coffee <span aria-hidden="true">↗</span></a>
-<a class="support-upi" href="upi://pay?pa=9199083445-3%40ybl&amp;pn=Shubhojeet%20Chakraborty&amp;cu=INR" title="Open your UPI app"><span>Support via UPI <span aria-hidden="true">↗</span></span><span class="support-upi-id">9199083445-3@ybl</span></a>
-</div>`;
+const supportLinks = `<details class="support-menu">
+<summary>Support my work <span aria-hidden="true">+</span></summary>
+<div class="support-panel"><p class="support-heading">Fuel the next idea.</p><p class="support-description">Coffee or chai, thanks for keeping me going.</p>
+<div class="support-links" role="group" aria-label="Support options">
+<a class="support-option" href="https://buymeacoffee.com/shubhchak" target="_blank" rel="noopener noreferrer">Buy me a coffee <span aria-hidden="true">☕</span></a>
+<a class="support-option support-upi" href="upi://pay?pa=9199083445-3%40ybl&amp;pn=Shubhojeet%20Chakraborty&amp;cu=INR" title="Open your UPI app"><span>Buy me a chai <span aria-hidden="true">🍵</span></span><span class="support-upi-id">UPI · 9199083445-3@ybl</span></a>
+</div></div></details>`;
 
 const footer = () => `<footer class="foot"><div class="foot-in">
 <span>cartmancodes/vault — system design study vault</span>
