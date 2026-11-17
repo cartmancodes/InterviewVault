@@ -218,6 +218,3 @@ So for example, one of our non-functional requirements for Twitter was that our 
 - [Data Modelling](../../CoreConcepts/DataModelling.md) — turning core entities into the persisted data model you evolve during high-level design.
 - [Key Technologies](KeyTechnologies.md) — the common building blocks (servers, databases, caches, queues) you assemble in the high-level design.
 - [Web Crawler](../ProblemBreakdowns/WebCrawler.md) — a worked example of the optional data-flow step (fetch → parse → extract → store → repeat).
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery](https://www.hellointerview.com/learn/system-design/in-a-hurry/delivery)*

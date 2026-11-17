@@ -408,6 +408,3 @@ Answer the question below to find your gaps.
 - [Dropbox](Dropbox.md) — the companion large-file upload/download breakdown referenced throughout.
 - [Sharding](../../CoreConcepts/Sharding.md) — partitioning strategies like the `videoId` partition key.
 - [Caching](../../CoreConcepts/Caching.md) — the LRU metadata cache that insulates the database from hot videos.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/youtube](https://www.hellointerview.com/learn/system-design/problem-breakdowns/youtube)*

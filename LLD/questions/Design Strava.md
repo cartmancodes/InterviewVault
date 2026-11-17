@@ -2,7 +2,6 @@
 
 > **Pattern**: Time-series / Geospatial
 > **Difficulty**: Medium
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/strava)
 
 > **Summary**: Strava records an athlete's run or ride as a time-ordered stream of GPS samples, stitches them into an activity with aggregate metrics, and layers social features (friend feeds, segment leaderboards, global heatmaps) on top. The hard parts are ingesting bursty, occasionally-offline, multi-million-concurrent GPS streams without dropping points (10M points/sec, ~500 MB/sec at peak), matching each new track against millions of community segments to compute effort times, and keeping per-segment leaderboards and heatmaps fresh over an ever-growing time-series corpus. The mature design treats the phone as the source of truth during recording, uses Kafka as a durable ingest buffer feeding async enrichment, tiers hot time-series storage against cold S3 blobs, and serves every read from a purpose-built store (Postgres, Redis sorted sets, tile CDN) so the raw GPS stream is never rescanned on the read path.
 

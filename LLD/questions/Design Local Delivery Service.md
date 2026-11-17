@@ -2,7 +2,6 @@
 
 > **Pattern**: Geospatial / Inventory
 > **Difficulty**: Medium
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/gopuff)
 
 > **Summary**: A GoPuff-style service delivers from small "dark store" micro-fulfillment DCs, showing each user only the items that can physically reach them within roughly one hour. Two problems intertwine: a *geospatial* one (which DCs can serve this location?) and an *inventory-consistency* one (never sell the same physical unit twice). The design answers reads with PostGIS polygon-containment for nearby-DC search plus a Redis browse cache and Postgres read replicas to absorb ~20k availability QPS, and answers writes with an optimistic-lock (`UPDATE ... WHERE available > 0`) commit on a single relational store, evolving to regional sharding and CQRS with CDC as write contention and read volume grow.
 

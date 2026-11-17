@@ -2,7 +2,6 @@
 
 > **Pattern**: Distributed Queue / BFS
 > **Difficulty**: Medium
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/web-crawler)
 
 > **Summary**: A web crawler is a fault-tolerant, breadth-first traversal of the web graph: seed URLs feed a durable **URL frontier**, stateless **fetcher workers** download HTML under strict per-domain politeness, and **parser workers** extract text and discover new links that loop back into the frontier. The hard parts are keeping the frontier durable at ~1 TB / 10B URLs, deduplicating URLs (Bloom filter) and content (SimHash) at web scale, respecting `robots.txt`, surviving spider traps, and beating the DNS bottleneck at ~23,000 pages/sec.
 

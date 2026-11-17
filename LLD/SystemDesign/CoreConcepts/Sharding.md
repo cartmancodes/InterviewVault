@@ -345,6 +345,3 @@ Get a quick-reference sheet for this topic, perfect for last-minute review.
 - [Scaling Reads](../Patterns/ScalingReads.md) — read replicas and caching, the alternatives to reach for before sharding.
 - [Multi-Step Processes](../Patterns/Multi-StepProcesses.md) — two-phase commit and the saga pattern for cross-shard consistency.
 - [Cassandra](../DeepDives/Cassandra.md) · [DynamoDB](../DeepDives/Dynamodb.md) — distributed databases that handle sharding for you.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/core-concepts/sharding](https://www.hellointerview.com/learn/system-design/core-concepts/sharding)*

@@ -1439,6 +1439,5 @@ graph LR
 ---
 
 **Last Updated**: December 2024
-**Source**: [HelloInterview - Sharding](https://www.hellointerview.com/learn/system-design/core-concepts/sharding)
 
 > **💡 Final Tip**: A well-tuned single database can get you surprisingly far. Don't shard until you've proven you need to!

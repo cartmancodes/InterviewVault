@@ -2,7 +2,6 @@
 
 > **Pattern**: Geospatial Search / Reviews
 > **Difficulty**: Medium
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/yelp)
 
 > **Summary**: Yelp is a local-business discovery platform where the dominant read pattern is a spatial-and-filtered search ("good ramen within half a mile that's open now") and the dominant write pattern is a trickle of reviews. The hard parts are answering radius queries over 10M businesses without a full scan (a two-stage geohash coarse filter plus Haversine exact filter), keeping `avg_rating` honest at scale (incremental `sum_stars`/`review_count` with a Bayesian average against review bombing), and serving hot metros under 500 ms p99 through layered caching and tile precomputation. The mature design pairs Postgres + PostGIS as the source of truth with Elasticsearch for combined geo+text search, a Redis cache/tile layer, S3 presigned photo uploads, and a CDC → Kafka pipeline that keeps aggregates, the search index, and async spam detection eventually consistent.
 

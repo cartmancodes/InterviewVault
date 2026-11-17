@@ -64,6 +64,3 @@ Unit #4238 Seattle
 WA 98103
 
 © 2026 Optick Labs Inc. All rights reserved.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/in-a-hurry/problem-breakdowns](https://www.hellointerview.com/learn/system-design/in-a-hurry/problem-breakdowns)*

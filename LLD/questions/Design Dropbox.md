@@ -2,7 +2,6 @@
 
 > **Pattern**: File Storage / Sync
 > **Difficulty**: Medium
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/dropbox)
 
 > **Summary**: Dropbox is a file hosting and sync service where large blobs (up to 50 GB) must never be lost once acknowledged, and many devices must converge on the same state within seconds without a central editor. The design splits a thin **control plane** (metadata, signed URLs, change feed) from a fat **data plane** where clients transfer bytes directly to S3 via presigned URLs and read back through a CDN — the application tier never touches file bytes. Content-defined chunking makes delta sync cheap, fingerprint-based dedup plus resumable S3 multipart uploads handle scale and flaky networks, a WebSocket-push / cursor-pull hybrid keeps devices in sync, and conflict *forking* (never last-write-wins) guarantees no user edit is silently lost.
 

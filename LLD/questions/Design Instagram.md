@@ -2,7 +2,6 @@
 
 > **Pattern**: Media + Feed
 > **Difficulty**: Medium
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/instagram)
 
 > **Summary**: Instagram is a photo/video-sharing social network that fuses two hard problems into one app: a **large-object media pipeline** (direct-to-S3 upload, async multi-resolution encoding, CDN delivery) and **fan-out feed aggregation** at social-network scale (~500M DAU, ~100M posts/day, read-heavy). The mature design serves EXIF-stripped derived variants from a CDN — never the original bytes — and generates feeds with a **hybrid push/pull** model: normal accounts fan out on write into per-user Redis feed lists, while celebrities are pulled on read and merged in memory, so both write and read amplification stay bounded. Cursor pagination on a composite `(createdAt, postId)` key keeps the scroll session stable as new posts land at the top.
 

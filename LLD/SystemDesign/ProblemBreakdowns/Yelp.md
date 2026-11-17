@@ -572,6 +572,3 @@ Answer the question below to find your gaps.
 - [Dealing with Contention](../Patterns/DealingWithContention.md) — optimistic locking for concurrent rating updates.
 - [Database Indexing](../CoreConcepts/DatabaseIndexing.md) — B-tree, inverted, and geospatial index fundamentals.
 - [Sharding](../CoreConcepts/Sharding.md) — why this small dataset avoids sharding on a single instance.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/yelp](https://www.hellointerview.com/learn/system-design/problem-breakdowns/yelp)*

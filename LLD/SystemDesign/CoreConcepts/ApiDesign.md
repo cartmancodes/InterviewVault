@@ -456,6 +456,3 @@ Get a quick-reference sheet for this topic, perfect for last-minute review.
 - [Real-Time Updates](../Patterns/Real-TimeUpdates.md) — WebSockets and Server-Sent Events for the real-time features REST/GraphQL/RPC don't cover.
 - [Rate Limiter](../ProblemBreakdowns/RateLimiter.md) — designing the throttling this page recommends mentioning.
 - [Ticketmaster](../ProblemBreakdowns/Ticketmaster.md) — the events/venues/tickets/bookings example used throughout this page.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/core-concepts/api-design](https://www.hellointerview.com/learn/system-design/core-concepts/api-design)*

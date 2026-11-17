@@ -411,6 +411,3 @@ Answer the question below to find your gaps.
 - [Data Structures for Big Data](DataStructuresForBigData.md) — LSM trees, SSTables, and bloom filters that power Cassandra's storage engine.
 - [How Discord Moved Trillions of Messages to ScyllaDB](../IntheWild/HowDiscordMovedTrillionsOfMessagesToScylladb.md) — a real-world evolution of the Discord message-storage model discussed here.
 - [Scaling Writes](../Patterns/ScalingWrites.md) — the pattern Cassandra's write-optimized storage layer is built to serve.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/deep-dives/cassandra](https://www.hellointerview.com/learn/system-design/deep-dives/cassandra)*

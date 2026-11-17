@@ -265,6 +265,3 @@ Get a quick-reference sheet for this topic, perfect for last-minute review.
 - [DynamoDB](../DeepDives/Dynamodb.md) — uses consistent hashing under the hood for partition placement.
 - [Redis](../DeepDives/Redis.md) — Redis Cluster's fixed 16,384 hash-slot approach as a contrast to the ring.
 - [Distributed Cache](../ProblemBreakdowns/DistributedCache.md) — a from-scratch design where consistent hashing is a core deep dive.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/core-concepts/consistent-hashing](https://www.hellointerview.com/learn/system-design/core-concepts/consistent-hashing)*

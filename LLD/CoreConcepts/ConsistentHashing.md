@@ -1087,6 +1087,5 @@ graph TB
 ---
 
 **Last Updated**: December 2024
-**Source**: [HelloInterview - Consistent Hashing](https://www.hellointerview.com/learn/system-design/core-concepts/consistent-hashing)
 
 > **💡 Final Tip**: Consistent hashing is elegant and powerful, but in most system design interviews, you just need to know it exists and when it's used. Focus on solving the problem, not memorizing the algorithm!

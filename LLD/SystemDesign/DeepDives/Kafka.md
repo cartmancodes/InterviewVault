@@ -746,6 +746,3 @@ Answer the question below to find your gaps.
 - [Scaling Writes](../Patterns/ScalingWrites.md) — where Kafka fits as a write-buffer and decoupling layer.
 - [Ad Click Aggregator](../ProblemBreakdowns/AdClickAggregator.md) — the hot-partition and streaming example referenced throughout this deep dive.
 - [Web Crawler](../ProblemBreakdowns/WebCrawler.md) — offset-commit timing and the Kafka-vs-SQS retry trade-off in practice.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/deep-dives/kafka](https://www.hellointerview.com/learn/system-design/deep-dives/kafka)*

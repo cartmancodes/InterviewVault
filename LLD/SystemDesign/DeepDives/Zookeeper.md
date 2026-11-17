@@ -573,6 +573,3 @@ But be careful. You don't want to jump to ZooKeeper in your next system design i
 - [ZooKeeper: Wait-free coordination for Internet-scale systems](https://www.usenix.org/legacy/event/usenix10/tech/full_papers/Hunt.pdf)
 
 Answer the question below to find your gaps.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/deep-dives/zookeeper](https://www.hellointerview.com/learn/system-design/deep-dives/zookeeper)*

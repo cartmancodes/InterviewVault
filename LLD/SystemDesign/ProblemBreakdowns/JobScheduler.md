@@ -479,6 +479,3 @@ Answer the question below to find your gaps.
 - [Redis](../DeepDives/Redis.md) — sorted-set (ZSET) priority queue as a self-managed alternative to SQS.
 - [Sharding](../../CoreConcepts/Sharding.md) — deeper treatment of partition-key design and write sharding.
 - [Distributed Locking](../../CoreConcepts/DistributedLocking.md) — the leasing mechanism behind job ownership.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/job-scheduler](https://www.hellointerview.com/learn/system-design/problem-breakdowns/job-scheduler)*

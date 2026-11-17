@@ -511,6 +511,3 @@ Mark as read
 - [Zookeeper](Zookeeper.md) — the quorum-based coordinator used to elect the leader Job Manager for high availability.
 - [Ad Click Aggregator](../ProblemBreakdowns/AdClickAggregator.md) — a problem breakdown that pairs Flink windowing with an offline true-up for very late data.
 - [Real-Time Updates](../Patterns/Real-TimeUpdates.md) — the broader pattern for pushing fresh, streamed results to clients.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/deep-dives/flink](https://www.hellointerview.com/learn/system-design/deep-dives/flink)*

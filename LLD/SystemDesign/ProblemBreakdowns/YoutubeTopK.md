@@ -649,6 +649,3 @@ Answer the question below to find your gaps.
 - [Scaling Writes](../Patterns/ScalingWrites.md) — sharding, partitioning, and batching for high write volume.
 - [Caching](../../CoreConcepts/Caching.md) — cache warming, TTLs, and request coalescing behind the top-K service.
 - [Sharding](../../CoreConcepts/Sharding.md) — sharding by `videoId` and merging per-shard top-K results.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/top-k](https://www.hellointerview.com/learn/system-design/problem-breakdowns/top-k)*

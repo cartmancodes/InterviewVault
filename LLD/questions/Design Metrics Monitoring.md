@@ -2,7 +2,6 @@
 
 > **Pattern**: Time-series / Telemetry
 > **Difficulty**: Medium
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/metrics-monitoring)
 
 > **Summary**: A metrics monitoring platform ingests append-heavy, timestamp-ordered telemetry from a fleet of hosts (~5M points/sec), stores it in a specialized time-series database, serves aggregation queries to dashboards, and evaluates alert rules that page on-call engineers. The hard parts are surviving the ingest firehose with a durable Kafka buffer and per-series sharding, squeezing petabytes into economically viable storage via delta-of-delta and Gorilla XOR compression plus tiered rollups, keeping alert latency under a minute off a hot-path head block, and taming cardinality explosions before they OOM the inverted index.
 

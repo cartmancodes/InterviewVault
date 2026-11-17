@@ -2,7 +2,6 @@
 
 > **Pattern**: Real-time Collaboration / OT/CRDT
 > **Difficulty**: Hard
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/google-docs)
 
 > **Summary**: Google Docs is a browser-based collaborative editor where many people type into the same document at once and every view must stay byte-consistent despite dropped packets, sleeping tabs, and edits landing on top of each other. Scoped to plain text for an interview, the design routes every operation through a single-writer coordinator per document that totally orders edits, transforms concurrent operations against each other with **Operational Transformation (OT)**, assigns a monotonic revision, and persists to an append-only operation log with periodic snapshots. Presence (cursors) is ephemeral and never logged; offline edits buffer locally and rebase against the server log on reconnect, falling back to a three-way merge when the log has been truncated.
 

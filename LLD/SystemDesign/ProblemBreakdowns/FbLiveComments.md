@@ -459,6 +459,3 @@ Answer the question below to find your gaps.
 - [Zookeeper](../DeepDives/Zookeeper.md) — the coordination service that keeps Dispatcher/routing mappings in sync.
 - [DynamoDB](../DeepDives/Dynamodb.md) — the scalable, highly available store chosen for persisting comments.
 - [WhatsApp](Whatsapp.md) — a related real-time messaging breakdown with a more balanced read/write ratio.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/fb-live-comments](https://www.hellointerview.com/learn/system-design/problem-breakdowns/fb-live-comments)*

@@ -236,6 +236,3 @@ Answer the question below to find your gaps.
 - [Numbers to Know](../CoreConcepts/NumbersToKnow.md) — the full capacity-and-latency reference table.
 - [CAP Theorem](../CoreConcepts/CapTheorem.md) — consistency vs availability during partitions.
 - [Scaling Reads](../Patterns/ScalingReads.md) — how indexing, caching, and replicas fit a read-heavy design.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/in-a-hurry/core-concepts](https://www.hellointerview.com/learn/system-design/in-a-hurry/core-concepts)*

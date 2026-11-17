@@ -376,6 +376,3 @@ Get a quick-reference sheet for this topic, perfect for last-minute review.
 - [Scaling Reads](../Patterns/ScalingReads.md) — where caching fits in the broader read-scaling progression.
 - [Numbers to Know](NumbersToKnow.md) — the latency figures (disk vs. memory) that justify caching in interviews.
 - [Distributed Cache](../ProblemBreakdowns/DistributedCache.md) — building a Redis-style cache as a full system design problem.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/core-concepts/caching](https://www.hellointerview.com/learn/system-design/core-concepts/caching)*

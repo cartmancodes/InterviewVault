@@ -219,6 +219,3 @@ graph LR
 - [Consistent Hashing](../../CoreConcepts/ConsistentHashing.md) — the routing scheme that keeps a channel pinned to one data-service instance as instances scale.
 - [Sharding](../../CoreConcepts/Sharding.md) — partitioning data across nodes and why hot partitions arise from skewed traffic.
 - [Data Modeling](../CoreConcepts/DataModeling.md) — partition keys vs. clustering keys and time-bucketing to bound partition growth.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/in-the-wild/discord-messages-scylladb](https://www.hellointerview.com/learn/system-design/in-the-wild/discord-messages-scylladb)*

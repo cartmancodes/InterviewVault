@@ -1379,7 +1379,3 @@ graph TB
 - [Real-time Updates Pattern](https://www.hellointerview.com/learn/system-design/patterns/realtime-updates)
 - [Networking Essentials Deep Dive](https://www.hellointerview.com/learn/system-design/core-concepts/networking-essentials)
 - [Load Balancing Strategies](https://www.hellointerview.com/learn/system-design/deep-dives/load-balancing)
-
----
-
-*Extracted from: System Design Core Concepts - HelloInterview*

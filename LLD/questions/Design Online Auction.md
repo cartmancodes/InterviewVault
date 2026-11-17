@@ -2,7 +2,6 @@
 
 > **Pattern**: Ordered Writes / Real-time
 > **Difficulty**: Medium
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/online-auction)
 
 > **Summary**: An online auction is an eBay-style system where sellers list items and bidders race to place the highest bid before a deadline. The data model is tiny, but the correctness bar is brutal: for any auction, every accepted bid must fold into one totally ordered, monotonically increasing sequence with no lost or tied bids. The mature design serializes each auction through a single writer (Postgres `SELECT FOR UPDATE`, then optimistic concurrency, then an atomic Redis Lua arbitrator), fans price updates out to hundreds of thousands of WebSocket viewers by sharding on `auctionId`, and guarantees durability by writing every accepted bid to Kafka with `acks=all` before ACKing the client — making Kafka the log, Postgres the queryable projection, and Redis just a fast cache.
 

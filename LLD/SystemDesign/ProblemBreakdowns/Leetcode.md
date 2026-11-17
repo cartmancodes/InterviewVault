@@ -480,6 +480,3 @@ Answer the question below to find your gaps.
 - [Redis (Core Concepts)](../../CoreConcepts/Redis.md) — hands-on notes on Redis internals and commands.
 - [Caching](../../CoreConcepts/Caching.md) — cache-the-leaderboard strategies and invalidation trade-offs.
 - [DynamoDB](../DeepDives/Dynamodb.md) — the chosen NoSQL store, plus the GSI used to query submissions by `competitionId`.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/leetcode](https://www.hellointerview.com/learn/system-design/problem-breakdowns/leetcode)*

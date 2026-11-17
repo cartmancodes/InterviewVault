@@ -2,7 +2,6 @@
 
 > **Pattern**: Trading / Real-time Prices
 > **Difficulty**: Hard
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/robinhood)
 
 > **Summary**: Robinhood is a retail brokerage that runs two very different data paths at once. The **price feed** is a read-heavy firehose: exchange trade events must fan out over WebSocket to millions of phones under ~200 ms p95. **Order management** is write-heavy and strongly consistent: money is real, so orders need idempotency, cash/share holds, and a durable audit trail. Keeping these two paths separate is the central architectural choice. The hardest moment is the 9:30 AM market-open spike, when volume jumps 10–50x and the system must absorb the flood without dropping an order or quoting a stale price.
 

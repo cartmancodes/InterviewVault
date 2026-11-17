@@ -224,6 +224,3 @@ Answer the question below to find your gaps.
 - [Scaling Writes](../Patterns/ScalingWrites.md) — the write-throughput limits that justify (or don't) a message queue.
 - [Kafka](../DeepDives/Kafka.md) — the message queue behind the million-messages-per-second figures.
 - [PostgreSQL](../DeepDives/Postgresql.md) — the single-instance database whose limits anchor these estimates.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/core-concepts/numbers-to-know](https://www.hellointerview.com/learn/system-design/core-concepts/numbers-to-know)*

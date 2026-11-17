@@ -172,6 +172,3 @@ That assembly was fairly novel in 2017. Today, few teams of scale would start wi
 - [Scaling Writes](../Patterns/ScalingWrites.md) — write queues as durable buffers for burst handling, the pattern this outage motivated.
 - [Managing Long Running Tasks](../Patterns/ManagingLongRunningTasks.md) — async job queues and worker pools for work too slow for a web request.
 - [Job Scheduler](../ProblemBreakdowns/JobScheduler.md) — designing a job queue from scratch, including dedup, retries, and in-flight tracking.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/in-the-wild/slack-job-queue](https://www.hellointerview.com/learn/system-design/in-the-wild/slack-job-queue)*

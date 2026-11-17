@@ -216,6 +216,3 @@ Answer the question below to find your gaps.
 - [PostgreSQL](Postgresql.md) — PostGIS builds R-tree-style spatial indexes on Postgres's GiST framework.
 - [Data Structures for Big Data](DataStructuresForBigData.md) — companion tour of specialized indexing structures.
 - [Sharding](../../CoreConcepts/Sharding.md) — geographic sharding pairs naturally with spatial partitioning of location data.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/deep-dives/proximity-search](https://www.hellointerview.com/learn/system-design/deep-dives/proximity-search)*

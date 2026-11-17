@@ -494,6 +494,3 @@ Answer the question below to find your gaps.
 - [Scaling Reads](../Patterns/ScalingReads.md) — caching, replicas, and CDN strategies for the read-heavy view/search paths.
 - [Real-Time Updates](../Patterns/Real-TimeUpdates.md) — SSE vs. WebSockets for live seat-map updates and queue positions.
 - [Caching](../../CoreConcepts/Caching.md) — read-through caching, TTLs, and invalidation used for event data.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/ticketmaster](https://www.hellointerview.com/learn/system-design/problem-breakdowns/ticketmaster)*

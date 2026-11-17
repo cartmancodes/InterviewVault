@@ -1187,7 +1187,3 @@ graph TB
 - [Consistent Hashing Explained](https://www.hellointerview.com/learn/system-design/core-concepts/consistent-hashing)
 - [CAP Theorem in Practice](https://www.hellointerview.com/learn/system-design/core-concepts/cap-theorem)
 - [Performance Numbers Reference](https://www.hellointerview.com/learn/system-design/core-concepts/numbers-to-know)
-
----
-
-*Content summarized from: [HelloInterview - System Design Core Concepts](https://www.hellointerview.com/learn/system-design/in-a-hurry/core-concepts)*

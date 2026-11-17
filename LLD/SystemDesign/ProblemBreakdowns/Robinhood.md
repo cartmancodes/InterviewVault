@@ -405,6 +405,3 @@ Answer the question below to find your gaps.
 - [Scaling Reads](../Patterns/ScalingReads.md) — broader strategies for serving high-volume reads like symbol prices.
 - [PostgreSQL](../DeepDives/Postgresql.md) — the relational store providing ACID guarantees for the order database.
 - [Sharding](../../CoreConcepts/Sharding.md) — partitioning the order DB by `userId` so per-user reads/writes hit one node.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/robinhood](https://www.hellointerview.com/learn/system-design/problem-breakdowns/robinhood)*

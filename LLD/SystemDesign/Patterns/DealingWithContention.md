@@ -479,6 +479,3 @@ Get a quick-reference sheet for this topic, perfect for last-minute review.
 - [Online Auction](../ProblemBreakdowns/OnlineAuction.md) — optimistic concurrency using the ever-increasing high bid as the version.
 - [Multi-Step Processes](Multi-StepProcesses.md) — where contention ends and distributed transactions begin.
 - [Scaling Reads](ScalingReads.md) — uses distributed locks to serialize hot-key cache rebuilds.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/patterns/dealing-with-contention](https://www.hellointerview.com/learn/system-design/patterns/dealing-with-contention)*

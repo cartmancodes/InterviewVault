@@ -2,7 +2,6 @@
 
 > **Pattern**: Sandboxed Execution / Queue-based Workers
 > **Difficulty**: Medium
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/leetcode)
 
 > **Summary**: LeetCode runs arbitrary, adversarial user code on our own infrastructure and must do so safely, fairly, and at burst scale. The defining challenge is not the CRUD around problems but a secure execution sandbox — hardened Docker with seccomp-bpf as a floor, Firecracker/gVisor microVMs for multi-tenant safety — fed by a queue that decouples bursty submissions (tens of thousands in a 60-second contest window) from slow execution. Verdicts return via an async submit-then-poll flow, while a Redis sorted set delivers O(log N) live contest ranks and an offline pipeline catches cheating without ever touching the synchronous submit path.
 

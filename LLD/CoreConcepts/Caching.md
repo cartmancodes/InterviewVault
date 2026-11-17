@@ -1605,6 +1605,5 @@ graph LR
 ---
 
 **Last Updated**: December 2024
-**Source**: [HelloInterview - Caching](https://www.hellointerview.com/learn/system-design/core-concepts/caching)
 
 > **💡 Final Tip**: Don't cache everything. Show you understand when caching is worth the complexity and when a well-indexed database is enough.

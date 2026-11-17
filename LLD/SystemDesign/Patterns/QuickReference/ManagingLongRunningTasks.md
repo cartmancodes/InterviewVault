@@ -93,6 +93,3 @@ Move to a Dead Letter Queue after 3-5 attempts for investigation.
 - **Queue overload**: Set queue depth limits; reject with system busy instead of accepting doomed work.
 - **Mixed workloads**: Separate fast and slow queues to prevent long jobs from blocking short jobs.
 - **Job dependencies**: Chain simple steps; use Step Functions, Temporal, or Airflow for complex workflows.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/patterns/long-running-tasks/quick-reference](https://www.hellointerview.com/learn/system-design/patterns/long-running-tasks/quick-reference)*

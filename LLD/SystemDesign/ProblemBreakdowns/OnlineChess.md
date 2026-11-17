@@ -468,6 +468,3 @@ For a staff+ candidate, I'm looking for depth and judgment past the textbook ans
 - [Zookeeper](../DeepDives/Zookeeper.md) — the ephemeral-node membership registry the router watches.
 - [Scaling Reads](../Patterns/ScalingReads.md) — indexing and caching patterns behind the leaderboard reads.
 - [Elasticsearch](../DeepDives/Elasticsearch.md) — where the offline game archive and opening explorer live.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/online-chess](https://www.hellointerview.com/learn/system-design/problem-breakdowns/online-chess)*

@@ -566,6 +566,3 @@ Answer the question below to find your gaps.
 - [Scaling Reads](../Patterns/ScalingReads.md) — hot-key and read-distribution patterns that hot reads here are an instance of.
 - [Redis](../DeepDives/Redis.md) — the in-memory store whose async replication and `WAIT` semantics are referenced above.
 - [Cassandra](../DeepDives/Cassandra.md) — deep dive on consistent-hashing-based partitioning recommended in the sharding section.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/distributed-cache](https://www.hellointerview.com/learn/system-design/problem-breakdowns/distributed-cache)*

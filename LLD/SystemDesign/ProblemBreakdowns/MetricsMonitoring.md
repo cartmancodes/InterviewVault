@@ -509,6 +509,3 @@ Answer the question below to find your gaps.
 - [Scaling Reads](../Patterns/ScalingReads.md) — the caching, rollup, and query-splitting strategies behind low-latency dashboards.
 - [Redis](../DeepDives/Redis.md) — the in-memory store behind both the query cache and the cardinality tracker.
 - [Caching](../../CoreConcepts/Caching.md) — cache invalidation and freshness trade-offs for the query layer.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/metrics-monitoring](https://www.hellointerview.com/learn/system-design/problem-breakdowns/metrics-monitoring)*

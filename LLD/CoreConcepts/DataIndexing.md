@@ -1378,6 +1378,5 @@ graph TB
 ---
 
 **Last Updated**: December 2024
-**Source**: [HelloInterview - Database Indexing](https://www.hellointerview.com/learn/system-design/core-concepts/db-indexing)
 
 > **💡 Remember**: In interviews, if unsure which index to use, B-Tree is always a safe choice. Focus on identifying access patterns from your API design, then match the right index type to those patterns.

@@ -491,6 +491,3 @@ Answer the question below to find your gaps.
 - [Dealing with Contention](../Patterns/DealingWithContention.md) — expanding the atomic boundary to make read-modify-write race-condition free.
 - [API Gateway](../DeepDives/ApiGateway.md) — the edge component the rate limiter is embedded in.
 - [Zookeeper](../DeepDives/Zookeeper.md) — push-based distributed configuration for real-time rate-rule updates.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/distributed-rate-limiter](https://www.hellointerview.com/learn/system-design/problem-breakdowns/distributed-rate-limiter)*

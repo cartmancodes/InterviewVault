@@ -546,6 +546,3 @@ Answer the question below to find your gaps.
 - [Real-Time Updates](../Patterns/Real-TimeUpdates.md) — CDC-driven feed propagation for immediate content freshness.
 - [Web Crawler](WebCrawler.md) — the scraping infrastructure reused to ingest publishers without RSS feeds.
 - [Handling Large Blobs](../Patterns/HandlingLargeBlobs.md) — why thumbnails belong in object storage + CDN, not the database.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/google-news](https://www.hellointerview.com/learn/system-design/problem-breakdowns/google-news)*

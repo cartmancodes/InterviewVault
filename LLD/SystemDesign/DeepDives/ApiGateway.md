@@ -277,6 +277,3 @@ Answer the question below to find your gaps.
 - [API Design](../CoreConcepts/ApiDesign.md) — designing the clean, consistent external API surface the gateway presents.
 - [Rate Limiter](../ProblemBreakdowns/RateLimiter.md) — a core middleware concern the gateway handles to prevent abuse.
 - [Scaling Reads](../Patterns/ScalingReads.md) — caching and horizontal-scaling patterns that complement gateway response caching.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/deep-dives/api-gateway](https://www.hellointerview.com/learn/system-design/deep-dives/api-gateway)*
