@@ -16,6 +16,8 @@ const TPL = path.join(__dirname, 'template');
 const DIAGRAMS = path.join(SITE, 'assets', 'diagrams');
 const walkthroughs = JSON.parse(readFileSync(path.join(REPO, 'content/visuals/walkthroughs.json'), 'utf8'));
 const walkthroughByAsset = new Map(walkthroughs.map(item => [item.asset, item]));
+const seoBySource = JSON.parse(readFileSync(path.join(REPO, 'content/seo.json'), 'utf8'));
+const SITE_ORIGIN = process.env.SITE_ORIGIN || 'https://cartmancodes.com';
 
 /* ── collections: repo dir -> site section ─────────────── */
 const COLLECTIONS = [
@@ -279,7 +281,7 @@ ${supportLinks}
 
 // `chrome: false` drops the vault header and footer — the portfolio landing page
 // carries its own nav and footer and shares nothing but the shell and the fonts.
-function page({ title, desc, body, active, cls = '', chrome = true }) {
+function page({ title, desc, body, active, cls = '', chrome = true, canonical, type = 'website' }) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -290,7 +292,12 @@ function page({ title, desc, body, active, cls = '', chrome = true }) {
 <meta name="description" content="${esc(desc)}">
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(desc)}">
-<meta property="og:type" content="website">
+<meta property="og:type" content="${esc(type)}">
+${canonical ? `<link rel="canonical" href="${esc(canonical)}">
+<meta property="og:url" content="${esc(canonical)}">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="${esc(title)}">
+<meta name="twitter:description" content="${esc(desc)}">` : ''}
 ${FONTS}
 <link rel="stylesheet" href="/assets/site.css">
 <link rel="stylesheet" href="/assets/figures.css">
@@ -370,9 +377,11 @@ ${sheetBtn}
 <script src="/assets/figures.js" defer></script>${vaultScript}`;
 
   mkdirSync(path.dirname(doc.out), { recursive: true });
+  const seo = seoBySource[doc.rel];
   writeFileSync(doc.out, page({
-    title: `${doc.title} — cartmancodes/vault`,
-    desc: `${doc.title}: ${doc.col.blurb}`,
+    title: seo?.title || `${doc.title} — cartmancodes/vault`,
+    desc: seo?.description || `${doc.title}: ${doc.col.blurb}`,
+    canonical: new URL(doc.url, SITE_ORIGIN).href, type: 'article',
     body, active: doc.col.key, cls: doc.dsa ? 'doc dsa-doc' : 'doc',
   }));
 }
@@ -706,7 +715,7 @@ function build() {
     if (existsSync(path.join(TPL, f))) copyFileSync(path.join(TPL, f), path.join(SITE, f));
   }
   // sitemap
-  const origin = process.env.SITE_ORIGIN || 'https://interviewvault.pages.dev';
+  const origin = SITE_ORIGIN;
   const urls = ['/', VAULT, ...docs.map((d) => d.url)];
   writeFileSync(path.join(SITE, 'sitemap.xml'),
     `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
