@@ -1079,10 +1079,10 @@ graph TB
 ## 📚 Related Concepts
 
 - [Sharding](./Sharding.md) - Horizontal partitioning strategies
-- [Load Balancing](./LoadBalancing.md) - Distributing requests
+- [Load Balancing](./Networking.md#load-balancing) - Distributing requests
 - [Caching](./Caching.md) - Distributed cache patterns
-- [Replication](./Replication.md) - Data redundancy strategies
-- [CAP Theorem](./CAPTheorem.md) - Distributed system trade-offs
+- [Replication](../SystemDesign/Patterns/ScalingReads.md#read-replicas) - Data redundancy strategies
+- [CAP Theorem](../SystemDesign/CoreConcepts/CapTheorem.md) - Distributed system trade-offs
 
 ---
 

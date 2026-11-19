@@ -8,6 +8,7 @@ import { hashOf, extractMermaid } from './render-diagrams.mjs';
 import { buildChallenges } from './gen-challenges.mjs';
 import { DSA_TOPICS } from './dsa-config.mjs';
 import { renderFigure, sectionAt, extractSvgLabels } from './figure-markup.mjs';
+import { SITE_ORIGIN } from './site-config.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, '..');
@@ -268,9 +269,34 @@ const footer = () => `<footer class="foot"><div class="foot-in">
 <span>${docs.length} documents · ${docs.reduce((a, d) => a + d.diagrams, 0)} diagrams</span>
 </div></footer>`;
 
+/**
+ * Builds a unique, intent-qualified page title for a document.
+ *
+ * @param {object} doc - Document entry with title and collection metadata.
+ * @returns {string} Fully qualified title with intent suffix and brand.
+ */
+function pageTitleForDoc(doc) {
+  return `${doc.title} — ${doc.col.label} — cartmancodes/vault`;
+}
+
 // `chrome: false` drops the vault header and footer — the portfolio landing page
 // carries its own nav and footer and shares nothing but the shell and the fonts.
-function page({ title, desc, body, active, cls = '', chrome = true }) {
+/**
+ * Renders the outer HTML shell for a page, including metadata, fonts, styles,
+ * and a self-referencing absolute canonical link.
+ *
+ * @param {object} options
+ * @param {string} options.title - Page title.
+ * @param {string} options.desc - Page meta description.
+ * @param {string} options.body - Body HTML content.
+ * @param {string|null} [options.active] - Active collection key for navigation.
+ * @param {string} [options.cls] - Additional body class names.
+ * @param {boolean} [options.chrome] - Whether to render standard header and footer.
+ * @param {string} [options.path] - Page URL path for the self-referencing canonical link.
+ * @returns {string} Rendered HTML string.
+ */
+function page({ title, desc, body, active, cls = '', chrome = true, path: pagePath = '/' }) {
+  const canonicalUrl = `${SITE_ORIGIN}${pagePath.startsWith('/') ? pagePath : '/' + pagePath}`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -278,6 +304,7 @@ function page({ title, desc, body, active, cls = '', chrome = true }) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="/assets/theme.js"></script>
 <title>${esc(title)}</title>
+<link rel="canonical" href="${canonicalUrl}">
 <meta name="description" content="${esc(desc)}">
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(desc)}">
@@ -362,9 +389,10 @@ ${sheetBtn}
 
   mkdirSync(path.dirname(doc.out), { recursive: true });
   writeFileSync(doc.out, page({
-    title: `${doc.title} — cartmancodes/vault`,
+    title: pageTitleForDoc(doc),
     desc: `${doc.title}: ${doc.col.blurb}`,
     body, active: doc.col.key, cls: doc.dsa ? 'doc dsa-doc' : 'doc',
+    path: doc.url,
   }));
 }
 
@@ -496,6 +524,7 @@ ${chips}
     title: 'cartmancodes/vault — System Design Study Vault',
     desc: `${docs.length} worked system-design documents: patterns, deep dives, problem breakdowns and interview answers.`,
     body, cls: '',
+    path: VAULT,
   }));
 }
 
@@ -609,6 +638,7 @@ ${sections.filter(([, name]) => !['about', 'help'].includes(name)).map(([, name,
     body,
     cls: 'portfolio',
     chrome: false,
+    path: '/',
   }));
 }
 
@@ -663,6 +693,7 @@ function buildProgressPage() {
     title: 'Vault map — cartmancodes/vault',
     desc: 'Your practice coverage across interview answers and core concepts, stored on this device.',
     body,
+    path: '/progress/',
   }));
 }
 
@@ -696,11 +727,10 @@ function build() {
     if (existsSync(path.join(TPL, f))) copyFileSync(path.join(TPL, f), path.join(SITE, f));
   }
   // sitemap
-  const origin = process.env.SITE_ORIGIN || 'https://interviewvault.pages.dev';
   const urls = ['/', VAULT, ...docs.map((d) => d.url)];
   writeFileSync(path.join(SITE, 'sitemap.xml'),
     `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
-    urls.map((u) => `  <url><loc>${origin}${u}</loc></url>`).join('\n') + `\n</urlset>\n`);
+    urls.map((u) => `  <url><loc>${SITE_ORIGIN}${u}</loc></url>`).join('\n') + `\n</urlset>\n`);
 
   const missing = docs.reduce((a, d) => a + (extractMermaid(d.md).filter((s) => !existsSync(path.join(DIAGRAMS, hashOf(s) + '.svg'))).length), 0);
   console.log(`built ${docs.length} pages · ${copiedAssets.size} assets copied · ${missing} diagrams missing`);

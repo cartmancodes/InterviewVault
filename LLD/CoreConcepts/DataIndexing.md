@@ -1372,8 +1372,9 @@ graph TB
 - [Data Modeling](./DataModelling.md) - Schema design and relationships
 - [Database Sharding](./Sharding.md) - Horizontal partitioning strategies
 - [Caching](./Caching.md) - Reduce database load
-- [PostgreSQL](./PostgreSQL.md) - B-Tree implementation details
-- [Query Optimization](./QueryOptimization.md) - Using indexes effectively
+- [PostgreSQL](../SystemDesign/DeepDives/Postgresql.md) - B-Tree implementation details
+- [Query Optimization](../SystemDesign/DeepDives/Postgresql.md#query-optimization-essentials) -
+  Using indexes effectively
 
 ---
 
