@@ -344,6 +344,3 @@ Get a quick-reference sheet for this topic, perfect for last-minute review.
 - [Database Indexing](DatabaseIndexing.md) — the companion scraped deep dive on indexing for access patterns.
 - [Postgresql](../DeepDives/Postgresql.md) — the recommended relational default for most interviews.
 - [Scaling Reads](../Patterns/ScalingReads.md) — denormalization, materialized views, and read replicas built on your data model.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/core-concepts/data-modeling](https://www.hellointerview.com/learn/system-design/core-concepts/data-modeling)*

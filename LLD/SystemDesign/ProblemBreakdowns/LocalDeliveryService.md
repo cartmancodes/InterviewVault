@@ -323,6 +323,3 @@ Answer the question below to find your gaps.
 - [Redis](../DeepDives/Redis.md) — the in-memory cache fronting availability reads.
 - [Sharding](../../CoreConcepts/Sharding.md) — region-based partitioning of the inventory dataset.
 - [Proximity Search](../DeepDives/ProximitySearch.md) — locating nearby DCs by latitude/longitude.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/gopuff](https://www.hellointerview.com/learn/system-design/problem-breakdowns/gopuff)*

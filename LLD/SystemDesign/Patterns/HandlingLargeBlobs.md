@@ -306,6 +306,3 @@ Get a quick-reference sheet for this topic, perfect for last-minute review.
 - [Managing Long-Running Tasks](ManagingLongRunningTasks.md) — post-upload workflows like transcoding, thumbnailing, and virus scanning.
 - [Real-Time Updates](Real-TimeUpdates.md) — pushing upload progress and completion status back to the client.
 - [YouTube](../ProblemBreakdowns/Youtube.md) · [Instagram](../ProblemBreakdowns/Instagram.md) · [Dropbox](../ProblemBreakdowns/Dropbox.md) — canonical breakdowns that apply this pattern end-to-end.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/patterns/large-blobs](https://www.hellointerview.com/learn/system-design/patterns/large-blobs)*

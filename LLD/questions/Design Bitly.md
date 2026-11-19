@@ -2,7 +2,6 @@
 
 > **Pattern**: Read-Heavy / Hash-based Lookup
 > **Difficulty**: Easy
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/bitly)
 
 > **Summary**: Bitly turns long URLs into compact short codes and redirects visitors back to the original. The functional surface is tiny — a single lookup table — but the workload is brutally asymmetric: ~1000 reads per write, ~600k RPS at peak, sub-100ms redirects, and a hard guarantee that every short code maps to exactly one URL. The mature design mints codes with a monotonic Redis counter + Base62 (no collisions by construction, with a DB `UNIQUE` constraint as the final net), serves reads through a layered cache (CDN edge → Redis → replicated Postgres) that exploits a Zipfian access pattern, and enforces expirations lazily at read time. Global low latency comes from partitioning the counter space per region and pushing 302s to the edge.
 

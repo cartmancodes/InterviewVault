@@ -399,6 +399,3 @@ Answer the question below to find your gaps.
 - [Redis](../DeepDives/Redis.md) — the in-memory store for the post cache and its hot-key issues.
 - [DynamoDB](../DeepDives/Dynamodb.md) — the key-value store backing the Post, Follow, and PrecomputedFeed tables (GSIs, partitioning).
 - [Sharding](../../CoreConcepts/Sharding.md) — partitioning keys evenly to avoid the hot-partition problem DynamoDB and caches face here.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/fb-news-feed](https://www.hellointerview.com/learn/system-design/problem-breakdowns/fb-news-feed)*

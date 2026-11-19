@@ -101,6 +101,3 @@ Avoid async upload-process-notify when users need immediate content feedback.
 - **AWS**: Presigned URLs, Multipart Upload API, S3 Event Notifications, CloudFront, Lifecycle Rules.
 - **Google Cloud**: Signed URLs, Resumable Uploads, Cloud Storage Pub/Sub, Cloud CDN, Lifecycle Management.
 - **Azure**: SAS tokens, Block Blobs, Event Grid, Azure CDN, Lifecycle Management Policies.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/patterns/large-blobs/quick-reference](https://www.hellointerview.com/learn/system-design/patterns/large-blobs/quick-reference)*

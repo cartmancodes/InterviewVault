@@ -589,6 +589,3 @@ Answer the question below to find your gaps.
 - [Consistent Hashing](../../CoreConcepts/ConsistentHashing.md) — keeps related swipes on the same Redis node as the cluster scales.
 - [Caching](../../CoreConcepts/Caching.md) — TTL, invalidation, and warming strategies behind pre-computed feeds.
 - [Sharding](../../CoreConcepts/Sharding.md) — partitioning the massive swipe dataset across nodes.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/tinder](https://www.hellointerview.com/learn/system-design/problem-breakdowns/tinder)*

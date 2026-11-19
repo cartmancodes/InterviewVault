@@ -2,7 +2,6 @@
 
 > **Pattern**: Geospatial Matching / Real-time
 > **Difficulty**: Hard
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/uber)
 
 > **Summary**: Uber is a two-sided marketplace that matches a nearby available driver to a rider in under a minute. The hard parts are ingesting ~2.5M location writes/sec, running low-latency proximity search over a planet-sized fleet, and enforcing strict single-driver exclusivity at dispatch under racing requests. The mature design leans on a Redis/H3 geo index for reads, Kafka + a durable workflow (Temporal) for crash-safe offer loops, and Postgres compare-and-swap for a linearizable ride state machine.
 

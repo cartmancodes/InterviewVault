@@ -184,6 +184,3 @@ The bounded pool deserves a close look before you copy it, because that's where 
 - [Dealing with Contention](../Patterns/DealingWithContention.md) — isolation levels, gap locks, and deadlock prevention, all central to "making the locks behave."
 - [Redis (Deep Dive)](../DeepDives/Redis.md) — the store this migration replaced, and when a Redis counter is still the simpler tool.
 - [Ticketmaster](../ProblemBreakdowns/Ticketmaster.md) — the reserve-a-row-per-seat pattern this post is a production instance of.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/in-the-wild/shopify-inventory-reservations](https://www.hellointerview.com/learn/system-design/in-the-wild/shopify-inventory-reservations)*

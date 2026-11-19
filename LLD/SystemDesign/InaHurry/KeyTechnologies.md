@@ -326,6 +326,3 @@ Some of the most popular CDNs are [Cloudflare](https://www.cloudflare.com/), [Ak
 - [Kafka](../DeepDives/Kafka.md) — the go-to technology for both queues and streams.
 - [DynamoDB](../DeepDives/Dynamodb.md) · [Cassandra](../DeepDives/Cassandra.md) · [Postgresql](../DeepDives/Postgresql.md) — deep dives on the core database options.
 - [API Gateway](../DeepDives/ApiGateway.md) — routing, auth, and rate limiting at the edge of your system.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/in-a-hurry/key-technologies](https://www.hellointerview.com/learn/system-design/in-a-hurry/key-technologies)*

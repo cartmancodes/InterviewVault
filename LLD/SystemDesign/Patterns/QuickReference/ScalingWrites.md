@@ -103,6 +103,3 @@ Scaling takes time; databases may have downtime or reduced throughput while scal
 
 - **Always check sub-keys**: Default in production; readers find dynamic splits without announcements.
 - **Announce split to readers**: More efficient but complex; readers must learn the split before writers execute it.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/patterns/scaling-writes/quick-reference](https://www.hellointerview.com/learn/system-design/patterns/scaling-writes/quick-reference)*

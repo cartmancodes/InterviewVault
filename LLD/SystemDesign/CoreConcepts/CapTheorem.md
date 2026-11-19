@@ -223,6 +223,3 @@ Get a quick-reference sheet for this topic, perfect for last-minute review.
 - [Redis](../DeepDives/Redis.md) — the in-memory store behind availability-first caching and replica clusters.
 - [Ticketmaster](../ProblemBreakdowns/Ticketmaster.md) — mixes strong-consistent bookings with available browsing.
 - [Tinder](../ProblemBreakdowns/Tinder.md) — consistent matching alongside available profile viewing.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/core-concepts/cap-theorem](https://www.hellointerview.com/learn/system-design/core-concepts/cap-theorem)*

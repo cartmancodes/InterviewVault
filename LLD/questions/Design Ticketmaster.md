@@ -2,7 +2,6 @@
 
 > **Pattern**: Booking / Concurrency Control
 > **Difficulty**: Medium
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/ticketmaster)
 
 > **Summary**: Ticketmaster is an event-ticketing platform whose one hard problem is selling each seat exactly once while millions of fans stampede a hot on-sale. Browsing and search are read-heavy and want high availability; the booking write path wants strong consistency. The mature design holds seats as Redis TTL locks (`SETNX ... EX 600`), writes Postgres only on confirmed payment, throttles the thundering herd through a Redis sorted-set virtual waiting room, and serves search from Elasticsearch fed by CDC from Postgres. Seat maps ride a CDN; only the small availability JSON is dynamic.
 

@@ -480,6 +480,3 @@ Answer the question below to find your gaps.
 - [Real-Time Updates](../Patterns/Real-TimeUpdates.md) — patterns for delivering price-drop alerts promptly.
 - [Managing Long Running Tasks](../Patterns/ManagingLongRunningTasks.md) — queue-driven processing for crawl and notification jobs.
 - [Caching](../../CoreConcepts/Caching.md) — reducing latency on read-heavy price history queries.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/camelcamelcamel](https://www.hellointerview.com/learn/system-design/problem-breakdowns/camelcamelcamel)*

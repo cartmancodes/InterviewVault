@@ -95,6 +95,3 @@ Short TTLs of 5-15 minutes often pair with active invalidation.
 
 - **Bitly/URL Shortener**: Cache short-to-long mappings aggressively; URLs do not change.
 - **Ticketmaster**: Cache event details, not seat availability; use replicas for browsing.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/patterns/scaling-reads/quick-reference](https://www.hellointerview.com/learn/system-design/patterns/scaling-reads/quick-reference)*

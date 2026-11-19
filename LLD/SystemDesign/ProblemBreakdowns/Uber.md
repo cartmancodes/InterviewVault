@@ -466,6 +466,3 @@ Answer the question below to find your gaps.
 - [Managing Long-Running Tasks](../Patterns/ManagingLongRunningTasks.md) — durable execution patterns for the human-in-the-loop matching workflow.
 - [Dealing with Contention](../Patterns/DealingWithContention.md) — lock strategies and race conditions when many instances compete.
 - [Ticketmaster](Ticketmaster.md) — the same reserve-with-timeout consistency problem in a different domain.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/uber](https://www.hellointerview.com/learn/system-design/problem-breakdowns/uber)*

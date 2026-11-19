@@ -410,6 +410,3 @@ Answer the question below to find your gaps.
 - [Data Indexing](../../CoreConcepts/DataIndexing.md) — how indexes trade write cost for read speed, the same tension vector indexes live under.
 - [ChatGPT](../ProblemBreakdowns/Chatgpt.md) — a canonical RAG system where vector search retrieves documents for the LLM to synthesize.
 - [FB Post Search](../ProblemBreakdowns/FbPostSearch.md) — the filtered-search problem this doc references, with a multi-dimensional twist.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/deep-dives/vector-databases](https://www.hellointerview.com/learn/system-design/deep-dives/vector-databases)*

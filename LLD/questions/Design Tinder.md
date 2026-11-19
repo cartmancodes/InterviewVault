@@ -2,7 +2,6 @@
 
 > **Pattern**: Geo-matching / Feed
 > **Difficulty**: Medium
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/tinder)
 
 > **Summary**: Tinder is a location-aware dating app where users swipe yes/no on a proximity-ranked stack of profiles and get notified the instant two people swipe right on each other. The hard parts sit at the intersection of **strong consistency** (a race must never swallow a mutual match), **freshness** (a swiped profile must never reappear), and **low-latency geo search** at a ~23K swipes/sec firehose. The mature design leans on a Redis + Lua script for single-round-trip atomic match detection, per-user Bloom filters for swipe dedup, an Elasticsearch `geo_point` index feeding precomputed Redis decks, and Kafka-decoupled notification fanout.
 

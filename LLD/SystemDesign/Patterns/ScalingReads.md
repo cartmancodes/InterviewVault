@@ -402,6 +402,3 @@ In interviews, demonstrate that you understand both the performance benefits and
 - [Redis](../DeepDives/Redis.md) — the in-memory store behind most application caches.
 - [Scaling Writes](ScalingWrites.md) — the complementary pattern for write-heavy systems.
 - [Dealing with Contention](DealingWithContention.md) — distributed locks used to serialize cache rebuilds.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/patterns/scaling-reads](https://www.hellointerview.com/learn/system-design/patterns/scaling-reads)*

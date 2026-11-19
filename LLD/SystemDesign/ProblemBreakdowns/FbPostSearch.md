@@ -415,6 +415,3 @@ Answer the question below to find your gaps.
 - [Data Indexing](../../CoreConcepts/DataIndexing.md) — indexing fundamentals that motivate the inverted index.
 - [Caching](../../CoreConcepts/Caching.md) — eviction, TTLs, and cache design for the search cache.
 - [Sharding](../../CoreConcepts/Sharding.md) — sharding indexes by keyword to spread write load.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/fb-post-search](https://www.hellointerview.com/learn/system-design/problem-breakdowns/fb-post-search)*

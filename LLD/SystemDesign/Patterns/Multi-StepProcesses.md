@@ -433,6 +433,3 @@ Be ready to discuss the tradeoffs. Yes, you're adding operational complexity wit
 Answer the question below to find your gaps.
 
 Get a quick-reference sheet for this topic, perfect for last-minute review.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/patterns/multi-step-processes](https://www.hellointerview.com/learn/system-design/patterns/multi-step-processes)*

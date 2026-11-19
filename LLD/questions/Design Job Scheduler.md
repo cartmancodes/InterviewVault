@@ -2,7 +2,6 @@
 
 > **Pattern**: Cron / Distributed Scheduler
 > **Difficulty**: Medium
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/job-scheduler)
 
 > **Summary**: A job scheduler accepts one-shot, recurring (cron/interval), and immediate jobs, then reliably fires each one near its trigger time and delivers it to a worker pool that survives duplicates. The CRUD surface is trivial; the engineering is the invariant that a job scheduled for `T` fires close to `T` even when leaders fail over, clocks drift, or tens of thousands of jobs come due in the same second. The mature design separates three concerns — storing the schedule, picking the due set on time (indexed lookahead → time-bucketed tables → in-memory heap), and delivering runs at-least-once with an idempotency key that handlers compose into effective exactly-once.
 

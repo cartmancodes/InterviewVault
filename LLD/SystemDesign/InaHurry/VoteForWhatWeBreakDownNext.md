@@ -48,6 +48,3 @@ Propose a New Question
 - [Breakdowns of Popular System Design Questions](BreakdownsOfPopularSystemDesignQuestions.md) — the catalog of questions already broken down.
 - [How to Prepare for System Design Interviews](HowToPrepareForSystemDesignInterviews.md) — where these breakdowns fit into a study plan.
 - [Key Technologies](KeyTechnologies.md) — the deep-dive topics you can request more of.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/in-a-hurry/vote](https://www.hellointerview.com/learn/system-design/in-a-hurry/vote)*

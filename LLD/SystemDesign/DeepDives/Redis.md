@@ -307,6 +307,3 @@ Answer the question below to find your gaps.
 - [Sharding](../../CoreConcepts/Sharding.md) & [Consistent Hashing](../../CoreConcepts/ConsistentHashing.md) — how hash slots spread keys across a cluster.
 - [Scaling Reads](../Patterns/ScalingReads.md) & [Scaling Writes](../Patterns/ScalingWrites.md) — the patterns that address hot keys and read/write load.
 - [Kafka](Kafka.md) — the durable, replayable log to reach for when Redis streams aren't enough.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/deep-dives/redis](https://www.hellointerview.com/learn/system-design/deep-dives/redis)*

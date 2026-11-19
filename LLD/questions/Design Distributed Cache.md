@@ -2,7 +2,6 @@
 
 > **Pattern**: Consistent Hashing / In-memory Store
 > **Difficulty**: Medium
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/distributed-cache)
 
 > **Summary**: A distributed cache stores key-value pairs in memory across a sharded cluster, serving `GET`/`SET`/`DELETE` in single-digit milliseconds to shield a slower durable store from read pressure and traffic spikes. The hard parts are keeping keys evenly spread as nodes join and leave (consistent hashing with virtual nodes), reclaiming memory intelligently when it fills (LRU eviction running alongside TTL expiry), surviving node failures without losing availability (replication with async / quorum / chain trade-offs), and taming hot keys and cache stampedes. Everything runs under eventual consistency between replicas, with multi-tier (L1 + L2) and multi-region topologies emerging as scale climbs from 1K to 1M+ RPS.
 

@@ -453,6 +453,28 @@ figure.fig figcaption { font-family: var(--mono); font-size: 11.5px; color: var(
   justify-content: space-between; gap: 14px; flex-wrap: wrap;
   /* mut is 2.20:1 on sky — muted text on a sky band steps up to ink-2 */
   font-family: var(--mono); font-size: 12px; color: var(--ink-2);
+  align-items: center;
+}
+
+/* Native disclosure keeps payment details out of the footer until requested. */
+.support-menu { position: relative; font: 12px/1.5 var(--mono); }
+.support-menu summary { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; list-style: none; }
+.support-menu summary::-webkit-details-marker { display: none; }
+.support-menu summary:hover { text-decoration: underline; }
+.support-menu summary > span { font-size: 18px; transition: transform .15s; }
+.support-menu[open] summary > span { transform: rotate(45deg); }
+.support-panel { position: absolute; z-index: 20; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%); width: min(280px, calc(100vw - 48px)); padding: 20px; border: var(--cut); border-radius: 8px; background: var(--paper); color: var(--ink); box-shadow: var(--lift); }
+.support-heading { margin: 0 0 6px; font-weight: 700; }
+.support-description { margin: 0 0 16px; color: var(--ink-2); font-size: 11px; }
+.support-links { display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
+.support-links a { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; }
+.support-links .support-option,
+body.portfolio footer .support-option { background: var(--acc); color: var(--accent-ink, #0E1A2B); border: 2px solid var(--accent-ink, #0E1A2B); border-radius: 5px; min-height: 56px; padding: 8px 12px; text-decoration: none; }
+.support-links .support-option:hover { filter: brightness(.95); }
+.support-links .support-upi { flex-direction: column; justify-content: center; align-items: flex-start; gap: 0; }
+.support-upi-id { font-size: 11px; user-select: all; overflow-wrap: anywhere; }
+@media (max-width: 900px) {
+  .support-panel { left: 0; transform: none; }
 }
 
 /* ── responsive ────────────────────────────────────────── */
@@ -1061,9 +1083,8 @@ body.portfolio .hobby-symbol { font-size:29px; color:var(--ink-2) }
 body.portfolio .help-list button { width:100%; display:flex; align-items:center; gap:15px; padding:11px 0; text-align:left; border-bottom:1px solid var(--rule) }
 body.portfolio .help-list code { font:13px var(--mono); color:var(--terminal-accent); min-width:95px }
 body.portfolio .help-list span { font-size:13px; color:var(--ink-2) }
-body.portfolio footer { border-top:1px solid var(--rule); padding:25px 0 29px; display:flex; justify-content:space-between; gap:20px; font:11px/1.5 var(--mono); color:var(--ink-2) }
+body.portfolio footer { border-top:1px solid var(--rule); padding:25px 0 29px; display:flex; flex-wrap:wrap; justify-content:space-between; gap:20px; font:11px/1.5 var(--mono); color:var(--ink-2) }
 body.portfolio footer a { color:var(--ink-2) }
-body.portfolio .footer-note { color:var(--ink-2) }
 body.portfolio .skip { position:absolute; top:-100px; left:20px; z-index:10; padding:12px; background:var(--terminal-accent); color:var(--ink) }
 body.portfolio .skip:focus { top:15px }
 body.portfolio .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0 }
@@ -1093,7 +1114,6 @@ body.portfolio .edition { display:none }
 body.portfolio .eyebrow { font-size:9px; letter-spacing:.8px }
 body.portfolio .location { display:none }
 body.portfolio .speech { margin-right:8px }
-body.portfolio .footer-note { display:none }
 }
 @media(max-width:900px) {
 body.portfolio .site-shell { padding:0 23px }
@@ -1356,7 +1376,7 @@ body.portfolio .skip { background: var(--acc); color: #0E1A2B; }
     border-radius: 6px; background: var(--acc); color: #0E1A2B; font: 500 13px var(--mono);
   }
   body.portfolio .mobile-terminal-link:hover { background: #FFE455; color: #0E1A2B; }
-  body.portfolio .character-stage { width: 100%; max-width: 310px; min-height: 0; margin: 26px auto 0; }
+  body.portfolio .character-stage { width: 100%; max-width: 420px; min-height: 0; margin: 26px auto 0; }
   body.portfolio .speech { font-size: 12px; }
   body.portfolio .scene-caption { font-size: 10px; }
   body.portfolio .social-links { flex-wrap: wrap; gap: 8px 20px; padding-top: 10px; }
@@ -1381,6 +1401,7 @@ body.portfolio .skip { background: var(--acc); color: #0E1A2B; }
   body.portfolio footer { flex-direction: column; gap: 8px; font-size: 12px; }
 }
 @media (max-width: 360px) {
+  body.portfolio .speech { margin-inline: 6px; padding-inline: 10px; font-size: 11px; }
   body.portfolio .terminal-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   body.portfolio .terminal-nav button span { font-size: 13px; }
   body.portfolio .terminal-title { padding-inline: 12px; }
@@ -1403,9 +1424,11 @@ body.portfolio .character-fit { display: flex; flex-direction: column; width: 10
        the page is magnified (below), which is why nothing here uses vw or vh. */
     --pf-vw: 1vw;
     --pf-vh: 1vh;
-    --pf-header: clamp(72px, 9.8 * var(--pf-vh), 106px);
-    --pf-top: clamp(28px, 4.8 * var(--pf-vh), 52px);
-    --pf-bottom: clamp(20px, 4 * var(--pf-vh), 44px);
+    /* Keep the surrounding chrome compact so the character can use the left
+       column at its natural ratio, even on shorter laptop screens. */
+    --pf-header: clamp(72px, 8 * var(--pf-vh), 88px);
+    --pf-top: clamp(20px, 3 * var(--pf-vh), 32px);
+    --pf-bottom: clamp(16px, 2.5 * var(--pf-vh), 28px);
     --pf-note-gap: 15px;
     --pf-note: 26px;
     --pf-footer: clamp(48px, 6.6 * var(--pf-vh), 72px);
@@ -1421,15 +1444,15 @@ body.portfolio .character-fit { display: flex; flex-direction: column; width: 10
   body.portfolio footer { min-height: var(--pf-footer); padding-block: 0; align-items: center; }
   body.portfolio .intro h1 {
     font-size: clamp(34px, min(3.5 * var(--pf-vw), 6 * var(--pf-vh)), 54px);
-    margin: clamp(14px, 2.2 * var(--pf-vh), 24px) 0 clamp(8px, 1.4 * var(--pf-vh), 15px);
+    margin: 14px 0 8px;
   }
-  body.portfolio .intro-copy { margin-top: clamp(10px, 1.9 * var(--pf-vh), 20px); }
-  body.portfolio .social-links { margin-top: clamp(10px, 2 * var(--pf-vh), 21px); padding-top: clamp(12px, 2.1 * var(--pf-vh), 23px); }
+  body.portfolio .intro-copy { margin-top: 10px; }
+  body.portfolio .social-links { margin-top: 10px; padding-top: 12px; }
   /* Cartman takes the height left beside the terminal. The stage is a size
      container, so the frame is sized from both of its dimensions at once and
      the 3:2 sprite is scaled, never stretched. 64px holds the speech bubble's
      overhang and the caption line. */
-  body.portfolio .character-stage { container-type: size; min-height: 204px; margin-top: clamp(14px, 2.8 * var(--pf-vh), 30px); }
+  body.portfolio .character-stage { container-type: size; min-height: 204px; margin-top: 14px; align-items: center; }
   body.portfolio .character-fit { container: pf-fit / inline-size; width: min(100cqw, (100cqh - 64px) * 1.5); }
   /* A frame narrower than the bubble: hang the bubble off the frame's right
      edge on one line instead of wrapping it into a tall block over the copy. */
@@ -1441,9 +1464,6 @@ body.portfolio .character-fit { display: flex; flex-direction: column; width: 10
 }
 @media (min-width: 901px) and (pointer: coarse) {
   body.portfolio { --pf-note: 44px; }
-}
-@media (min-width: 1450px) {
-  body.portfolio { --pf-top: clamp(28px, 6 * var(--pf-vh), 65px); }
 }
 
 /* Fill wide windows. The page is drawn 1440px wide and every size in it is in

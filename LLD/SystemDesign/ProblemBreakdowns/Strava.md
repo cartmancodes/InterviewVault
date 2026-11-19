@@ -495,6 +495,3 @@ Answer the question below to find your gaps.
 - [Scaling Writes](../Patterns/ScalingWrites.md) — the sharding/tiering pattern applied to the growing activity store.
 - [Real-Time Updates](../Patterns/Real-TimeUpdates.md) — deciding between polling, SSE, and WebSockets for friend-following.
 - [FB Live Comments](FbLiveComments.md) · [Whatsapp](Whatsapp.md) — related realtime systems referenced for live activity sharing.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/strava](https://www.hellointerview.com/learn/system-design/problem-breakdowns/strava)*

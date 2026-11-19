@@ -186,6 +186,3 @@ In system design interviews, proactively identifying and applying these patterns
 - [Consistent Hashing](../../CoreConcepts/ConsistentHashing.md) — the hash ring used for stateful realtime servers.
 - [Caching](../../CoreConcepts/Caching.md) — the read-scaling workhorse across these patterns.
 - [Networking](../../CoreConcepts/Networking.md) — protocol choices that underpin realtime update delivery.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/in-a-hurry/patterns](https://www.hellointerview.com/learn/system-design/in-a-hurry/patterns)*

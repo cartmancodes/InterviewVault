@@ -220,7 +220,8 @@ for (const file of pages) {
     } else if (ref.startsWith('/')) {
       links++;
       if (!existsSync(resolve(ref))) problems.push(`${rel}: broken link ${ref}`);
-    } else if (!/^(https?:|mailto:|tel:|data:|javascript:)/i.test(ref)) {
+    } else if (!/^[a-z][a-z0-9+.-]*:/i.test(ref)) {
+      // Any URI scheme (https:, mailto:, upi:, ...) is external, not a relative path.
       problems.push(`${rel}: unresolved relative link ${ref}`);
     }
   }

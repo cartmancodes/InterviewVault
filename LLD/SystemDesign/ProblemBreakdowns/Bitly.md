@@ -448,6 +448,3 @@ Answer the question below to find your gaps.
 - [Redis](../DeepDives/Redis.md) — the single-threaded, atomic `INCR` store behind the global counter and the cache layer.
 - [Postgresql](../DeepDives/Postgresql.md) — a solid default for the low-write mapping store, with replication for availability.
 - [Sharding](../CoreConcepts/Sharding.md) — how to split the mapping table across servers if a single instance ever hits hardware limits.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/bitly](https://www.hellointerview.com/learn/system-design/problem-breakdowns/bitly)*

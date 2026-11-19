@@ -548,6 +548,3 @@ Answer the question below to find your gaps.
 - [Cassandra](../DeepDives/Cassandra.md) — LSM-tree storage for write-heavy workloads.
 - [Redis](../DeepDives/Redis.md) — in-memory hash tables and geohash-based geospatial commands.
 - [Scaling Reads](../Patterns/ScalingReads.md) — indexing as the first lever for read-heavy systems.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/core-concepts/db-indexing](https://www.hellointerview.com/learn/system-design/core-concepts/db-indexing)*

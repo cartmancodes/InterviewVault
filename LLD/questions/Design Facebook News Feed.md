@@ -2,7 +2,7 @@
 
 > **Pattern**: Fan-out / Feed Aggregation
 > **Difficulty**: Medium–Hard
-> **Sources**: [Hello Interview](https://www.hellointerview.com/learn/system-design/problem-breakdowns/fb-news-feed) · Twitter/Meta/LinkedIn/Pinterest Engineering Blogs
+> **Sources**: Twitter/Meta/LinkedIn/Pinterest Engineering Blogs
 
 > **Summary**: A news feed delivers a personalized, reverse-chronological (or ML-ranked) stream of posts from followed accounts to billions of users at sub-second latency. The defining tension is a ~50:1 read-to-write ratio combined with follower counts that span 0 to 100M+, making per-user fan-out wildly asymmetric. The production answer is **hybrid fanout**: precompute normal-account feeds into per-user Redis sorted sets (fan-out on write), skip celebrities above a threshold and merge their recent posts live at read time (fan-out on read), front hot viral posts with a replicated cache, and — at hyperscale — replace reverse-chron with a multi-stage ML ranking pipeline.
 

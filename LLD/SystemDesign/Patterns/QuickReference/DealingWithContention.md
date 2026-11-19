@@ -84,6 +84,3 @@ For ride sharing, pending_request prevents simultaneous ride requests to one dri
 For flash sales, combine versioned inventory updates with temporary cart holds.
 
 For one hot item needing strong consistency, one worker processes that resource's queue.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/patterns/dealing-with-contention/quick-reference](https://www.hellointerview.com/learn/system-design/patterns/dealing-with-contention/quick-reference)*

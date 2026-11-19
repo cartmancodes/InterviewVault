@@ -550,6 +550,3 @@ Answer the question below to find your gaps.
 - [Sharding](../../CoreConcepts/Sharding.md) — sharding by `auctionId` to spread bid write throughput.
 - [Distributed Locking](../../CoreConcepts/DistributedLocking.md) — row locks versus optimistic concurrency control for serializing bids.
 - [FB Live Comments](FbLiveComments.md) — a deeper treatment of the pub/sub broadcast pattern referenced here.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/online-auction](https://www.hellointerview.com/learn/system-design/problem-breakdowns/online-auction)*

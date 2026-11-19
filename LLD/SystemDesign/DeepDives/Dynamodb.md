@@ -419,6 +419,3 @@ Answer the question below to find your gaps.
 - [Cassandra](Cassandra.md) — an open-source, vendor-neutral wide-column alternative.
 - [Elasticsearch](Elasticsearch.md) — commonly kept in sync with DynamoDB via Streams for search.
 - [Scaling Reads](../Patterns/ScalingReads.md) — where DAX and secondary indexes fit the broader read-scaling toolkit.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/deep-dives/dynamodb](https://www.hellointerview.com/learn/system-design/deep-dives/dynamodb)*

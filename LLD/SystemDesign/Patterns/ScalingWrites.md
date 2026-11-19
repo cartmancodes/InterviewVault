@@ -448,6 +448,3 @@ Get a quick-reference sheet for this topic, perfect for last-minute review.
 - [Cassandra](../DeepDives/Cassandra.md) — the append-only, write-optimized store called out for high write throughput.
 - [Kafka](../DeepDives/Kafka.md) — the queue used to decouple write acceptance from processing.
 - [Redis](../DeepDives/Redis.md) — cluster sharding and disk-flush batching referenced above.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/patterns/scaling-writes](https://www.hellointerview.com/learn/system-design/patterns/scaling-writes)*

@@ -673,6 +673,3 @@ Answer the question below to find your gaps.
 - [Sharding](../../CoreConcepts/Sharding.md) — sharding the transaction database by `merchant_id` for write scale.
 - [Scaling Reads](../Patterns/ScalingReads.md) — read replicas and Redis caching for status queries and reports.
 - [API Gateway](../DeepDives/ApiGateway.md) — the entry point handling authentication, rate limiting, and routing.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/payment-system](https://www.hellointerview.com/learn/system-design/problem-breakdowns/payment-system)*

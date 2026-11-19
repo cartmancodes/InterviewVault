@@ -175,6 +175,3 @@ WA 98103
 - [Breakdowns of Popular System Design Questions](BreakdownsOfPopularSystemDesignQuestions.md) — how to think about the questions in the tables above.
 - [Bitly](../ProblemBreakdowns/Bitly.md) — a good Easy starter write-up to attempt first.
 - [Uber](../ProblemBreakdowns/Uber.md) — a Hard question to work toward once you're comfortable.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/in-a-hurry/how-to-prepare](https://www.hellointerview.com/learn/system-design/in-a-hurry/how-to-prepare)*

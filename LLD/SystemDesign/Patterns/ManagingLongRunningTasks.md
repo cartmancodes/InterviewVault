@@ -325,6 +325,3 @@ Most importantly, don't overthink it. This pattern shows up in nearly every comp
 Answer the question below to find your gaps.
 
 Get a quick-reference sheet for this topic, perfect for last-minute review.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/patterns/long-running-tasks](https://www.hellointerview.com/learn/system-design/patterns/long-running-tasks)*

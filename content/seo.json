@@ -1,0 +1,6 @@
+{
+  "LLD/SystemDesign/IntheWild/WhyOurEksPodsKeptGettingOomKilled.md": {
+    "title": "EKS OOMKilled: glibc Thread Arenas & MALLOC_ARENA_MAX",
+    "description": "How glibc thread arena fragmentation caused OOMKilled Python pods on Amazon EKS, how we diagnosed it, and why MALLOC_ARENA_MAX=2 fixed the memory growth."
+  }
+}

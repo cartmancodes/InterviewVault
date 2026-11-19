@@ -426,6 +426,3 @@ Answer the question below to find your gaps.
 - [Redis](../DeepDives/Redis.md) — backs the per-domain lock, rate-limiting window, and RedisBloom content-dedup filter.
 - [Data Structures for Big Data](../DeepDives/DataStructuresForBigData.md) — Bloom filters and other probabilistic structures for large-scale deduplication.
 - [Consistent Hashing](../../CoreConcepts/ConsistentHashing.md) — distributing domains and work across crawler machines.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/web-crawler](https://www.hellointerview.com/learn/system-design/problem-breakdowns/web-crawler)*

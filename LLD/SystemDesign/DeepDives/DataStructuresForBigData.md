@@ -528,6 +528,3 @@ Answer the question below to find your gaps.
 - [Web Crawler](../ProblemBreakdowns/WebCrawler.md) — uses a centralized Bloom filter to avoid re-crawling seen URLs.
 - [YouTube Top K](../ProblemBreakdowns/YoutubeTopK.md) — Count-Min Sketch for approximate top-K video views at massive scale.
 - [Metrics Monitoring](../ProblemBreakdowns/MetricsMonitoring.md) — bucketed histograms / approximate quantiles for latency percentiles and SLOs.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/deep-dives/data-structures-for-big-data](https://www.hellointerview.com/learn/system-design/deep-dives/data-structures-for-big-data)*

@@ -2,7 +2,6 @@
 
 > **Pattern**: Stream Aggregation / Exactly-Once
 > **Difficulty**: Hard
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/ad-click-aggregator)
 
 > **Summary**: An ad click aggregator straddles two opposed workloads — a write-heavy ingest firehose (~10K clicks/sec, ~100M/day) and a read-heavy analytics tier (advertisers refreshing dashboards). Both sides touch money, so clicks can be neither lost nor double-counted, yet dashboards must feel live. The mature design lands clicks in Kafka behind an HMAC + Redis `SET NX` dedup gate, aggregates them in Flink 1-minute tumbling windows into an OLAP store for fast "estimated" reads, and reconciles nightly with Spark over the S3 event lake to produce the exact, audit-proof numbers that billing actually charges against.
 

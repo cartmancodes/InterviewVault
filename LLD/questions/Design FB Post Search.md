@@ -2,7 +2,6 @@
 
 > **Pattern**: Inverted Index / Search
 > **Difficulty**: Medium
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/fb-post-search)
 
 > **Summary**: FB Post Search lets a user type a keyword and get back matching posts sorted by recency or by like count, over a large, continuously growing corpus with a one-minute freshness bar. The load-bearing choice is an inverted index that maps each token to two precomputed posting lists — a Redis list ordered by recency and a Redis sorted set ordered by like count — so the hot path is an O(log N + page_size) read instead of a scan-and-sort. Writes are decoupled from the index via a Postgres → Debezium CDC → Kafka pipeline, likes are folded into the index only at milestone thresholds to tame write amplification, and the index is sharded by token with hot-key mitigation for celebrity terms.
 

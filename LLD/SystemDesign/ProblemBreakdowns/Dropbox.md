@@ -569,6 +569,3 @@ Answer the question below to find your gaps.
 - [Dynamodb](../DeepDives/Dynamodb.md) — the NoSQL store chosen for file metadata.
 - [Api Gateway](../DeepDives/ApiGateway.md) — the LB/gateway layer, including payload-size limits that motivate chunking.
 - [Data Modeling](../CoreConcepts/DataModeling.md) — modeling the share relationship (sharelist vs. normalized SharedFiles table).
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/dropbox](https://www.hellointerview.com/learn/system-design/problem-breakdowns/dropbox)*

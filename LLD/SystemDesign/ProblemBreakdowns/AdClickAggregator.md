@@ -392,6 +392,3 @@ Answer the question below to find your gaps.
 - [Time Series Databases](../DeepDives/TimeSeriesDatabases.md) — the alternative to OLAP for time-range metrics, and why high ad cardinality favors OLAP.
 - [Sharding](../../CoreConcepts/Sharding.md) — partitioning the stream by AdId and mitigating hot shards.
 - [Redis](../DeepDives/Redis.md) — the distributed cache backing impression-ID deduplication.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/ad-click-aggregator](https://www.hellointerview.com/learn/system-design/problem-breakdowns/ad-click-aggregator)*

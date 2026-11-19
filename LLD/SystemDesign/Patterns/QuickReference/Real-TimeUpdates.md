@@ -97,6 +97,3 @@ The extra indirection has minimal latency impact, under 10ms.
 - **Missed update replay**: Use per-user queues or sequence numbers; Redis streams are a popular option.
 - **Celebrity fan-out**: Cache once, then distribute through regional or hierarchical layers.
 - **Message ordering**: For product designs, send related messages through one server or partition.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/patterns/realtime-updates/quick-reference](https://www.hellointerview.com/learn/system-design/patterns/realtime-updates/quick-reference)*

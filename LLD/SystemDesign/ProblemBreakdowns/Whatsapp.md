@@ -654,6 +654,3 @@ Answer the question below to find your gaps.
 - [Sharding](../../CoreConcepts/Sharding.md) — partitioning Pub/Sub channels and tables by userId.
 - [Handling Large Blobs](../Patterns/HandlingLargeBlobs.md) — the pre-signed URL upload pattern for media attachments.
 - [Managing Long Running Tasks](../Patterns/ManagingLongRunningTasks.md) — background cleanup via TTLs on Inbox and Message tables.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/whatsapp](https://www.hellointerview.com/learn/system-design/problem-breakdowns/whatsapp)*

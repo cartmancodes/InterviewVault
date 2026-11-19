@@ -863,6 +863,3 @@ Answer the question below to find your gaps.
 - [Proximity Search](ProximitySearch.md) — BKD trees and k-d trees that power `geo_point`/`geo_distance` queries.
 - [PostgreSQL](Postgresql.md) — a common authoritative store (with full-text search) that Elasticsearch sits in front of.
 - [DynamoDB](Dynamodb.md) — an authoritative store frequently synced to Elasticsearch via Change Data Capture.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/deep-dives/elasticsearch](https://www.hellointerview.com/learn/system-design/deep-dives/elasticsearch)*

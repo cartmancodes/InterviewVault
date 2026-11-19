@@ -719,6 +719,3 @@ Get a quick-reference sheet for this topic, perfect for last-minute review.
 
 1. <a id="user-content-fn-dns"></a>DNS technically can run over TCP or UDP, but we'll exclude that for simplicity in this illustration. [↩](#user-content-fnref-dns)
 2. <a id="user-content-fn-sse"></a>We use SSE extensively for Hello Interview and the amount of time we've spent dealing with networking edge cases is mind boggling. [↩](#user-content-fnref-sse)
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/patterns/realtime-updates](https://www.hellointerview.com/learn/system-design/patterns/realtime-updates)*

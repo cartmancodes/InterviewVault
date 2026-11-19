@@ -427,6 +427,3 @@ Answer the question below to find your gaps.
 - [Caching](../../CoreConcepts/Caching.md) — the reuse-the-warm-prefix idea behind KV-cache / prefix caching.
 - [API Gateway](../DeepDives/ApiGateway.md) — the entry point that handles auth, rate limiting, and routing.
 - [Rate Limiter](RateLimiter.md) — per-user token buckets and shared counters used for fairness across users.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/chatgpt](https://www.hellointerview.com/learn/system-design/problem-breakdowns/chatgpt)*

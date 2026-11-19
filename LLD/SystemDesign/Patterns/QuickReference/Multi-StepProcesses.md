@@ -77,6 +77,3 @@ Most CRUD, single-service, and high-frequency low-value operations do not justif
 - **Signals**: External events wake the workflow by ID; waiting holds no thread or worker memory.
 - **Continue-as-New**: Start a fresh run with current state and empty history; resumes at current position.
 - **Activity Payloads**: Pass identifiers instead of huge inputs/results to keep workflow history small.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/patterns/multi-step-processes/quick-reference](https://www.hellointerview.com/learn/system-design/patterns/multi-step-processes/quick-reference)*

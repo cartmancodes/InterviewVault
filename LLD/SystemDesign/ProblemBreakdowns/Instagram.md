@@ -497,6 +497,3 @@ Answer the question below to find your gaps.
 - [Redis](../DeepDives/Redis.md) — the ZSET-backed feed store, plus Sentinel/persistence for durability.
 - [DynamoDB](../DeepDives/Dynamodb.md) — the metadata store with GSIs powering the Follows and Posts tables.
 - [FB News Feed](FbNewsFeed.md) — the closely related feed-generation breakdown referenced throughout.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/instagram](https://www.hellointerview.com/learn/system-design/problem-breakdowns/instagram)*

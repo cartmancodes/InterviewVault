@@ -172,6 +172,3 @@ Lastly, we're constantly updating our content based on your feedback. If you hav
 - [Core Concepts](CoreConcepts.md) — the fundamentals that power Solution Design.
 - [Common Patterns](CommonPatterns.md) — recurring building blocks that show up across problem breakdowns.
 - [Breakdowns of Popular System Design Questions](BreakdownsOfPopularSystemDesignQuestions.md) — worked solutions showing per-level expectations in action.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/in-a-hurry/introduction](https://www.hellointerview.com/learn/system-design/in-a-hurry/introduction)*

@@ -17,6 +17,7 @@ const TPL = path.join(__dirname, 'template');
 const DIAGRAMS = path.join(SITE, 'assets', 'diagrams');
 const walkthroughs = JSON.parse(readFileSync(path.join(REPO, 'content/visuals/walkthroughs.json'), 'utf8'));
 const walkthroughByAsset = new Map(walkthroughs.map(item => [item.asset, item]));
+const seoBySource = JSON.parse(readFileSync(path.join(REPO, 'content/seo.json'), 'utf8'));
 
 /* ── collections: repo dir -> site section ─────────────── */
 const COLLECTIONS = [
@@ -264,8 +265,17 @@ ${SOCIALS}
 <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch to dark mode"><span id="theme-icon" aria-hidden="true">☾</span> <span id="theme-label">Dark mode</span></button>
 </div></header>`;
 
+const supportLinks = `<details class="support-menu">
+<summary>Support my work <span aria-hidden="true">+</span></summary>
+<div class="support-panel"><p class="support-heading">Fuel the next idea.</p><p class="support-description">Coffee or chai, thanks for keeping me going.</p>
+<div class="support-links" role="group" aria-label="Support options">
+<a class="support-option" href="https://buymeacoffee.com/shubhchak" target="_blank" rel="noopener noreferrer">Buy me a coffee <span aria-hidden="true">☕</span></a>
+<a class="support-option support-upi" href="upi://pay?pa=9199083445-3%40ybl&amp;pn=Shubhojeet%20Chakraborty&amp;cu=INR" title="Open your UPI app"><span>Buy me a chai <span aria-hidden="true">🍵</span></span><span class="support-upi-id">UPI · 9199083445-3@ybl</span></a>
+</div></div></details>`;
+
 const footer = () => `<footer class="foot"><div class="foot-in">
 <span>cartmancodes/vault — system design study vault</span>
+${supportLinks}
 <span>${docs.length} documents · ${docs.reduce((a, d) => a + d.diagrams, 0)} diagrams</span>
 </div></footer>`;
 
@@ -293,9 +303,10 @@ function pageTitleForDoc(doc) {
  * @param {string} [options.cls] - Additional body class names.
  * @param {boolean} [options.chrome] - Whether to render standard header and footer.
  * @param {string} [options.path] - Page URL path for the self-referencing canonical link.
+ * @param {string} [options.type] - Open Graph page type.
  * @returns {string} Rendered HTML string.
  */
-function page({ title, desc, body, active, cls = '', chrome = true, path: pagePath = '/' }) {
+function page({ title, desc, body, active, cls = '', chrome = true, path: pagePath = '/', type = 'website' }) {
   const canonicalUrl = `${SITE_ORIGIN}${pagePath.startsWith('/') ? pagePath : '/' + pagePath}`;
   return `<!DOCTYPE html>
 <html lang="en">
@@ -304,11 +315,15 @@ function page({ title, desc, body, active, cls = '', chrome = true, path: pagePa
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="/assets/theme.js"></script>
 <title>${esc(title)}</title>
-<link rel="canonical" href="${canonicalUrl}">
+<link rel="canonical" href="${esc(canonicalUrl)}">
 <meta name="description" content="${esc(desc)}">
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(desc)}">
-<meta property="og:type" content="website">
+<meta property="og:type" content="${esc(type)}">
+<meta property="og:url" content="${esc(canonicalUrl)}">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="${esc(title)}">
+<meta name="twitter:description" content="${esc(desc)}">
 ${FONTS}
 <link rel="stylesheet" href="/assets/site.css">
 <link rel="stylesheet" href="/assets/figures.css">
@@ -388,9 +403,11 @@ ${sheetBtn}
 <script src="/assets/figures.js" defer></script>${vaultScript}`;
 
   mkdirSync(path.dirname(doc.out), { recursive: true });
+  const seo = seoBySource[doc.rel];
   writeFileSync(doc.out, page({
-    title: pageTitleForDoc(doc),
-    desc: `${doc.title}: ${doc.col.blurb}`,
+    title: seo?.title || pageTitleForDoc(doc),
+    desc: seo?.description || `${doc.title}: ${doc.col.blurb}`,
+    type: 'article',
     body, active: doc.col.key, cls: doc.dsa ? 'doc dsa-doc' : 'doc',
     path: doc.url,
   }));
@@ -620,6 +637,7 @@ ${PF_PROJECTS.map((project, i) => `<a class="project" href="${esc(project.href)}
 <p>${esc(project.blurb)}</p><span class="project-meta">${esc(project.meta)}</span></div></a>`).join('')}`;
   let body = readFileSync(path.join(TPL, 'portfolio.html'), 'utf8')
     .replaceAll('{{year}}', String(new Date().getFullYear()))
+    .replaceAll('{{support}}', supportLinks)
     .replaceAll('{{docs}}', String(docs.length))
     .replaceAll('{{diagrams}}', String(totalDiagrams))
     .replace('{{experience}}', experience)

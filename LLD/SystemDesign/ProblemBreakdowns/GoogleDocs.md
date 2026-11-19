@@ -466,6 +466,3 @@ For staff engineers, I'm expecting a degree of mastery over the problem. I'd exp
 - [Real-Time Mouse Pointers](https://www.canva.dev/blog/engineering/realtime-mouse-pointers/): How Canva enables collaborative editing using WebRTC.
 
 Answer the question below to find your gaps.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/problem-breakdowns/google-docs](https://www.hellointerview.com/learn/system-design/problem-breakdowns/google-docs)*

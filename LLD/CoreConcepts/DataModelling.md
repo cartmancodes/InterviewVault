@@ -1267,4 +1267,3 @@ SELECT create_hypertable('metrics', 'timestamp', chunk_time_interval => INTERVAL
 ---
 
 **Last Updated**: December 2024
-**Source**: [HelloInterview - Data Modeling](https://www.hellointerview.com/learn/system-design/core-concepts/data-modeling)

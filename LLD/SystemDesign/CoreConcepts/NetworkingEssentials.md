@@ -813,6 +813,3 @@ Get a quick-reference sheet for this topic, perfect for last-minute review.
 - [Real-Time Updates](../Patterns/Real-TimeUpdates.md) — server-side design for SSE and WebSocket push described here.
 - [Scaling Reads](../Patterns/ScalingReads.md) — CDN and edge caching for read-heavy, globally distributed traffic.
 - [Payment System](../ProblemBreakdowns/PaymentSystem.md) — idempotency keys and retry safety applied to a real problem.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/core-concepts/networking-essentials](https://www.hellointerview.com/learn/system-design/core-concepts/networking-essentials)*

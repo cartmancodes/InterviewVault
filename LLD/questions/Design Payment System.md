@@ -2,7 +2,6 @@
 
 > **Pattern**: Ledger / Idempotency
 > **Difficulty**: Hard
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/payment-system)
 
 > **Summary**: A payment system sits between merchants, customers, and external PSPs (Stripe, Adyen, Braintree) and moves money exactly once even when the network, the PSP, or our own services fail mid-transaction. The hard parts are not the happy path: they are end-to-end idempotency (client → service → PSP → ledger), an append-only double-entry ledger whose debits and credits always sum to zero, choosing correctness over availability on the write path, and daily reconciliation against the PSP's record of truth. The mature design never holds a DB transaction open across a PSP call, resolves timeout ambiguity with webhooks plus a PENDING-recovery worker, and shards the ledger by account so every money-moving write stays single-shard.
 

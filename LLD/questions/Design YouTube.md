@@ -2,7 +2,6 @@
 
 > **Pattern**: Video Storage / Streaming
 > **Difficulty**: Hard
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/youtube)
 
 > **Summary**: YouTube is the canonical large-blob streaming system, defined by two hard flows: uploading videos that can reach tens of GB (which must survive network interruption) and watching them (which must start in under ~2 seconds and adapt smoothly to any bandwidth). The mature design keeps heavy bytes out of the app tier entirely — clients upload directly to S3 via presigned multipart URLs, an async DAG orchestrator (Temporal) eagerly transcodes every upload into a bitrate ladder, and a tiered CDN with origin shielding serves adaptive-bitrate (HLS/DASH) segments from the edge. Cassandra holds metadata behind a Redis cache, and storage is tiered hot/warm/cold with source masters kept forever for future re-encodes.
 

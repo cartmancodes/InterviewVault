@@ -883,6 +883,3 @@ Answer the question below to find your gaps.
 - [Distributed Locking](../../CoreConcepts/DistributedLocking.md) — locking semantics underlying `FOR UPDATE` and contention handling.
 - [Scaling Reads](../Patterns/ScalingReads.md) — read replicas and caching for read-heavy workloads.
 - [Scaling Writes](../Patterns/ScalingWrites.md) — the complementary set of write-scaling patterns.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/deep-dives/postgres](https://www.hellointerview.com/learn/system-design/deep-dives/postgres)*

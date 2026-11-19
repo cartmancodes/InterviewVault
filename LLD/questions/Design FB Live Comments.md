@@ -2,7 +2,6 @@
 
 > **Pattern**: Real-time Broadcast / Fanout
 > **Difficulty**: Medium
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/fb-live-comments)
 
 > **Summary**: FB Live Comments is the chat plane floating over a live video — a read-heavy, fanout-shaped workload where one comment writer spawns tens of thousands of reads, all wanting their comment within ~200 ms. The hard parts are massive write fan-out on a single hot stream, real-time push to millions of viewers, and graceful degradation when a mega-stream's firehose exceeds what any human (or socket) can absorb. The mature design pushes with SSE, brokers comments through Redis Pub/Sub (Kafka on the write path), samples aggressively above a velocity threshold, and offloads mega-streams to CDN snapshots — accepting per-stream partial ordering as the correct, scalable target.
 

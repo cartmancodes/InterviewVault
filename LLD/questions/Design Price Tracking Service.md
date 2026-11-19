@@ -2,7 +2,6 @@
 
 > **Pattern**: Scraping / Time-series / Alerting
 > **Difficulty**: Medium
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/camelcamelcamel)
 
 > **Summary**: A price tracker lets users view a product's historical price chart and get notified when it drops below a target. The hard parts are not the UI but the data pipeline behind it: politely scraping hundreds of millions of products against aggressive anti-bot defenses, deduplicating noisy samples from scrapers and a crowd-sourced Chrome extension, storing years of time-series cheaply, and fanning alerts out within an hour without melting the notifier during a flash sale. The mature design leans on a Redis-backed scraper control plane, a Kafka ingest backbone feeding a Sample Processor, TimescaleDB with change-data-only storage, and a Redis watcher index for O(log N) alert matching.
 

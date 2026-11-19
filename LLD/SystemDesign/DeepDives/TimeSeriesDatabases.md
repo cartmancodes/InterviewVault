@@ -511,6 +511,3 @@ Answer the question below to find your gaps.
 - [PostgreSQL](Postgresql.md) — the general-purpose baseline this doc contrasts against for time-series workloads.
 - [Metrics Monitoring](../ProblemBreakdowns/MetricsMonitoring.md) — a full problem breakdown built on time-series storage.
 - [Ad Click Aggregator](../ProblemBreakdowns/AdClickAggregator.md) — downsampling and rollups applied to billions of events in a problem context.
-
----
-*Source: [https://www.hellointerview.com/learn/system-design/deep-dives/time-series-databases](https://www.hellointerview.com/learn/system-design/deep-dives/time-series-databases)*

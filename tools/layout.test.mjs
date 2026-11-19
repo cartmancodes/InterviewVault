@@ -90,6 +90,8 @@ test('the shell and its grid backdrop reach the bottom of the window in both the
 
 test('the Cartman frame stays 3:2, stays legible, and stays inside its column', async () => {
   const shapes = [...DESKTOP.map(([width, height]) => ({ width, height })),
+    ...[[901, 720], [1024, 1024], [1280, 1024], [2560, 720], [3840, 2160]].map(([width, height]) => ({ width, height })),
+    ...[[320, 568], [430, 932], [600, 960], [601, 960], [900, 1200]].map(([width, height]) => ({ width, height, touch: true })),
     { width: 1180, height: 820, touch: true }, { width: 820, height: 1180, touch: true },
     { width: 844, height: 390, touch: true }, { width: 390, height: 844, touch: true }, { width: 360, height: 640, touch: true }];
   for (const shape of shapes) {

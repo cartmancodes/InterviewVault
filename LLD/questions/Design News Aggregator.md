@@ -2,7 +2,6 @@
 
 > **Pattern**: Content Ingestion / Clustering
 > **Difficulty**: Medium
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/google-news)
 
 > **Summary**: A news aggregator continuously polls thousands of publisher feeds, deduplicates wire-syndicated copies, and clusters independently-written articles about the same event into one browsable card — never hosting the article body, only headline, thumbnail, and a redirect. The hard parts are an adaptive crawl scheduler over 100K+ pull-based sources, near-duplicate detection (SimHash) plus event clustering (MinHash LSH real-time singletons merged by a batch job), a two-vector personalization re-ranker over implicit signals, and holding a read-heavy feed under 200 ms while breaking news multiplies traffic 10–50x. The mature design is a Kafka-staged ingest pipeline feeding a Redis/Elasticsearch serve plane with edge-side personalization.
 

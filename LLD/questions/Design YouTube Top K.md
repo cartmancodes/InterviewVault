@@ -2,7 +2,6 @@
 
 > **Pattern**: Streaming Aggregation / Heavy Hitters
 > **Difficulty**: Hard
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/top-k)
 
 > **Summary**: Top-K answers one question fast — "what are the K most-viewed videos over a given time window?" — against YouTube-class write volume (~700K events/sec average, multi-million at peak) with tens-of-milliseconds p99 reads and sub-minute freshness. A naive `GROUP BY` melts at scale, so the mature design is a streaming pipeline: client beacons → Kafka partitioned by `video_id` → a Flink stream processor maintaining per-window counters → a materialized rollup store → a Redis/CDN cache the read path hits directly. The hard trade-offs are approximate counting (Count-Min Sketch + Space-Saving) to bound memory, tiered time-window rollups, hot-key mitigation for viral videos, and MapReduce-style fan-in across shards.
 

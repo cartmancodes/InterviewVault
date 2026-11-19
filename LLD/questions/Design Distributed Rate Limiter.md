@@ -2,7 +2,6 @@
 
 > **Pattern**: Coordination / Counting
 > **Difficulty**: Medium
-> **Source**: [hellointerview.com](https://www.hellointerview.com/learn/system-design/problem-breakdowns/distributed-rate-limiter)
 
 > **Summary**: A distributed rate limiter caps how often a client (user, IP, or API key) can call an API over a time window, enforcing a global limit across many gateway nodes without adding meaningful latency (< 10 ms) to the critical path. The design places the limiter at the edge (API gateway), keeps counter state in a centralized, sharded Redis accessed through atomic Lua scripts (to defeat the read-modify-write race), and picks token bucket as the default algorithm for its O(1) state and burst tolerance. The hard parts are consistency-vs-latency trade-offs, sync-vs-async counter updates at scale, hot-key mitigation, and choosing fail-open so the limiter never becomes the API's single point of failure.
 
