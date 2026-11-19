@@ -1259,9 +1259,9 @@ SELECT create_hypertable('metrics', 'timestamp', chunk_time_interval => INTERVAL
 ## 📚 Related Concepts
 
 - [Sharding](./Sharding.md) - Horizontal partitioning strategies
-- [Database Indexing](./DatabaseIndexing.md) - Index types and strategies
+- [Database Indexing](./DataIndexing.md) - Index types and strategies
 - [Caching](./Caching.md) - Cache layers for denormalized reads
-- [PostgreSQL Deep Dive](./PostgreSQL.md) - SQL database internals
+- [PostgreSQL Deep Dive](../SystemDesign/DeepDives/Postgresql.md) - SQL database internals
 - [Redis Deep Dive](./Redis.md) - Key-value store patterns
 
 ---

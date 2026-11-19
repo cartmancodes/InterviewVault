@@ -5,6 +5,7 @@ import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { DSA_TOPICS } from './dsa-config.mjs';
+import { SITE_ORIGIN } from './site-config.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SITE = path.resolve(__dirname, '..', 'site');
@@ -29,6 +30,21 @@ function resolve(ref) {
   if (ref === '/') return path.join(SITE, 'index.html');
   if (ref.endsWith('/')) return path.join(SITE, ref, 'index.html');
   return path.join(SITE, ref);
+}
+
+/**
+ * Computes the expected canonical URL for an HTML file relative to the site root.
+ *
+ * @param {string} rel - Site-relative HTML file path (e.g. "index.html", "vault/index.html").
+ * @param {string} origin - Production site origin without trailing slash.
+ * @returns {string} Expected absolute canonical URL.
+ */
+function expectedCanonical(rel, origin) {
+  if (rel === 'index.html') return `${origin}/`;
+  if (rel.endsWith('/index.html')) {
+    return `${origin}/${rel.slice(0, -'index.html'.length)}`;
+  }
+  return `${origin}/${rel}`;
 }
 
 function checkpointIds(checkpoints) {
@@ -163,20 +179,50 @@ const problems = [];
 const challengePayloads = [];
 const challengePayloadCounts = new Map();
 const authoredSlugs = new Set();
+const seenTitles = new Map();
 
 for (const file of pages) {
   const html = readFileSync(file, 'utf8');
   const rel = path.relative(SITE, file).split(path.sep).join('/');
 
-  for (const m of html.matchAll(/(?:src|href)="(\/[^"]*)"/g)) {
-    const ref = m[1].split('#')[0];
+  const titleMatch = html.match(/<title>([\s\S]*?)<\/title>/i);
+  if (!titleMatch) {
+    problems.push(`${rel}: missing <title> tag`);
+  } else {
+    const pageTitle = titleMatch[1].trim();
+    if (seenTitles.has(pageTitle)) {
+      problems.push(
+        `${rel}: duplicate title "${pageTitle}" (already used by ${seenTitles.get(pageTitle)})`,
+      );
+    } else {
+      seenTitles.set(pageTitle, rel);
+    }
+  }
+
+  const canonicalMatch = html.match(/<link\s+rel="canonical"\s+href="([^"]+)"/i)
+    || html.match(/<link\s+href="([^"]+)"\s+rel="canonical"/i);
+  const expectedUrl = expectedCanonical(rel, SITE_ORIGIN);
+  if (!canonicalMatch) {
+    problems.push(`${rel}: missing canonical link (expected ${expectedUrl})`);
+  } else if (canonicalMatch[1] !== expectedUrl) {
+    problems.push(
+      `${rel}: canonical link mismatch: got "${canonicalMatch[1]}", expected "${expectedUrl}"`,
+    );
+  }
+
+  for (const m of html.matchAll(/(?:src|href)="([^"]*)"/g)) {
+    const rawRef = m[1];
+    const ref = rawRef.split('#')[0];
     if (!ref) continue;
     if (ref.startsWith('/assets/')) {
       assets++;
       if (!existsSync(resolve(ref))) problems.push(`${rel}: missing asset ${ref}`);
-    } else {
+    } else if (ref.startsWith('/')) {
       links++;
       if (!existsSync(resolve(ref))) problems.push(`${rel}: broken link ${ref}`);
+    } else if (!/^[a-z][a-z0-9+.-]*:/i.test(ref)) {
+      // Any URI scheme (https:, mailto:, upi:, ...) is external, not a relative path.
+      problems.push(`${rel}: unresolved relative link ${ref}`);
     }
   }
 

@@ -84,7 +84,9 @@ The most common ways that candidates fail with this competency are:
 
 #### 🏗️ Solution Design
 
-With a problem broken down, your interviewer wants to see how you can solve each of the pieces of the problem. This is where your knowledge of the [Core Concepts](core-concepts) comes into play. You should be able to describe how you would solve each piece of the problem, and how those pieces fit together into a cohesive whole.
+With a problem broken down, your interviewer wants to see how you can solve each of the pieces of the problem.
+This is where your knowledge of the [Core Concepts](./CoreConcepts.md) comes into play. You should be able to
+describe how you would solve each piece of the problem, and how those pieces fit together into a cohesive whole.
 
 The most common ways that candidates fail with this competency are:
 
@@ -96,7 +98,9 @@ The most common ways that candidates fail with this competency are:
 
 #### 🔬 Technical Excellence
 
-To be able to design a great system, you'll need to know about best practices, current technologies, and how to apply them. This is where your knowledge of the [Key Technologies](key-technologies) is important. You should be able to describe how you would use current technologies, with well-recognized patterns, to solve the problems.
+To be able to design a great system, you'll need to know about best practices, current technologies, and how to
+apply them. This is where your knowledge of the [Key Technologies](./KeyTechnologies.md) is important. You should
+be able to describe how you would use current technologies, with well-recognized patterns, to solve the problems.
 
 The most common ways that candidates fail with this competency are:
 

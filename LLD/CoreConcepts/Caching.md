@@ -1599,8 +1599,8 @@ graph LR
 - [Database Indexing](./DataIndexing.md) - Optimize database queries
 - [Data Modeling](./DataModelling.md) - Design efficient schemas
 - [Redis Deep Dive](./Redis.md) - In-memory cache internals
-- [Load Balancing](./LoadBalancing.md) - Distribute cache traffic
-- [System Design Patterns](./Patterns.md) - Scaling strategies
+- [Load Balancing](./Networking.md#load-balancing) - Distribute cache traffic
+- [System Design Patterns](../SystemDesign/InaHurry/CommonPatterns.md) - Scaling strategies
 
 ---
 

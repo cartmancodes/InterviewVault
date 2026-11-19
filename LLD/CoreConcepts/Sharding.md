@@ -1434,7 +1434,7 @@ graph LR
 - [Database Indexing](./DataIndexing.md) - Optimize queries within shards
 - [Caching](./Caching.md) - Reduce cross-shard query costs
 - [Data Modeling](./DataModelling.md) - Design for single-shard operations
-- [Replication](./Replication.md) - Combine with sharding for HA
+- [Replication](../SystemDesign/Patterns/ScalingReads.md#read-replicas) - Combine with sharding for HA
 
 ---
 
