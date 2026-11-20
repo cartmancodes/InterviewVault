@@ -570,6 +570,8 @@ body.portfolio footer .support-option { background: var(--acc); color: var(--acc
   border: var(--cut); border-radius: 10px; box-shadow: var(--lift); background: var(--paper);
   padding: 17px 18px 15px;
 }
+.inline-practice { font: 14px/1.5 var(--sans); }
+.inline-practice .sc-level { margin-top: 0; }
 .sc-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .sc-eyebrow {
   font-family: var(--mono); font-size: 11px; letter-spacing: .12em;

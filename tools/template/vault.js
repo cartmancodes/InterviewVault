@@ -454,7 +454,13 @@
 
     var db = store.read();
     var slug = data.slug;
-    var tier = db.tier || 'senior';
+    var inline = host.classList.contains('inline-practice');
+    var order = { mid: 0, senior: 1, staff: 2 };
+    var tiers = inline ? TIERS.filter(function (t) {
+      return data.checkpoints.some(function (cp) { return order[cp.tier] <= order[t.id]; });
+    }) : TIERS;
+    var preferredTier = db.tier || 'senior';
+    var tier = tiers.some(function (t) { return t.id === preferredTier; }) ? preferredTier : tiers[0].id;
     window.__ivTimed = false;
 
     function save() { store.write(db); }
@@ -480,17 +486,19 @@
       host.innerHTML = '';
       var doc = store.doc(db, slug);
 
-      var head = el('div', 'sc-head');
-      head.appendChild(el('span', 'sc-eyebrow', 'Practice'));
-      var timed = el('label', 'sc-timed');
-      var tbox = el('input');
-      tbox.type = 'checkbox';
-      tbox.checked = !!window.__ivTimed;
-      tbox.addEventListener('change', function () { window.__ivTimed = tbox.checked; });
-      timed.appendChild(tbox);
-      timed.appendChild(el('span', null, 'Timed'));
-      head.appendChild(timed);
-      host.appendChild(head);
+      if (!inline) {
+        var head = el('div', 'sc-head');
+        head.appendChild(el('span', 'sc-eyebrow', 'Practice'));
+        var timed = el('label', 'sc-timed');
+        var tbox = el('input');
+        tbox.type = 'checkbox';
+        tbox.checked = !!window.__ivTimed;
+        tbox.addEventListener('change', function () { window.__ivTimed = tbox.checked; });
+        timed.appendChild(tbox);
+        timed.appendChild(el('span', null, 'Timed'));
+        head.appendChild(timed);
+        host.appendChild(head);
+      }
 
       var lv = levelOf(db.xp);
       var meter = el('div', 'sc-level');
@@ -506,7 +514,7 @@
       host.appendChild(meter);
 
       var tabs = el('div', 'sc-tabs');
-      TIERS.forEach(function (t) {
+      tiers.forEach(function (t) {
         var b = el('button', 'sc-tab' + (t.id === tier ? ' on' : ''), t.label);
         b.type = 'button';
         b.setAttribute('aria-pressed', String(t.id === tier));
@@ -515,12 +523,11 @@
       });
       host.appendChild(tabs);
 
-      var order = { mid: 0, senior: 1, staff: 2 };
       var visible = data.checkpoints.filter(function (cp) { return order[cp.tier] <= order[tier]; });
       var doneN = visible.filter(function (cp) { return doc.cp[cp.id]; }).length;
 
       host.appendChild(el('div', 'sc-track',
-        TIERS.filter(function (t) { return t.id === tier; })[0].label + ' track · ' +
+        tiers.find(function (t) { return t.id === tier; }).label + ' track · ' +
         doneN + ' of ' + visible.length + ' checkpoints'));
 
       var list = el('div', 'sc-list');
@@ -568,6 +575,7 @@
     }
 
     render();
+    host.hidden = false;
 
     // mobile: the sidecar becomes a bottom sheet
     var opener = document.getElementById('iv-sheet-open');

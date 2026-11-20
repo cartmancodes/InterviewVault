@@ -10,6 +10,10 @@ import { SITE_ORIGIN } from './site-config.mjs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SITE = path.resolve(__dirname, '..', 'site');
 const CHALLENGES = path.resolve(__dirname, '..', 'content', 'challenges');
+const SCOPED_CHALLENGE_ROUTES = {
+  notes: 'notes',
+  quickref: 'patterns/quick-reference',
+};
 const AUTHORED_CONTRACT = {
   tradeoff: { type: 'duel', tier: 'senior', xp: 80 },
   capacity: { type: 'ladder', tier: 'senior', xp: 70 },
@@ -240,13 +244,13 @@ for (const file of pages) {
 
   const payloadMatches = [...html.matchAll(/<script\b[^>]*\bid="iv-challenges"[^>]*>([\s\S]*?)<\/script>/g)];
   challengePayloadCounts.set(rel, payloadMatches.length);
-  if (payloadMatches.length > 1 && (rel.startsWith('answers/') || rel.startsWith('deep-dives/') || rel.startsWith('notes/'))) {
+  if (payloadMatches.length > 1) {
     problems.push(`${rel}: expected exactly one iv-challenges payload, found ${payloadMatches.length}`);
   }
 
   for (const m of payloadMatches) {
-    if (!rel.startsWith('answers/') && !rel.startsWith('deep-dives/') && !rel.startsWith('notes/')) {
-      problems.push(`${rel}: iv-challenges payload is outside answers/, deep-dives/, or notes/`);
+    if (!['answers', 'deep-dives', ...Object.values(SCOPED_CHALLENGE_ROUTES)].some((route) => rel.startsWith(route + '/'))) {
+      problems.push(`${rel}: iv-challenges payload is outside the practice collections`);
     }
 
     let payload;
@@ -327,12 +331,12 @@ for (const file of readdirSync(CHALLENGES).filter((f) => f.endsWith('.json'))) {
   }
   authoredSlugs.add(slug);
 
-  const targetSlug = slug.startsWith('notes-') ? slug.slice('notes-'.length) : slug;
-  const targets = slug.startsWith('notes-')
-    ? [`notes/${targetSlug}/index.html`]
+  const scope = Object.keys(SCOPED_CHALLENGE_ROUTES).find((key) => slug.startsWith(key + '-'));
+  const targets = scope
+    ? [`${SCOPED_CHALLENGE_ROUTES[scope]}/${slug.slice(scope.length + 1)}/index.html`]
     : [
-        `answers/${targetSlug}/index.html`,
-        `deep-dives/${targetSlug}/index.html`,
+        `answers/${slug}/index.html`,
+        `deep-dives/${slug}/index.html`,
       ].filter((target) => existsSync(path.join(SITE, target)));
   if (!targets.length) {
     problems.push(`authored challenge ${slug}: no applicable built target page`);
@@ -360,12 +364,12 @@ for (const file of readdirSync(CHALLENGES).filter((f) => f.endsWith('.json'))) {
   }
 }
 
-for (const payload of challengePayloads.filter((entry) => entry.rel.startsWith('deep-dives/'))) {
+for (const payload of challengePayloads.filter((entry) => /^(deep-dives|patterns\/quick-reference)\//.test(entry.rel))) {
   if (!authoredSlugs.has(payload.slug)) {
-    problems.push(`${payload.rel}: deep-dive payload slug "${payload.slug}" has no matching authored source`);
+    problems.push(`${payload.rel}: payload slug "${payload.slug}" has no matching authored source`);
   }
   if (payload.authoredCount <= 0) {
-    problems.push(`${payload.rel}: deep-dive payload authoredCount must be greater than 0`);
+    problems.push(`${payload.rel}: payload authoredCount must be greater than 0`);
   }
 }
 

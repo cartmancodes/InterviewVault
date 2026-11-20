@@ -339,31 +339,40 @@ ${chrome ? footer() : ''}
 }
 
 /* ── doc pages ─────────────────────────────────────────── */
+function challengesForDoc(doc) {
+  // Scope progress and authored files for collections that can share a document slug.
+  const key = doc.col.key;
+  const slug = key === 'notes' || key === 'quickref' ? `${key}-${doc.slug}` : doc.slug;
+  return buildChallenges(path.join(REPO, doc.rel), slug);
+}
+
 function buildDocPage(doc, siblings, idx) {
   const { html, headings } = renderDoc(doc);
   const prev = siblings[idx - 1], next = siblings[idx + 1];
+  const ch = challengesForDoc(doc);
+  const inlinePractice = doc.col.key === 'quickref' && ch.authoredCount > 0;
+  const railPractice = doc.col.key === 'answers'
+    ? ch.checkpoints.length
+    : (doc.col.key === 'deep-dives' || doc.col.key === 'notes') && ch.authoredCount > 0;
+  let sidecar = '', quiz = '', sheetBtn = '', vaultScript = '';
+  if (inlinePractice || railPractice) {
+    sidecar =
+      `<section id="iv-sidecar" class="sidecar${inlinePractice ? ' inline-practice' : ''}" ${inlinePractice ? 'aria-labelledby="revision-quiz" hidden' : 'aria-label="Practice"'}></section>` +
+      `<script type="application/json" id="iv-challenges">${JSON.stringify(ch).replace(/</g, '\\u003c')}</script>`;
+    vaultScript = `<script src="/assets/vault.js" defer></script>`;
+  }
+  if (inlinePractice) {
+    headings.push({ lvl: 2, id: 'revision-quiz', text: 'Revision Quiz' });
+    quiz = `\n<h2 id="revision-quiz">Revision Quiz</h2>\n${sidecar}\n<noscript><p>Enable JavaScript to take the revision quiz.</p></noscript>`;
+  }
+  if (railPractice) {
+    sheetBtn = `<button id="iv-sheet-open" class="sheet-open-btn" type="button" aria-expanded="false" hidden>Practice</button>`;
+  }
   const toc = headings.length
     ? `<nav class="toc"><h4>On this page</h4><ol>${headings
         .map((h) => `<li><a class="${h.lvl === 3 ? 'h3' : ''}" href="#${h.id}">${esc(h.text)}</a></li>`).join('')}</ol></nav>`
     : '';
-
-  // Practice progress is keyed by payload slug. Deep Notes share several document
-  // slugs with other collections (for example Redis), so scope their challenge
-  // files and localStorage entries to the collection.
-  const practiceSlug = doc.col.key === 'notes' ? `notes-${doc.slug}` : doc.slug;
-  const ch = buildChallenges(path.join(REPO, doc.rel), practiceSlug);
-  const hasSidecar = doc.col.key === 'answers'
-    ? ch.checkpoints.length
-    : (doc.col.key === 'deep-dives' || doc.col.key === 'notes') && ch.authoredCount > 0;
-  let sidecar = '', sheetBtn = '', vaultScript = '';
-  if (hasSidecar) {
-    sidecar =
-      `<section id="iv-sidecar" class="sidecar" aria-label="Practice"></section>` +
-      `<script type="application/json" id="iv-challenges">${JSON.stringify(ch).replace(/</g, '\\u003c')}</script>`;
-    sheetBtn = `<button id="iv-sheet-open" class="sheet-open-btn" type="button" aria-expanded="false" hidden>Practice</button>`;
-    vaultScript = `<script src="/assets/vault.js" defer></script>`;
-  }
-  const rail = sidecar || toc ? `<aside class="rail">${sidecar}${toc}</aside>` : '<aside></aside>';
+  const rail = railPractice || toc ? `<aside class="rail">${railPractice ? sidecar : ''}${toc}</aside>` : '<aside></aside>';
   const side = doc.dsa
     ? `<nav class="side dsa-track" aria-label="DSA study track"><h4>DSA study track</h4><ol>${siblings
         .map((s) => `<li><a href="${s.url}"${s.slug === doc.slug ? ' aria-current="page"' : ''}><span class="track-n">${String(s.dsa.order).padStart(2, '0')}</span><span>${esc(s.title)}</span></a></li>`).join('')}</ol></nav>`
@@ -386,10 +395,10 @@ ${side}
 <div class="art-head">
 <div class="art-kicker">${esc(doc.col.label)}</div>
 <h1>${esc(doc.title)}</h1>
-<div class="art-meta">${meta}</div>
+<div class="art-meta">${meta}${inlinePractice ? '<a href="#revision-quiz">Take the quiz</a>' : ''}</div>
 ${dsaMeta}
 </div>
-<div class="prose">${html}</div>
+<div class="prose">${html}${quiz}</div>
 </article>
 <nav class="pager">
 ${prev ? `<a href="${prev.url}"><span>Previous</span><b>${esc(prev.title)}</b></a>` : '<span></span>'}
@@ -662,17 +671,17 @@ ${sections.filter(([, name]) => !['about', 'help'].includes(name)).map(([, name,
 
 /* ── vault map (1h) ────────────────────────────────────── */
 function buildProgressPage() {
-  const practiceDocs = docs.filter((d) => d.col.key === 'answers' || d.col.key === 'notes');
+  const practiceDocs = docs.filter((d) => ['answers', 'notes', 'quickref'].includes(d.col.key));
   const cards = practiceDocs.map((d) => {
-    const practiceSlug = d.col.key === 'notes' ? `notes-${d.slug}` : d.slug;
-    const ch = buildChallenges(path.join(REPO, d.rel), practiceSlug);
-    return { slug: practiceSlug, title: d.title, url: d.url, total: ch.checkpoints.length };
+    const ch = challengesForDoc(d);
+    const total = d.col.key === 'quickref' && !ch.authoredCount ? 0 : ch.checkpoints.length;
+    return { slug: ch.slug, title: d.title, url: d.url, total };
   }).filter((c) => c.total);
 
   const body = `<section class="hero blueprint"><div class="hero-in">
 <div class="eyebrow">Progress · stored on this device</div>
 <h1>The vault map</h1>
-<p class="hero-sub">Every interview question and core concept you have practised, and how far each one got. Nothing leaves this browser — see <a href="#storage">where that stops working</a>.</p>
+<p class="hero-sub">Track your checkpoints across interview questions, core concepts, and quick references. Progress is stored in <a href="#storage">this browser</a>.</p>
 <div class="stats" id="vm-stats"></div>
 </div></section>
 

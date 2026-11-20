@@ -1,0 +1,115 @@
+{
+  "slug": "quickref-dealing-with-contention",
+  "checkpoints": [
+    {
+      "id": "tradeoff",
+      "type": "duel",
+      "tier": "senior",
+      "title": "A payment arrives after the hold expires",
+      "xp": 80,
+      "prompt": "Maya pays for seat A15 just as her hold expires. Before her payment callback arrives, Leo reserves the seat. How should the callback decide whether to issue Maya’s ticket?",
+      "options": [
+        {
+          "label": "Issue the ticket once the payment succeeds",
+          "correct": false,
+          "verdict": "The payment confirms a charge. The seat belongs to a newer reservation, so issuing the ticket can double-book it."
+        },
+        {
+          "label": "Sell the seat only if Maya’s reservation still owns it and is unexpired",
+          "correct": true,
+          "verdict": "Check the reservation ID and expiry in the same update that marks the seat sold. If that update changes zero rows, the callback failed to claim the seat."
+        },
+        {
+          "label": "Read the reservation, then issue the ticket in a separate write",
+          "correct": false,
+          "verdict": "The hold can expire or change owners between the read and the write."
+        }
+      ],
+      "defend": {
+        "prompt": "Which safeguards belong in the checkout flow? Select all that apply.",
+        "options": [
+          { "label": "Record ticket issuance in the same transaction as the guarded sale", "correct": true },
+          { "label": "Void or refund a successful charge when the sale cannot be finalized", "correct": true },
+          { "label": "Return the recorded result on replay of an already-completed checkout", "correct": true },
+          { "label": "Hold the seat row lock open while the buyer pays", "correct": false }
+        ],
+        "explain": "Commit the hold before payment. On the callback, a short transaction can finalize the seat and ticket together. Replayed callbacks should reuse the recorded outcome so they cannot issue a second ticket or refund a valid sale."
+      }
+    },
+    {
+      "id": "capacity",
+      "type": "ladder",
+      "tier": "senior",
+      "title": "Pick the contention strategy",
+      "xp": 70,
+      "prompt": "Choose a coordination technique for each race.",
+      "rungs": [
+        {
+          "q": "Two buyers try to decrement the same stock count. What is the simplest safe write?",
+          "choices": ["Read the count, then write it back", "Decrement with WHERE stock > 0", "Start a distributed lease"],
+          "answer": 1,
+          "note": "Put the availability check in the update and inspect the affected row count."
+        },
+        {
+          "q": "The app must inspect seats to pick a contiguous block. The same candidate rows often collide.",
+          "choices": ["Hold row locks while selecting and claiming the block", "Check a cached seat map before writing", "Retry a version check under sustained contention"],
+          "answer": 0,
+          "note": "A short pessimistic lock keeps the candidate rows stable while the app decides. High collision rates make repeated retries costly."
+        },
+        {
+          "q": "Two editors rarely update the same record. An edit depends on the exact revision the user opened.",
+          "choices": ["Compare the visible text", "Lock the row while the user edits", "Compare the row version and reject a stale edit"],
+          "answer": 2,
+          "note": "Optimistic concurrency detects changes without holding locks during editing. A version also catches a value that changed and changed back."
+        },
+        {
+          "q": "Two on-call engineers each see the other on duty and take themselves off duty. They update different rows.",
+          "choices": ["Use serializable transactions and retry aborts", "Check each engineer’s row version", "Retry only when an update changes zero rows"],
+          "answer": 0,
+          "note": "This is write skew. Serializable isolation can abort one of the transactions so it reads the new coverage on retry."
+        }
+      ]
+    },
+    {
+      "id": "architecture",
+      "type": "builder",
+      "tier": "staff",
+      "title": "Build the winning bid path",
+      "xp": 100,
+      "prompt": "Arrange the successful write path for an auction bid. The auction row and bid log share a database.",
+      "palette": [
+        "Publish price update",
+        "Insert accepted bid",
+        "Read cached high bid",
+        "Guard auction update",
+        "Commit transaction"
+      ],
+      "slots": [
+        { "accept": "Guard auction update" },
+        { "accept": "Insert accepted bid" },
+        { "accept": "Commit transaction" },
+        { "accept": "Publish price update" }
+      ],
+      "explain": "Update only if the auction is open and the offer beats the current high bid. If the update changes one row, record the bid in that transaction. Publish the new price after commit. An outbox in the transaction can make publication recoverable after a crash."
+    },
+    {
+      "id": "bottleneck",
+      "type": "bottleneck",
+      "tier": "staff",
+      "title": "Diagnose a stale worker write",
+      "xp": 90,
+      "prompt": "Worker A pauses past its lease expiry. Worker B takes over and writes a result. A resumes and overwrites it. Which observation identifies the missing safeguard?",
+      "cards": [
+        { "name": "Lease store", "metric": "A expires before B acquires", "state": "ok" },
+        { "name": "Worker A", "metric": "Resumes after a long pause", "state": "warn" },
+        { "name": "Result store", "metric": "Accepts A’s older write after B’s", "state": "hot" }
+      ],
+      "answer": "Result store",
+      "explain": "Assign a monotonically increasing fencing token on each acquisition. The result store records the newest token it has accepted and rejects writes with older ones. Once B has written, A’s token is stale.",
+      "wrong": {
+        "Lease store": "The lease service handed ownership to B after A expired. It cannot prevent A from sending a write to another service.",
+        "Worker A": "The pause explains how A lost the lease. A worker can pause between checking its lease and writing, so the result store must enforce ordering."
+      }
+    }
+  ]
+}
