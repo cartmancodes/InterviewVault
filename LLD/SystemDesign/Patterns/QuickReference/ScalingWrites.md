@@ -23,9 +23,8 @@
 
 ### Database Tuning
 
-Reduce indexes, triggers, and constraints for write-heavy periods.
-
-Tune write-ahead logging for write-heavy periods.
+- **Per-write work.** Review the cost of maintaining indexes and firing triggers. Keep the constraints that enforce data integrity.
+- **Write-ahead logging.** Check whether log writes are the bottleneck during peak traffic.
 
 ## Partitioning
 
@@ -38,11 +37,9 @@ Tune write-ahead logging for write-heavy periods.
 
 ### Key Choice
 
-Often the best key for flat write distribution across shards.
-
-Avoid keys like country that overload popular shards and waste sparse ones.
-
-Ask how many shards each common request must hit and how often it happens.
+- **Distribution.** Hash a primary identifier such as user ID to spread writes across shards.
+- **Skew.** A key such as country can overload the shard for a popular country while other shards sit idle.
+- **Query cost.** For each common request, check how often it runs and how many shards it touches.
 
 ### Shard Routing
 
@@ -53,15 +50,11 @@ Ask how many shards each common request must hit and how often it happens.
 
 ## Bursts
 
-A 4x peak means off-peak load can only use 25% of capacity without buffering.
-
-Buffer writes when delayed processing and inconsistent reads are acceptable.
-
-Queues require async processing and clients may need to verify completion later.
-
-Drop less important writes, like stale locations or impressions, before system failure.
-
-Scaling takes time; databases may have downtime or reduced throughput while scaling.
+- **Peak capacity.** If peak traffic is four times the baseline, a system provisioned for the peak uses only 25% of that capacity at baseline.
+- **Buffering.** Queue writes when the product can tolerate delayed processing and temporarily stale reads.
+- **Completion.** Give clients a way to check whether an accepted write has finished.
+- **Load shedding.** Under overload, drop low-priority writes such as superseded location updates.
+- **Scaling time.** Allow for reduced throughput or downtime while database capacity changes.
 
 ## Write Reduction
 

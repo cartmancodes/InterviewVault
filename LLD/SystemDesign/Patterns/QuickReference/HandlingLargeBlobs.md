@@ -6,19 +6,14 @@
 
 ### Use When
 
-Default trigger: direct storage access when moving files larger than 10MB through an API.
-
-Video uploads, photo sharing, file sync, and chat media all fit this pattern.
+- **Large transfers.** For files above roughly 10 MB, consider giving the client direct access to object storage.
+- **Typical workloads.** Video uploads, photo sharing, file sync, and chat attachments all move large files.
 
 ### Avoid When
 
-Under 10MB, normal API endpoints avoid the two-step URL flow.
-
-Use servers when invalid bytes must be rejected before accepting the upload.
-
-Use servers when data must pass through certified scanners before storage.
-
-Avoid async upload-process-notify when users need immediate content feedback.
+- **Small files.** Below roughly 10 MB, a regular API endpoint can save a separate request for an upload URL.
+- **Validation before storage.** Route uploads through a server if invalid bytes must be rejected or a certified scanner must inspect the file before it is stored.
+- **Immediate feedback.** If users need a result before continuing, complete the required validation before returning success.
 
 ## Transfer Paths
 
@@ -44,8 +39,7 @@ Avoid async upload-process-notify when users need immediate content feedback.
 
 ![Presigned URL TTL: typically 15 minutes to 1 hour.](assets/3da8beb6c333950e-eb8f58620b63bb5b.png)
 
-- **15 minutes**: Typical presigned URL TTL.
-- **1 hour**: Typical presigned URL TTL.
+Typical presigned URL lifetime is **15 minutes to 1 hour**.
 
 ### Upload Size Limits
 
@@ -58,15 +52,13 @@ Avoid async upload-process-notify when users need immediate content feedback.
 
 ![Upload transfer time: at 100 Mbps, a 5 GB video takes 429 seconds, or 7 minutes 9 seconds.](assets/3da8beb6c333950e-8835804b716b1a9e.png)
 
-- **429 seconds**: At 100 Mbps, a 5 GB video takes 429 seconds.
-- **7 minutes 9 seconds**: At 100 Mbps, a 5 GB video takes 7 minutes 9 seconds.
+At 100 Mbps, transferring a 5 GiB video takes about **429 seconds (7 minutes 9 seconds)** before protocol overhead.
 
 ### Incomplete Upload Cleanup Window
 
 ![Incomplete upload cleanup window: delete incomplete multipart uploads after 24-48 hours.](assets/3da8beb6c333950e-713fce960c05c3ba.png)
 
-- **24 hours**: Delete incomplete multipart uploads after 24-48 hours.
-- **48 hours**: Delete incomplete multipart uploads after 24-48 hours.
+Example cleanup window for incomplete multipart uploads is **24–48 hours**.
 
 ## State Sync
 

@@ -42,29 +42,17 @@
 
 ### Scaling Assignment
 
-1
-
-Signal scaling start and keep both old and new server mappings.
-
-2
-
-Reconnect clients to new owners while sending updates to both old and new servers.
-
-3
-
-Signal completion and update the coordination service with new assignments.
+1. **Keep both mappings.** When reassignment starts, retain the current mapping and publish the new one.
+2. **Move connections.** Reconnect clients to their new owners. During the move, send updates to both the old and new servers.
+3. **Retire the old mapping.** Once clients have moved, mark reassignment complete in the coordination service.
 
 ## Key Numbers
 
-2-5 second updates may be acceptable when true real-time is not required.
-
-With 100ms latency and updates 10ms apart, the second update can arrive up to 290ms late.
-
-15-30s is a common polling interval that avoids load balancer timeout fuss.
-
-1M clients polling every 10s creates 100k TPS of read volume.
-
-The extra indirection has minimal latency impact, under 10ms.
+- **Freshness target.** A 2–5 second delay may be acceptable for updates such as dashboard refreshes.
+- **Long-poll delay.** With 100 ms of one-way latency, two updates sent 10 ms apart can reach the client with very different delays. The second can take 290 ms because it waits for the next request.
+- **Long-poll timeout.** A server might hold a request open for 15–30 seconds. Set the load balancer’s timeout long enough for the response to get through.
+- **Polling load.** One million clients polling every 10 seconds generate 100,000 requests per second on average.
+- **Pub/sub latency.** The guide estimates under 10 ms for the extra hop through the broker.
 
 ## Interview Scenarios
 

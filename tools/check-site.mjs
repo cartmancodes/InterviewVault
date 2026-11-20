@@ -185,6 +185,11 @@ for (const file of pages) {
   const html = readFileSync(file, 'utf8');
   const rel = path.relative(SITE, file).split(path.sep).join('/');
 
+  // Detached Markdown markers render as alternating number and text paragraphs.
+  if (/^<p>1<\/p>\s*<p>(?:(?!<\/p>)[\s\S])+<\/p>\s*<p>2<\/p>/m.test(html)) {
+    problems.push(`${rel}: detached step numbers; use a Markdown ordered list`);
+  }
+
   const titleMatch = html.match(/<title>([\s\S]*?)<\/title>/i);
   if (!titleMatch) {
     problems.push(`${rel}: missing <title> tag`);

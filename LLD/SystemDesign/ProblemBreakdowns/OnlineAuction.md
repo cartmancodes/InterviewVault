@@ -282,20 +282,24 @@ To avoid this, we can cache the max bid in memory in something like Redis. Now, 
 We solved one problem, but created another. Now we've moved this from a consistency problem within the database to a consistency problem between the database and the cache. We need a couple things to be true:
 
 1. We need the cache read and cache write to happen atomically so we don't have a race condition like in our initial scenario. Fortunately, Redis is single-threaded and supports atomic operations. We can use a Lua script to ensure our read-modify-write (compare-and-set) sequence happens as one atomic operation. Note that Redis `MULTI/EXEC` alone wouldn't work here since it can't read a value and conditionally write based on it within the same transaction:
-`-- Lua script to atomically compare and set max bid
-local current_max_bid = tonumber(redis.call('GET', auction_key) or '0')
-local proposed_bid_amount = tonumber(proposed_bid)
 
-if proposed_bid_amount > current_max_bid then
- redis.call('SET', auction_key, proposed_bid_amount)
- return true
-else
- return false
-end`
+   ```lua
+   -- Lua script to atomically compare and set max bid
+   local current_max_bid = tonumber(redis.call('GET', auction_key) or '0')
+   local proposed_bid_amount = tonumber(proposed_bid)
+
+   if proposed_bid_amount > current_max_bid then
+    redis.call('SET', auction_key, proposed_bid_amount)
+    return true
+   else
+    return false
+   end
+   ```
+
 2. We need to make sure that our cache is strongly consistent with the database. Otherwise we could find ourselves in a place where the cache says the max bid is one thing but that bid is not in our database (because of failure or any other issue). To solve this, we have a few options:
-  - Accept Redis as the source of truth during the auction and write to the database asynchronously. This trades consistency for performance but is pragmatic.
-  - Use optimistic concurrency with retry logic: update the cache atomically first, then write to the database. If the database write fails, roll back the cache update.
-  - Write to the database first, then update the cache. If the cache update fails, you can invalidate the cache entry and let it be repopulated on the next read.
+   - Accept Redis as the source of truth during the auction and write to the database asynchronously. This trades consistency for performance but is pragmatic.
+   - Use optimistic concurrency with retry logic: update the cache atomically first, then write to the database. If the database write fails, roll back the cache update.
+   - Write to the database first, then update the cache. If the cache update fails, you can invalidate the cache entry and let it be repopulated on the next read.
 
 The core challenge here is that there's no clean way to make Redis and a relational database transactionally consistent. Redis doesn't support distributed transaction protocols like two-phase commit. If you find yourself in an interview needing cross-system atomicity, consider whether you can restructure to keep everything in one system.
 

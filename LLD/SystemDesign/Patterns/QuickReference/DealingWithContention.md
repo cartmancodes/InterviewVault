@@ -4,13 +4,10 @@
 
 ## Recognition Signals
 
-Concert tickets, auction items, flash-sale inventory, or drivers/riders have one winner.
-
-Seats, payments, and meeting rooms need coordination to prevent duplicate claims.
-
-Balances, inventory, and shared edits need consistency under simultaneous updates.
-
-Across servers, simultaneous operations can change outcomes based on commit order.
+- **One winner.** Two buyers want the same seat, two bidders want the same item, or two riders want the same driver.
+- **Duplicate claims.** Retried requests could charge a payment twice or book the same meeting room twice.
+- **Concurrent edits.** Two updates to a balance, inventory count, or shared document can overwrite each other.
+- **Commit order.** Requests arriving on different servers can produce different outcomes depending on which write commits first.
 
 ## Selection Ladder
 

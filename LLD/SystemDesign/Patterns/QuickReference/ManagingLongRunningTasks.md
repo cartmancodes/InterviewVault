@@ -4,43 +4,19 @@
 
 ## Decision Triggers
 
-Operations taking more than a few seconds should return a job ID and process async.
-
-Simple request/response flows do not need queue, worker, and status-tracking overhead.
-
-Video transcoding, image processing, PDFs, bulk emails, CSV imports, and exports fit.
-
-Multiply job volume by per-job processing time before assigning work to web servers.
-
-Run GPU, CPU-heavy, or memory-heavy work on worker fleets, not the web tier.
-
-Queues, workers, job states, retries, and monitoring replace simple request/response.
+- **Response time.** If work takes more than a few seconds and the caller can wait for the result, return a job ID and process it asynchronously.
+- **Workload.** Video transcoding, image processing, PDF generation, bulk email, and CSV imports or exports are common examples.
+- **Capacity.** Multiply the arrival rate by the average processing time to estimate how many jobs will run concurrently. Put GPU, CPU, or memory-intensive jobs on a worker fleet.
+- **Operating cost.** Keep short requests synchronous when they fit the web tier. A background job adds a queue, workers, status tracking, retries, and monitoring.
 
 ## Request Flow
 
-1
-
-Web server validates the request and stores a job record with status pending.
-
-2
-
-Push only the job ID to the queue; keep full job data in the database.
-
-3
-
-Client gets the job ID right away instead of waiting for the work to finish.
-
-4
-
-Worker pulls the message, fetches details, and updates status to processing.
-
-5
-
-Worker writes files to S3 or metadata to the database after doing the work.
-
-6
-
-Worker updates the job to completed or failed for status checks and notifications.
+1. **Create the job.** The web server validates the request and saves a pending job record.
+2. **Enqueue the job ID.** Keep the full job details in the database.
+3. **Return the ID.** The client can check progress while the job runs.
+4. **Claim the work.** A worker takes the message, fetches the job details, and marks the job as processing.
+5. **Save the result.** The worker writes output files to object storage or saves result metadata in the database.
+6. **Record the outcome.** Mark the job as completed or failed so clients can see its status or receive a notification.
 
 ## Core Components
 
@@ -67,9 +43,8 @@ Worker updates the job to completed or failed for status checks and notification
 
 ![Quick profile query takes less than 0.1 seconds. PDF report generation takes at least 45 seconds in the example.](assets/60907f54a7f51dd1-ee7fac8e8563dd44.png)
 
-Simple synchronous profile fetch takes less than 0.1 seconds.
-
-Example annual report generation takes at least 45 seconds.
+- **Profile fetch.** Less than 0.1 seconds in the synchronous example.
+- **Annual report.** At least 45 seconds in the report generation example.
 
 ### Platform Timeout Constraints
 
@@ -80,9 +55,8 @@ Example annual report generation takes at least 45 seconds.
 
 ### Operational Tuning Values
 
-10-30 seconds is a good starting point for most systems.
-
-Move to a Dead Letter Queue after 3-5 attempts for investigation.
+- **Worker failure detection.** The guide uses 10–30 seconds as a starting interval. Tune it to how long a job can wait for recovery after its worker stops responding.
+- **Retry limit.** After 3–5 unsuccessful attempts, send the job to a dead-letter queue for investigation.
 
 ## Pitfalls and Fixes
 

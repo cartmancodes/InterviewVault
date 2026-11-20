@@ -6,19 +6,15 @@
 
 ### Use When
 
-Flow-chart logic with state and many failures is a workflow candidate.
-
-Driver acceptance, warehouse picking, and document signing are workflow candidates.
-
-"If X fails, undo Y" or "all steps or none" is a workflow signal.
+- **Persistent state.** The operation has multiple steps and needs to resume after a failure.
+- **External waits.** Driver acceptance, warehouse picking, and document signing can all pause a workflow.
+- **Recovery.** A failed step may require undoing an earlier one, such as releasing a reservation.
 
 ### Avoid When
 
-Image resize or send email alone does not need a workflow engine.
-
-If the client waits for the response, workflows usually add too much async overhead.
-
-Most CRUD, single-service, and high-frequency low-value operations do not justify engine cost.
+- **Single task.** Resizing one image or sending one email can run as an ordinary job.
+- **Synchronous response.** When the caller waits for the whole operation, consider whether an asynchronous workflow adds useful recovery behavior.
+- **Coordination cost.** Most CRUD operations, single-service updates, and frequent low-value operations need little coordination.
 
 ## Coordination Choices
 
