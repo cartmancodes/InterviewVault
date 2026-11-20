@@ -6,37 +6,23 @@
 
 ### When To Apply
 
-High-volume external endpoints where many users repeatedly read the same data.
-
-Write-heavy 2:1 or 1:1 workloads and 1000-user apps do not need complex read scaling.
-
-Financial, inventory, and real-time collaboration may reject stale cached reads.
+- **Repeated reads.** Look for busy endpoints where many people request the same data, such as an event page before tickets go on sale.
+- **Database capacity.** For a small app or a workload closer to one or two reads per write, measure peak read load and query latency before adding infrastructure.
+- **Freshness requirements.** Identify which reads must see the latest write, such as a balance check, a seat claim, or a collaborator’s latest edit.
 
 ### Scaling Progression
 
-1
-
-Add indexes, tune data model, and denormalize before adding infrastructure.
-
-2
-
-Add read replicas or shard when one database server hits limits.
-
-3
-
-Use application caches or CDNs when repeated reads dominate.
+1. **Optimize the database.** Inspect the slow query’s execution plan. Index the columns it filters or joins on, and consider denormalizing data when the same join dominates read cost.
+2. **Distribute database reads.** Send reads that tolerate lag to replicas when one server runs out of read capacity. Consider sharding when queries can target a partition and the dataset has outgrown one server.
+3. **Cache repeated reads.** Use an application cache for frequently requested records or a CDN for public content shared across users. Choose an expiry that fits how long readers can tolerate stale data.
 
 ## Key Numbers
 
-Standard starts at 10:1; content-heavy apps often reach 100:1+.
-
-Consider replicas/cache above 50,000-100,000 read requests per second.
-
-Cache hits are sub-millisecond versus tens of milliseconds for DB queries.
-
-Tokyo edge example cuts Virginia round trip from 200ms to under 10ms.
-
-Short TTLs of 5-15 minutes often pair with active invalidation.
+- **Read/write ratio.** At 10:1, each write corresponds to ten reads on average. A content-heavy workload can reach 100:1 or higher.
+- **Peak throughput.** At 50,000–100,000 reads per second, compare peak demand with the database’s measured capacity and check how much traffic targets the same keys.
+- **Cache latency.** An in-memory lookup can take under 1 ms while a database query can take tens of milliseconds. Include network time when comparing what the caller sees.
+- **Edge latency.** In the Tokyo example, serving a request locally cuts a roughly 200 ms round trip to Virginia to under 10 ms.
+- **Cache lifetime.** A 5–15 minute TTL is an example for data that can be stale that long. Invalidate on writes when updates need to appear sooner.
 
 ## Database Optimization
 
